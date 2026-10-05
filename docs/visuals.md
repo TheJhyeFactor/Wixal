@@ -1,6 +1,6 @@
 # Wixal logo and motion
 
-The identity pairs a folded W symbol with a custom lowercase wordmark. Warm white and sakura pink sit against charcoal, matching the app. The symbol is also the Mac app icon.
+The folded W is the first letter of Wixal. The remaining letters sit beside it as one continuous name. Warm white and sakura pink sit against charcoal, matching the app. The symbol is also the Mac app icon.
 
 Open [the visual preview](brand.html) locally to inspect the logo variants, small icon sizes, and product recordings. Its pause button switches every GIF to a still image, and system reduced motion settings pause motion automatically.
 
@@ -31,7 +31,7 @@ The symbol and lettering are drawn as vector paths. They don't depend on a font 
 
 The recordings are made from real app interactions with a temporary project. The model clip opens the picker, filters the installed library, and selects a model. The file clip previews real fixture files and adds code to the prompt. The terminal clip runs `node hello.js` in the actual PTY and waits for its output. Captions are added after capture. None of these clips simulate model inference or approval results.
 
-The header and logo reveal play once and settle. The four product GIFs loop. The GIF files themselves do not respond to reduced motion settings, so every recording has a still image link beside it. The local preview provides a global pause control. The animated SVG and app transitions respect `prefers-reduced-motion`.
+The header and logo GIFs reveal the letters from the W, hold the complete name, then repeat. The animated SVG plays once and settles. The four product GIFs also loop. The GIF files themselves do not respond to reduced motion settings, so every recording has a still image link beside it. The local preview provides a global pause control. The animated SVG and app transitions respect `prefers-reduced-motion`.
 
 The social card is exported for use in GitHub's separate repository social preview setting. Committing that image does not apply the setting automatically.
 

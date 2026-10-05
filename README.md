@@ -120,8 +120,8 @@ If you'd like to help, start with [CONTRIBUTING](CONTRIBUTING.md) and the [archi
 
 ## The Wixal logo
 
-The logo pairs a folded W symbol with a custom lowercase wordmark. The same symbol is used in the Mac app icon.
+One folded W starts the name, with “ixal” flowing from it. The same W is used in the Mac app icon.
 
-![The Wixal symbol and wordmark appearing in a short animated reveal.](assets/motion/logo-reveal.gif)
+![The letters ixal slide out from the coloured W to form Wixal.](assets/motion/logo-reveal.gif)
 
 [Download the SVG logo](assets/logo/wixal.svg) · [Transparent PNG](assets/logo/wixal.png) · [Logo for light backgrounds](assets/logo/wixal-dark.svg) · [Full asset guide](docs/visuals.md)

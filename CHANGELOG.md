@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Joined the folded W directly to ixal, removed the duplicate white w, and added a smooth reveal from the W across the logo, GitHub header, and app assets.
+
 - Added a custom folded W logo, outlined wordmark, light and single colour variants, and a matching Mac app icon.
 - Redesigned the README around an animated header and four recorded product GIFs.
 - Added logo reveal animations in SVG and GIF, with repeatable motion exports and still image alternatives.

@@ -1,0 +1,12 @@
+{
+  "name": "wixal-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs",
+    "check": "node --check scripts/build.mjs && node --check scripts/serve.mjs && node --check src/site.js && node scripts/check.mjs"
+  },
+  "engines": { "node": ">=22" }
+}

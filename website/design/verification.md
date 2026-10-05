@@ -62,3 +62,20 @@ Downloads now target the published v0.7.0 assets and require macOS 14+. The mode
 New workspace, model-manager, toolkit and usage captures come from the actual 0.7.0 release workflow. Usage counts and Gemma 3 12B performance shown are reported by a real model run on this Mac. Unchanged files, memory, terminal and connections focus captures retain their original 0.6.0 version captions.
 
 The updated site builds and validates 183 local links and actual WebP dimensions. Headless Chromium checks cover all five pages at widths 1280, 390 and 320: no horizontal page overflow, no broken images and correct visible image proportions. The new model page was rendered and visually inspected. Download links select v0.7.0 and the minimum version reads macOS 14+. Browser page errors were absent.
+
+## Expanded workflows and dark appearance refresh
+
+The site now has six pages, including a dedicated Tools page. The home catalogue covers Desktop, local models and performance, project memory and recall, terminal and command sessions, web and external tools, and the optional ChatGPT companion. Existing product fragments remain available; new memory and tool sections expand the current 0.7.0 features. Content was checked against the current release source, feature guide, local runtime guide, performance guide and cyber tools guide. The site distinguishes command sessions from the manual PTY terminal, rendered inspection from an interactive authenticated browser, and generation benchmarks from answer-quality evaluation.
+
+Focused files, memory, terminal and connections were recaptured from the actual 0.7.0 app with disposable data. New captures show the actual @tool menu, command category, web tool cards and empty MCP setup dialog. The script runs a real node --test fixture in the manual terminal; it fabricates no model response, command-session execution, browser result or connected integration. Prior real model-manager and benchmark captures remain. All focused capture captions now correctly identify 0.7.0. The companion remains an explicitly labelled illustration.
+
+Cursor's live dark appearance was selected and inspected on 6 October 2026. Its body background is #14120b, foreground #edecec and raised surface #1b1913. Wixal now uses those core colours with #9d9c98 secondary text, low-opacity off-white borders and an accessible #ff6c2b orange accent. The previous #302e24 media panels, pale orange links and heavy borders are replaced. Dark styling also covers navigation, gallery selection, screenshot frames, cards, secondary and primary buttons, footer, appearance controls and the enlarged viewer. Light colours remain unchanged.
+
+Local verification for this refresh:
+
+- Build and checks pass for six pages plus the 404 document, resolving 269 local assets, pages and fragments and validating source WebP dimensions.
+- The in-app browser inspected all six pages in Light and Dark at actual widths 1280, 390 and 320. No horizontal page overflow or broken sourced images was found. The empty dialog image is excluded until its src is set. Screenshot frames retain contain sizing and intrinsic ratios.
+- Desktop and mobile dark layouts were visually inspected, including the new web tool cards. A fresh tools/#web navigation places the heading at y=95px below the sticky header.
+- Mobile navigation includes Tools & workflows, closes after selection, and preserves the chosen dark theme. Both header and footer pressed states match the theme, which survives navigation and reload; theme-color matches the background.
+- The third home gallery tab opens the actual web tool cards. Escape dismisses the enlarged image and restores focus; End selects Project memory.
+- No browser errors or warnings were recorded during the interaction pass. Download assets remain the verified uploaded v0.7.0 DMG and ZIP, requiring macOS 14+ and Apple Silicon.

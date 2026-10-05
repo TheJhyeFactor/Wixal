@@ -54,3 +54,11 @@ Follow-up local browser verification:
 - ArrowRight switches models to terminal and End selects memory. The viewer opens the selected screenshot; Escape closes it and restores focus to its trigger.
 - A 320px narrow-width pass has no horizontal page overflow; the header download shortcut is omitted at that width, with the main download action available in the hero.
 - npm run build, npm run check, and git diff --check pass. The check verifies 182 local links and validates each screenshot's width/height attributes against its WebP data.
+
+## 0.7.0 release update
+
+Downloads now target the published v0.7.0 assets and require macOS 14+. The model page explains the bundled Wixal Local engine, separate model library, imports, downloads, hardware filters and actual generation benchmarks. Ollama attribution remains visible. Usage and runtime guides are linked. The tool copy describes all 15 enabled built-ins and explicit @ selection.
+
+New workspace, model-manager, toolkit and usage captures come from the actual 0.7.0 release workflow. Usage counts and Gemma 3 12B performance shown are reported by a real model run on this Mac. Unchanged files, memory, terminal and connections focus captures retain their original 0.6.0 version captions.
+
+The updated site builds and validates 183 local links and actual WebP dimensions. Headless Chromium checks cover all five pages at widths 1280, 390 and 320: no horizontal page overflow, no broken images and correct visible image proportions. The new model page was rendered and visually inspected. Download links select v0.7.0 and the minimum version reads macOS 14+. Browser page errors were absent.

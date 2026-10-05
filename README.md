@@ -8,7 +8,7 @@ Wixal brings Ollama, your project files, and a terminal together in a Mac app. U
 
 **0.2.0 · macOS Apple Silicon · Early preview**
 
-[Get started](#get-started) · [See it in action](#take-a-look) · [How it works](docs/architecture.md) · [Contribute](CONTRIBUTING.md) · [What's changed](CHANGELOG.md)
+[Get started](#get-started) · [See it in action](#see-how-it-feels) · [How it works](docs/architecture.md) · [Contribute](CONTRIBUTING.md) · [What's changed](CHANGELOG.md)
 
 ## See how it feels
 

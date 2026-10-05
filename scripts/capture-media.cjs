@@ -17,8 +17,14 @@ const root = path.resolve(__dirname, '..');
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
     const page = await app.firstWindow();
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1320, 960));
-    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1680, 1080));
+    await page.locator('.title-version').filter({ hasText: '0.5.1' }).waitFor();
+    await page.locator('#project-label').filter({ hasText: 'Wixal demo' }).waitFor();
+    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ state: 'attached' });
+    if (await page.locator('#sidebar').evaluate(element => element.classList.contains('collapsed'))) {
+      await page.locator('#sidebar-toggle').click();
+      await page.waitForFunction(() => !document.querySelector('#sidebar').classList.contains('collapsed'));
+    }
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.locator('#welcome img').evaluateAll(images => Promise.all(images.map(i => i.decode())));
     const shots = path.join(root, 'docs/screenshots');
@@ -33,26 +39,30 @@ const root = path.resolve(__dirname, '..');
       const raw = await sharp({ create: { width: 990, height: 772, channels: 3, background: '#191a20' } }).composite([{ input: label, top: 0, left: 0 }, { input: image, top: 52, left: 0 }]).removeAlpha().raw().toBuffer();
       frames.push(raw); delays.push(delay);
     }
+    async function openWorkspaceSection(id) {
+      await page.locator('#workspace-menu-toggle').click();
+      await page.locator(id).click();
+    }
     await capture('workspace', 'Open a project and make yourself at home.', 3000);
     await page.click('#model-button');
     await page.locator('.model-row').first().waitFor();
     await capture('models', 'Choose a model from your local Ollama library.');
     await page.click('[data-close="models-dialog"]');
-    await page.click('#files-button');
+    await openWorkspaceSection('#files-button');
     await page.locator('[data-file="README.md"]').click();
     await page.locator('#file-content').filter({ hasText: 'A small project' }).waitFor();
     await capture('files', 'Browse the project and bring a file into the conversation.');
     await page.click('[data-close="files-dialog"]');
-    await page.click('#toolkit-button');
+    await openWorkspaceSection('#toolkit-button');
     await capture('toolkit', 'Choose which tools the model can use.');
     await page.click('#close-toolkit');
-    await page.click('#memory-button');
+    await openWorkspaceSection('#memory-button');
     await page.fill('#memory-input', 'Use plain JavaScript in this project.');
     await page.locator('#memory-form button').click();
     await page.locator('.memory-entry').waitFor();
     await capture('memory', 'Save a project preference when you want it remembered.');
     await page.click('#close-memory');
-    await page.click('#terminal-button');
+    await openWorkspaceSection('#terminal-button');
     await page.locator('#terminal .xterm').waitFor();
     await page.evaluate(() => window.wixal['terminal-write']("clear; printf 'Hello from the Wixal terminal\\n'; pwd\r"));
     await page.waitForFunction(() => document.querySelector('#terminal').textContent.includes('Hello from the Wixal terminal'));

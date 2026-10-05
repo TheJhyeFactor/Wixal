@@ -4,7 +4,7 @@
 
 Local AI for your Mac. Chat with models, work with project files, and keep your notes and terminal in one place.
 
-**[Download Wixal for Mac](https://github.com/TheJhyeFactor/Wixal/releases/latest)** · [ZIP download](https://github.com/TheJhyeFactor/Wixal/releases/latest) · [What's new](CHANGELOG.md)
+**[Download Wixal for Mac](https://github.com/TheJhyeFactor/Wixal/releases/latest)** · [What's new](CHANGELOG.md)
 
 Version **0.5.1** · Apple Silicon · macOS 13 or newer
 
@@ -29,4 +29,11 @@ Wixal is an early preview and is not Developer ID signed or notarised. See the [
 
 ## Learn more
 
-[Provider and ChatGPT setup](docs/connections.md) · [App architecture](docs/architecture.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+[User guide](docs/user-guide.md) · [Provider and ChatGPT setup](docs/connections.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+
+<details>
+<summary>Watch a quick tour</summary>
+
+![Wixal app tour](docs/media/workspace-tour.gif)
+
+</details>

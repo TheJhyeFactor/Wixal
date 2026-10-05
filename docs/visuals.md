@@ -1,47 +1,32 @@
-# Artwork and motion
+# Logo & motion
 
-Wixal uses a simple lettermark, a quiet Japanese night illustration, and small SVG icons. The application and README share the same colours and artwork.
+The Wixal logo uses the folded W as the first letter of the name. In the reveal animation, the W stays in place while “ixal” appears beside it.
 
-Open [the visual preview](brand.html) locally to see the assets together, pause the animation, and play the app tour.
+## Logo files
 
-## Source files
+| Asset | File |
+| :--- | :--- |
+| Animated logo used in the README | [logo-reveal.gif](../assets/motion/logo-reveal.gif) |
+| Animated vector version | [logo-reveal.svg](../assets/motion/logo-reveal.svg) |
+| Still version of the README header | [logo-reveal-still.png](../assets/motion/logo-reveal-still.png) |
+| Logo for dark backgrounds | [SVG](../assets/logo/wixal.svg) · [PNG](../assets/logo/wixal.png) |
+| Logo for light backgrounds | [SVG](../assets/logo/wixal-dark.svg) · [PNG](../assets/logo/wixal-dark.png) |
+| W symbol | [SVG](../assets/logo/symbol.svg) · [PNG](../assets/logo/symbol.png) |
 
-| Asset | Editable source | Ready to use |
-| --- | --- | --- |
-| GitHub banner | [repo-banner.svg](../assets/repo-banner.svg) | [repo-banner.png](../assets/repo-banner.png) |
-| Social preview | [social-card.svg](../assets/social-card.svg) | [social-card.png](../assets/social-card.png) |
-| Mac app icon | [app-icon.svg](../assets/app-icon.svg) | [icon.png](../assets/icon.png), [Wixal.icns](../assets/Wixal.icns) |
-| Lettermark | [mark.svg](../assets/mark.svg) | SVG |
-| Workspace illustration | [night-shrine.png](../assets/artwork/night-shrine.png) | [night-shrine.webp](../assets/artwork/night-shrine.webp) |
-| Workflow | [workflow.svg](../assets/workflow.svg) | SVG |
-| Working indicator | [working.svg](../assets/motion/working.svg) | Animated SVG |
-| App tour | [capture-media.cjs](../scripts/capture-media.cjs) | [workspace-tour.gif](media/workspace-tour.gif) |
+The README uses the existing GIF for playback on GitHub. A picture source supplies the still frame when the browser requests reduced motion. The animated SVG also supports reduced motion.
 
-The [icon directory](../assets/icons) contains nine SVGs for files, tools, memory, the terminal, search, new work, models, images, and review. Each uses a 24 × 24 viewBox with consistent strokes.
+## App screenshots and tour
 
-The banner and social card have vector text with the illustration embedded. Their PNG exports are used where SVG image support varies, including the README banner. The social card is ready for GitHub's repository social preview setting; committing the image alone does not set that repository preference.
+The [screenshots](screenshots) and [app tour](media/workspace-tour.gif) show Wixal 0.5.1 running with a disposable demo project. The tour covers model selection, project files, tool controls, notes, and the terminal. Captions are added after recording; the tour does not stage model replies or approval results.
 
-## Rebuild or record
+To record updated screenshots and a tour:
 
 ```sh
-npm run assets
 npm run media
 ```
 
-`assets` rebuilds the vectors and raster exports, including the ICNS icon. It requires macOS for `iconutil`. Change the vector artwork or wording in [graphics.cjs](../scripts/graphics.cjs), then rebuild.
+The capture script needs Ollama running with a model installed. It uses temporary app data and leaves your saved projects and conversations alone.
 
-`media` opens the actual Electron app with a temporary project. It records the workspace, model picker, file browser, tool controls, saved memory, and interactive terminal. It needs Ollama running with at least one model installed. It does not run model inference or modify your saved workspace.
+Keep screenshots current when the interface changes. Check them for private paths, credentials, and personal conversations before publishing.
 
-The GIF has captions added after capture and plays once. Its screenshots come from real UI interactions. No model replies or approval results are simulated.
-
-## Motion
-
-The welcome artwork has three small moving petals. They run for two slow cycles and then settle. Dialogs and drawers have short entrance transitions, and the working indicator animates only while a response is active.
-
-The interface and animated SVG respect `prefers-reduced-motion`. The README keeps the GIF behind an expandable section; a static workspace screenshot is visible by default. The local visual preview lets you pause its SVG animation and opt into playing the GIF.
-
-## Artwork provenance
-
-The shrine illustration was generated with the built-in image generation tool for this project. It is illustrative artwork, not a photograph of a real location. The fox is drawn as part of the scene; the product logo is a separate lettermark.
-
-The complete generation prompt is saved in [artwork-prompt.txt](artwork-prompt.txt). The SVGs, layout, captions, and motion are implemented in the repository. App screenshots and the GIF are captured from Wixal itself.
+[Back to Wixal](../README.md)

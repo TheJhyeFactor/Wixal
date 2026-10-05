@@ -10,7 +10,7 @@ Add a test when behaviour or permissions change. Small wording and styling chang
 
 ## Interface and copy
 
-Use plain wording. Say what the control does. Keep the dark workspace, restrained pink accents and fox identity consistent. Screens should help someone do the next thing, without slogans or pretend features.
+Use plain wording. Say what the control does. Keep the dark workspace, restrained pink accents and W identity consistent. Screens should help someone do the next thing, without slogans or pretend features.
 
 Screenshots should come from the running app with a test project. Keep personal files, credentials and private conversations out of them.
 

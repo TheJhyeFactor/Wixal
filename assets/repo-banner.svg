@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320">
+<rect width="1280" height="320" fill="#1b1c20"/><path d="M0 319h1280" stroke="#51404c"/>
+<g transform="translate(75 70) scale(1.75)"><path fill="#e9a5bd" d="M13 12 42 31 58 31 87 12 79 63 50 87 21 63Z"/><path fill="#1b1c20" d="m21 25 16 15-12 5Zm58 0-16 15 12 5ZM24 53l19 6-8 5Zm52 0-19 6 8 5ZM44 71h12l-6 6Z"/><path stroke="#1b1c20" stroke-width="3" fill="none" d="m50 44-5 10 5 7 5-7Z"/></g>
+<text x="275" y="160" font-family="Menlo,monospace" font-size="78" letter-spacing="-4" font-weight="600" fill="#e8e7e5">wixal<tspan fill="#e9a5bd">_</tspan></text>
+<text x="280" y="208" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#aca9b0">Local models. Project tools. Your Mac.</text>
+<path d="M865 69v183" stroke="#3a343c"/>
+<text x="908" y="117" font-family="Menlo,monospace" font-size="12" letter-spacing="2" fill="#b9a2b1">MACOS / APPLE SILICON</text>
+<text x="908" y="160" font-family="Menlo,monospace" font-size="16" fill="#c9c0cb">›_ terminal</text>
+<text x="908" y="192" font-family="Menlo,monospace" font-size="16" fill="#c9c0cb">⌁ project tools</text>
+<text x="908" y="224" font-family="Menlo,monospace" font-size="16" fill="#c9c0cb">◇ local memory</text>
+</svg>

@@ -1,0 +1,15 @@
+name: Feature idea
+description: A change that would make Wixal more useful.
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: What are you trying to do?
+      description: Explain the actual workflow and where Wixal gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What would help?
+      description: A small concrete example is useful.

@@ -1,0 +1,45 @@
+{
+  "name": "wixal",
+  "version": "0.2.0",
+  "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
+  "main": "app/main.cjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "test:app": "node scripts/smoke.cjs",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir=node_modules/node-pty --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(release|test|scripts|artifacts|docs|\\.git)($|/)'",
+    "check": "node --check app/main.cjs && node --check app/agent.cjs && node --check app/models.cjs && node --check app/store.cjs && node --check app/tools.cjs && node --check app/preload.cjs && node --check ui/renderer.js"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "dompurify": "^3.2.7",
+    "marked": "^17.0.0",
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@electron/rebuild": "4.2.0",
+    "electron": "44.5.1",
+    "playwright": "^1.56.0",
+    "sharp": "^0.35.5"
+  },
+  "allowScripts": {
+    "electron@44.5.1": true,
+    "node-pty@1.1.0": true,
+    "sharp@0.35.5": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TheJhyeFactor/Wixal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TheJhyeFactor/Wixal/issues"
+  },
+  "homepage": "https://github.com/TheJhyeFactor/Wixal",
+  "engines": {
+    "node": ">=22"
+  }
+}

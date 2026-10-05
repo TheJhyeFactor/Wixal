@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; font-src 'self'">
+  <title>Wixal</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css"><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="titlebar"><span class="title-label">wixal <span>/</span> <span id="title-project">workspace</span></span><button id="palette-button" class="title-command">Find a command <kbd>⌘ K</kbd></button><span class="title-version">0.2.0</span></div>
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="brand"><img src="../assets/mark.svg" alt="Wixal fox"><strong>wixal<span>_</span></strong><small>ウィクサル</small></div>
+      <button id="new-chat" class="new-chat"><span>＋</span> New conversation <kbd>⌘ N</kbd></button>
+      <div class="section-label">Projects <button id="open-project" title="Open project folder" aria-label="Open project folder">＋</button></div><div id="projects" class="projects"></div>
+      <div class="section-label conversations-heading">Conversations <span id="session-count">0</span></div>
+      <input id="session-search" type="search" placeholder="Find a conversation…" aria-label="Find a conversation"><div id="sessions" class="sessions"></div>
+      <div class="sidebar-bottom">
+        <button id="files-button" class="nav-button"><span>▱</span> Project files <kbd>⌘ ⇧ F</kbd></button>
+        <button id="toolkit-button" class="nav-button"><span>⌁</span> Tool kit <span id="tools-count" class="count">5</span></button>
+        <button id="memory-button" class="nav-button"><span>◇</span> Project memory <span id="memory-count" class="count">0</span></button>
+        <button id="terminal-button" class="nav-button"><span>›_</span> Terminal <kbd>⌘ J</kbd></button>
+        <div class="connection"><span class="status-dot" id="connection-dot"></span><div><strong id="connection-label">Connecting to Ollama</strong><small>On this Mac · 127.0.0.1</small></div><button id="refresh-models" title="Refresh local models" aria-label="Refresh local models">↻</button></div>
+      </div>
+    </aside>
+    <main>
+      <header class="workspace-header"><div class="breadcrumb"><span class="folder">▱</span><span id="project-label">Personal workspace</span><span class="divider">/</span><button id="conversation-label" title="Rename conversation">New conversation</button></div><button id="reveal-project" title="Show project in Finder" aria-label="Show project in Finder">↗</button></header>
+      <section id="chat-scroll" class="chat-scroll" aria-label="Conversation">
+        <div id="welcome" class="welcome">
+          <div class="welcome-intro"><div><div class="eyebrow">YOUR LOCAL WORKSPACE</div><h1>Let’s get into it.</h1><p>Pick a model. Open your project.<br>Tell it what needs doing.</p><button id="welcome-open" class="text-button">Open a project folder <span>↗</span></button></div><img class="welcome-fox" src="../assets/night.svg" alt="Wixal fox beneath a moon and a Japanese gate"></div>
+          <div class="workspace-overview"><div><span>Project</span><strong id="welcome-project">No folder open</strong></div><div><span>Model</span><strong id="welcome-model">Choose a model</strong></div><div><span>Tools</span><strong id="welcome-tools">Open a project first</strong></div></div>
+          <div class="quick-heading">A place to start <small>These fill the prompt. You send it.</small></div>
+          <div class="suggestions">
+            <button data-prompt="Have a look through this project. Read the main docs and files, then give me a plain rundown of how it works and where I should start."><span class="task-icon">▱</span><span><strong>Have a look around</strong><small>Understand the files and how they fit together.</small></span><span class="task-arrow">↗</span></button>
+            <button data-prompt="I want to build a feature in this project. Have a look at the structure first, then ask me what I want it to do before changing anything."><span class="task-icon">＋</span><span><strong>Build something</strong><small>Work out the approach, then make the changes.</small></span><span class="task-arrow">↗</span></button>
+            <button data-prompt="Check this project for a real bug. Read the relevant files, show me what is wrong and why, then propose a focused fix."><span class="task-icon">⌁</span><span><strong>Find what’s broken</strong><small>Check the code and show me the evidence.</small></span><span class="task-arrow">↗</span></button>
+          </div>
+          <div class="welcome-note">Edits and commands come to you for review. <button id="welcome-toolkit">See the tool kit →</button></div>
+        </div>
+        <div id="messages" class="messages" aria-live="off"></div>
+      </section>
+      <section id="terminal-panel" class="terminal-panel hidden"><div class="panel-heading"><span><i>›_</i> Terminal <small id="terminal-root"></small></span><span><small>Host shell</small><button id="close-terminal" title="Hide terminal" aria-label="Hide terminal">×</button></span></div><div id="terminal"></div></section>
+      <div class="composer-wrap"><div id="activity" class="activity" role="status"><span class="activity-dot"></span><span id="activity-label">Ready</span><span id="context-note"></span></div>
+        <form id="composer" class="composer"><div id="attachments" class="attachments hidden"></div><label class="sr-only" for="prompt">Message Wixal</label><div class="prompt-row"><textarea id="prompt" rows="2" placeholder="What do you want to work on?" maxlength="16000"></textarea><button id="send" type="submit" title="Send message" aria-label="Send message">↑</button><button id="stop" class="hidden" type="button" title="Stop response" aria-label="Stop response">■</button></div>
+          <div class="composer-bottom"><div class="composer-controls"><button id="attach-image" type="button" title="Attach images" aria-label="Attach images">＋</button><button id="model-button" type="button" aria-label="Choose local model"><span class="model-glyph">◈</span><span id="model-label">Choose a model</span><span class="chevron">⌄</span></button><span class="control-divider"></span><button id="mode-button" type="button"><span id="mode-label">Agent</span><span class="chevron">⌄</span></button></div><span class="input-hint">↵ send · ⇧↵ new line</span></div>
+        </form><div class="bottom-status"><span id="bottom-model">Connecting to local models</span><span id="response-stats">Stored on this Mac</span></div>
+      </div>
+    </main>
+    <aside id="memory-drawer" class="drawer hidden" aria-label="Project memory"><div class="drawer-title"><div><div class="eyebrow">PROJECT CONTEXT</div><h2>Memory</h2></div><button id="close-memory" aria-label="Close memory">×</button></div><p>Save preferences and decisions for this project. Wixal includes these in future messages.</p><div id="memories"></div><form id="memory-form"><label for="memory-input">Something to remember</label><textarea id="memory-input" placeholder="Use pnpm. Run the build before finishing." maxlength="4000" required></textarea><button class="primary" type="submit">Save memory</button></form></aside>
+    <aside id="toolkit-drawer" class="drawer hidden" aria-label="Tool kit"><div class="drawer-title"><div><div class="eyebrow">WHAT THE MODEL CAN DO</div><h2>Tool kit</h2></div><button id="close-toolkit" aria-label="Close tool kit">×</button></div><p id="toolkit-summary">Choose the tools available in Agent mode.</p><div id="tool-list"></div><div class="drawer-note"><strong>You stay in the loop.</strong><p>File edits and commands need your approval each time. Commands run as your Mac user. The terminal is a separate, interactive shell.</p></div><div class="tool-activity"><div class="section-label">Recent tool results</div><div id="tool-activity"></div></div></aside>
+  </div>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <dialog id="models-dialog" class="models-dialog"><div class="dialog-heading"><div><div class="eyebrow">OLLAMA · ON THIS MAC</div><h2>Choose your model</h2></div><button data-close="models-dialog" aria-label="Close model picker">×</button></div><p>Use a model with tools for project work, or images for photos and screenshots.</p><input id="model-search" type="search" placeholder="Search installed models…" aria-label="Search installed models"><div id="model-list" class="model-list"></div><div class="model-settings"><label for="context-size">Context window <small>More context uses more memory.</small></label><select id="context-size"><option value="8192">8k tokens</option><option value="16384">16k tokens</option><option value="32768">32k tokens</option></select></div><div class="model-help"><span id="model-library-info"></span><button id="model-refresh" class="text-button">Refresh ↻</button></div><div id="ollama-help" class="ollama-help hidden"><strong>Get a local model running</strong><p>Install and open Ollama, then install a model using its app or your terminal. Come back here and refresh.</p><code>ollama pull &lt;model-name&gt;</code><small>Wixal only lists installed models. Nothing downloads automatically.</small></div></dialog>
+  <dialog id="files-dialog" class="files-dialog"><div class="dialog-heading"><div><div class="eyebrow">SELECTED PROJECT</div><h2>Project files</h2></div><button data-close="files-dialog" aria-label="Close project files">×</button></div><div class="file-browser"><div class="file-sidebar"><input id="file-search" type="search" placeholder="Find a file…" aria-label="Find a file"><div id="file-list"></div></div><div class="file-preview"><div class="file-preview-heading"><strong id="file-name">Choose a file</strong><button id="use-file" class="text-button" disabled>Add to prompt ↗</button></div><pre id="file-content">Preview a file, then add its contents to your next message.</pre></div></div><p class="file-footnote">Text previews are limited to 24,000 characters. Dependencies and credential files are hidden.</p></dialog>
+  <dialog id="rename-dialog"><div class="dialog-heading"><h2>Rename conversation</h2><button data-close="rename-dialog" aria-label="Close rename">×</button></div><form id="rename-form"><label class="sr-only" for="rename-input">Conversation name</label><input id="rename-input" maxlength="80" required><div class="dialog-actions"><button type="submit" class="primary">Save name</button></div></form></dialog>
+  <dialog id="image-dialog"><div class="dialog-heading"><h2 id="image-title">Image attachment</h2><button data-close="image-dialog" aria-label="Close image">×</button></div><img id="image-preview" alt="Attached image"></dialog>
+  <dialog id="approval-dialog"><div class="dialog-eyebrow">REVIEW BEFORE RUNNING</div><h2 id="approval-title">Review action</h2><p id="approval-description"></p><div id="approval-content"></div><div class="dialog-actions"><button id="decline" class="secondary">Decline</button><button id="approve" class="primary">Approve once</button></div></dialog>
+  <dialog id="palette"><div class="palette-heading">Commands <kbd>ESC</kbd></div><button data-action="open"><span>▱ Open project folder</span><kbd>⌘ O</kbd></button><button data-action="new"><span>＋ New conversation</span><kbd>⌘ N</kbd></button><button data-action="models"><span>◈ Choose model</span><kbd>⌘ L</kbd></button><button data-action="files"><span>▱ Project files</span><kbd>⌘ ⇧ F</kbd></button><button data-action="toolkit"><span>⌁ Tool kit</span><kbd>⌘ ⇧ T</kbd></button><button data-action="terminal"><span>›_ Toggle terminal</span><kbd>⌘ J</kbd></button><button data-action="memory"><span>◇ Project memory</span><kbd>⌘ ⇧ M</kbd></button></dialog>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script><script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script><script src="../node_modules/marked/lib/marked.umd.js"></script><script src="../node_modules/dompurify/dist/purify.min.js"></script><script src="renderer.js"></script>
+</body>
+</html>

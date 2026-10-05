@@ -12,7 +12,8 @@ async function main() {
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
     const page = await app.firstWindow(), errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ timeout: 20000 });
+    async function openWorkspace(id) { if (!(await page.locator(id).isVisible())) await page.click('#workspace-menu-toggle'); await page.click(id); }
+    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ timeout: 20000, state: 'attached' });
     await app.evaluate(({ app }, fixturePath) => {
       const fixtures = process.mainModule.require(fixturePath);
       const { providers } = process.mainModule.require(app.getAppPath() + '/app/providers.cjs');
@@ -30,7 +31,7 @@ async function main() {
         return id === 'xai' ? fixtures.responses(call, denied ? 'Edit declined.' : 'Reviewed file saved.') : id === 'anthropic' ? fixtures.anthropic(call, denied ? 'Edit declined.' : 'Reviewed file saved.') : fixtures.completion(call, denied ? 'Edit declined.' : 'Reviewed file saved.');
       };
     }, path.join(root, 'test/provider-fixtures.cjs'));
-    await page.click('#connections-button');
+    await openWorkspace('#connections-button');
     for (const provider of ['xai', 'deepseek', 'anthropic', 'gemini', 'groq', 'mistral', 'openrouter']) {
       await page.selectOption('#key-provider-select', provider); await page.fill('#api-key-input', `${provider}-fixture-secret`); await page.locator('#api-key-form button').click();
       await page.locator('#api-key-status').filter({ hasText: 'saved securely' }).waitFor(); assert.equal(await page.inputValue('#api-key-input'), '');
@@ -61,13 +62,13 @@ async function main() {
       assert.match(JSON.stringify(own[1].body), provider === 'deepseek' ? /User declined/ : /Saved/);
       console.log(`PASS: ${provider} catalog, isolated credential, native tool continuation and real ${provider === 'deepseek' ? 'declined' : 'approved'} file review`);
     }
-    await page.reload(); await page.locator('#connection-label').filter({ hasText: 'Custom endpoint connected' }).waitFor();
+    await page.reload(); await page.locator('#connection-label').filter({ hasText: 'Custom endpoint connected' }).waitFor({ state: 'attached' });
     const saved = await page.evaluate(() => window.wixal.state()); assert.equal(saved.providerModels.anthropic, 'claude-fixture'); assert.equal(saved.customProvider.model, 'local-fixture'); assert.equal(saved.sessions.filter(s => s.messages.length).length, 8);
-    await page.click('#connections-button'); await page.selectOption('#key-provider-select', 'xai'); await page.click('#remove-api-key'); await page.locator('#api-key-status').filter({ hasText: 'No key saved' }).waitFor();
+    await openWorkspace('#connections-button'); await page.selectOption('#key-provider-select', 'xai'); await page.click('#remove-api-key'); await page.locator('#api-key-status').filter({ hasText: 'No key saved' }).waitFor();
     const afterRemoval = await page.evaluate(() => window.wixal.connections()); assert.equal(afterRemoval.keysSaved.xai, false); assert.equal(afterRemoval.keysSaved.anthropic, true);
     await page.click('[data-close="connections-dialog"]'); await page.fill('#prompt', 'Confirm the previous reviewed result.'); await page.click('#send'); await page.locator('#activity-label').filter({ hasText: 'Ready' }).waitFor();
     const following = await page.evaluate(() => window.wixal.state()); assert.equal(following.sessions.find(s => s.id === following.activeSession).messages.at(-1).content, 'Reviewed file saved.');
-    await page.click('#connections-button'); await page.selectOption('#key-provider-select', 'custom'); await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640));
+    await openWorkspace('#connections-button'); await page.selectOption('#key-provider-select', 'custom'); await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640));
     await page.locator('#connections-dialog').evaluate(dialog => { dialog.scrollTop = 0; }); await page.locator('#toast').waitFor({ state: 'hidden', timeout: 12000 });
     assert.ok(await page.locator('#connections-dialog').evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth + 1));
     await page.screenshot({ path: path.join(root, 'artifacts/wixal-providers-custom.png'), animations: 'disabled' });

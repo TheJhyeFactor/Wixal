@@ -12,6 +12,14 @@ Browse and search project files, preview their contents, and attach images to a 
 
 Chats and project notes are saved on this Mac. Ollama requests stay local. When you use a cloud provider, Wixal sends the conversation and project context you allow, including attachments or tool results used in that conversation.
 
+## Tools, recall and long chats
+
+Open **Workspace → Tool kit** to enable web search, web pages and JSON APIs, conversation recall, reviewed memory saves, or tools from a connected MCP server. File edits, shell commands, memories, network requests and external tool calls show their proposed action for review. Network and external tools start disabled.
+
+Project memory includes a switch for automatic long-conversation summaries and an inspector for the current chat's saved summary. Full messages remain saved. To download a local model, open **⌘L**, choose Ollama and use the Download form; progress and cancellation are available there.
+
+Read the [feature guide](features.md) for setup, examples, MCP servers, context behaviour and service limits.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |

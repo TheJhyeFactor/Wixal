@@ -14,14 +14,15 @@ async function main() {
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
     const page = await app.firstWindow(), errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ timeout: 20000 });
+    async function openWorkspace(id) { if (!(await page.locator(id).isVisible())) await page.click('#workspace-menu-toggle'); await page.click(id); }
+    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ timeout: 20000, state: 'attached' });
     await fs.mkdir(path.join(root, 'artifacts'), { recursive: true });
     async function capture(name, dialog) {
       await page.locator('#toast').waitFor({ state: 'hidden', timeout: 12000 });
       if (dialog) await page.locator(dialog).evaluate(element => { element.scrollTop = 0; });
       await page.screenshot({ path: path.join(root, `artifacts/${name}.png`), animations: 'disabled' });
     }
-    await page.click('#connections-button');
+    await openWorkspace('#connections-button');
     await page.fill('#api-key-input', 'sk-wixal-smoke-fixture'); await page.locator('#api-key-form button').click();
     await page.locator('#api-key-status').filter({ hasText: 'saved securely' }).waitFor(); assert.equal(await page.inputValue('#api-key-input'), '');
     const snapshot = await page.evaluate(() => window.wixal.connections()); assert.equal(snapshot.apiKeySaved, true); assert.doesNotMatch(JSON.stringify(snapshot), /sk-wixal/);
@@ -36,7 +37,7 @@ async function main() {
     const projects = JSON.parse((await client.callTool({ name: 'list_projects', arguments: {} })).content[0].text); assert.equal(projects.length, 1);
     const read = await client.callTool({ name: 'read_project_file', arguments: { projectId: projects[0].id, path: 'README.md' } }); assert.match(read.content[0].text, /Fixture project/);
     const queued = JSON.parse((await client.callTool({ name: 'create_task', arguments: { projectId: projects[0].id, title: 'A task from ChatGPT', prompt: 'Use write_file to create companion-proof.txt containing wixal-companion-proof.' } })).content[0].text);
-    await page.locator('#task-count').filter({ hasText: '1' }).waitFor(); await assert.rejects(fs.access(path.join(project, 'companion-proof.txt')));
+    await page.locator('#task-count').filter({ hasText: '1' }).waitFor({ state: 'attached' }); await assert.rejects(fs.access(path.join(project, 'companion-proof.txt')));
     console.log('PASS: real MCP stdio client discovered tools, read the shared project and queued a task without executing it');
     // External inference is simulated here. The app, controller, file write and review UI are real.
     await app.evaluate((_electron, appRoot) => {
@@ -65,7 +66,7 @@ async function main() {
     }, root);
     await page.click('[data-close="connections-dialog"]'); await page.click('#model-button'); await page.selectOption('#provider-select', 'openai');
     await page.locator('.model-row').filter({ hasText: 'gpt-6-fixture' }).waitFor(); await page.locator('.model-row').click();
-    await page.click('#tasks-button'); await page.locator('[data-task-start]').click();
+    await openWorkspace('#tasks-button'); await page.locator('[data-task-start]').click();
     await page.locator('#approval-dialog[open]').waitFor(); assert.match(await page.locator('#approval-title').textContent(), /companion-proof/);
     await page.click('#approve'); await page.locator('#activity-label').filter({ hasText: 'Ready' }).waitFor();
     assert.equal(await fs.readFile(path.join(project, 'companion-proof.txt'), 'utf8'), 'wixal-companion-proof');
@@ -75,7 +76,7 @@ async function main() {
     // Sign the fixture ID token; the application still performs full JWKS verification.
     const { generateKeyPair, exportJWK, SignJWT } = await import('jose'); const keys = await generateKeyPair('RS256'); const jwk = await exportJWK(keys.publicKey); jwk.kid = 'smoke';
     await app.evaluate(({ shell }) => { globalThis.wixalOriginalOpenExternal = shell.openExternal; shell.openExternal = async url => { globalThis.wixalAuthUrl = url; }; });
-    await page.click('#connections-button'); await page.click('#chatgpt-sign-in');
+    await openWorkspace('#connections-button'); await page.click('#chatgpt-sign-in');
     const url = new URL(await app.evaluate(() => globalThis.wixalAuthUrl));
     const idToken = await new SignJWT({ sub: 'wixal-fixture-account', email: 'fixture@example.com', nonce: url.searchParams.get('nonce') }).setProtectedHeader({ alg: 'RS256', kid: 'smoke' }).setIssuer('https://auth.openai.com').setAudience('oaiapp_smoke').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
     await app.evaluate((_electron, fixture) => { globalThis.wixalJwks = { keys: [fixture.jwk] }; globalThis.wixalTokens = { id_token: fixture.idToken, access_token: 'fixture-access', refresh_token: 'fixture-refresh', token_type: 'Bearer', expires_in: 3600, scope: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct' }; }, { jwk, idToken });
@@ -92,15 +93,15 @@ async function main() {
     const requests = await app.evaluate(() => globalThis.wixalRequests.map(request => ({ store: request.store, stream: request.stream, tools: request.tools?.[0]?.type, hasToolOutput: request.input.some(i => i.type === 'function_call_output') })));
     assert.equal(requests.at(-1).tools, 'namespace'); assert.ok(requests.at(-1).hasToolOutput); assert.ok(requests.every(r => r.store === false && r.stream));
     console.log('PASS: ChatGPT account catalog, namespaced tools, stateless continuation and declined edits through the app UI');
-    await page.click('#tasks-button'); await capture('wixal-tasks', '#tasks-dialog'); await page.click('[data-close="tasks-dialog"]');
-    await page.reload(); await page.locator('#connection-label').filter({ hasText: 'ChatGPT connected' }).waitFor();
+    await openWorkspace('#tasks-button'); await capture('wixal-tasks', '#tasks-dialog'); await page.click('[data-close="tasks-dialog"]');
+    await page.reload(); await page.locator('#connection-label').filter({ hasText: 'ChatGPT connected' }).waitFor({ state: 'attached' });
     const afterReload = await page.evaluate(() => window.wixal.state()); assert.equal(afterReload.tasks[0].status, 'completed'); assert.equal(afterReload.provider, 'chatgpt');
-    await page.click('#connections-button'); await page.locator('[data-account-out]').click(); await page.locator('.account-row').filter({ hasText: 'Signed out' }).waitFor();
+    await openWorkspace('#connections-button'); await page.locator('[data-account-out]').click(); await page.locator('.account-row').filter({ hasText: 'Signed out' }).waitFor();
     await page.locator('[data-share]').uncheck(); const denied = await client.callTool({ name: 'get_task_status', arguments: { taskId: queued.id } }); assert.equal(denied.isError, true);
     await page.uncheck('#companion-enabled'); assert.equal((await page.evaluate(() => window.wixal.connections())).companion.running, false);
     await page.click('#remove-api-key'); await page.locator('#api-key-status').filter({ hasText: 'No key saved' }).waitFor();
     await page.click('[data-close="connections-dialog"]'); await page.click('#model-button'); await page.selectOption('#provider-select', 'ollama'); await page.locator('.model-row').first().waitFor(); await page.click('[data-close="models-dialog"]');
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640)); await page.click('#connections-button');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640)); await openWorkspace('#connections-button');
     await capture('wixal-connections-compact', '#connections-dialog');
     assert.deepEqual(errors, []);
     console.log('PASS: reload persistence, sign-out, key removal, sharing revocation, companion pause and no renderer exceptions');

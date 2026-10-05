@@ -1,6 +1,8 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { executeNetwork } = require('./network.cjs');
+const { searchHistory } = require('./context.cjs');
 
 const MAX_OUTPUT = 24000;
 const skipped = new Set(['.git', 'node_modules', '.venv', 'venv', 'release', '.next', 'dist']);
@@ -42,10 +44,14 @@ const definition = (name, description, properties, required) => ({ type: 'functi
 const str = description => ({ type: 'string', description });
 const definitions = [
   definition('list_files', 'List files in the selected project. Skips dependency folders and credential files.', { directory: str('Relative directory, default .') }, []),
-  definition('read_file', 'Read a UTF-8 file inside the project, up to 24,000 characters.', { path: str('Relative file path') }, ['path']),
+  definition('read_file', 'Read a UTF-8 file inside the project. Use offset to read subsequent chunks of a large file.', { path: str('Relative file path'), offset: { type: 'integer', minimum: 0, description: 'Character offset, default 0' } }, ['path']),
   definition('search_files', 'Find literal text in project files. Case insensitive.', { query: str('Text to find') }, ['query']),
   definition('write_file', 'Create or replace a UTF-8 file after the user reviews the proposed content. Parent folder must exist.', { path: str('Relative file path'), content: str('Complete new file contents') }, ['path', 'content']),
   definition('run_command', 'Run a non-interactive shell command after user approval. Starts in project directory; host shell is not sandboxed. 60 second timeout.', { command: str('Shell command') }, ['command']),
+  definition('web_search', 'Search the web using DuckDuckGo after review. Returns titles and source URLs; use http_request to read a source.', { query: str('Search terms, maximum 500 characters') }, ['query']),
+  definition('http_request', 'Fetch a web page or call a JSON HTTP API after review. Redirects require a new request. No stored credentials are attached.', { url: str('Complete HTTP(S) URL'), method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] }, body: str('Optional JSON request body, maximum 16,000 characters') }, ['url']),
+  definition('search_history', 'Search saved conversations in this project for relevant excerpts with conversation titles.', { query: str('Words to recall, maximum 500 characters') }, ['query']),
+  definition('save_memory', 'Save a project decision or preference for future conversations after user review.', { content: str('Memory text, maximum 4,000 characters') }, ['content']),
 ];
 
 function runCommand(command, root, signal, onOutput = () => {}) {
@@ -68,11 +74,19 @@ function runCommand(command, root, signal, onOutput = () => {}) {
   });
 }
 
-async function executeTool(name, args, { root, approve, signal, onOutput, allowedTools }) {
+async function executeTool(name, args, { root, approve, signal, onOutput, allowedTools, store, fetcher }) {
   if (allowedTools && !allowedTools.includes(name)) throw new Error(`${name} is switched off in the tool kit.`);
   if (!root) throw new Error('Open a project folder to use tools.');
   if (signal?.aborted) throw new Error('Stopped');
   if (!args || typeof args !== 'object') throw new Error('Invalid tool arguments');
+  if (['web_search', 'http_request'].includes(name)) return executeNetwork(name, args, { approve, signal, fetcher });
+  if (name === 'search_history') { if (!store) throw new Error('Project history is unavailable.'); return JSON.stringify(searchHistory(store, args.query)); }
+  if (name === 'save_memory') {
+    if (!store || typeof args.content !== 'string' || !args.content.trim() || args.content.length > 4000) throw new Error('Memory must contain 1–4,000 characters.');
+    if (!(await approve({ name, content: args.content }))) return 'User declined this memory.';
+    if (signal?.aborted) throw new Error('Stopped');
+    store.remember(args.content); return 'Saved project memory.';
+  }
   if (name === 'list_files') return (await walk(root, args.directory || '.')).join('\n').slice(0, MAX_OUTPUT);
   if (name === 'read_file') {
     const file = await safePath(root, args.path);
@@ -80,7 +94,10 @@ async function executeTool(name, args, { root, approve, signal, onOutput, allowe
     if (!stat.isFile() || stat.size > 1024 * 1024) throw new Error('File must be text and smaller than 1 MB.');
     const content = await fs.readFile(file, 'utf8');
     if (content.includes('\0')) throw new Error('Binary file is not supported.');
-    return content.slice(0, MAX_OUTPUT) + (content.length > MAX_OUTPUT ? '\n[Truncated]' : '');
+    const offset = args.offset ?? 0;
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > content.length) throw new Error('Offset must be a valid character position within the file.');
+    const end = offset + MAX_OUTPUT;
+    return content.slice(offset, end) + (content.length > end ? `\n[Truncated; next offset: ${end}; total characters: ${content.length}]` : '');
   }
   if (name === 'search_files') {
     if (typeof args.query !== 'string' || !args.query.trim()) throw new Error('Search query cannot be empty.');

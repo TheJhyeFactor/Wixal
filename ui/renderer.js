@@ -7,7 +7,12 @@ const tools = [
   { id: 'search_files', name: 'Search the project', description: 'Find text across project files.' },
   { id: 'write_file', name: 'Edit and create files', description: 'Review the existing and proposed contents before saving.', review: true },
   { id: 'run_command', name: 'Run commands', description: 'Run a command in the project. Stops after 60 seconds.', review: true },
+  { id: 'search_history', name: 'Recall project conversations', description: 'Search saved conversations in this project.' },
+  { id: 'save_memory', name: 'Save project memory', description: 'Keep reviewed decisions and preferences for future chats.', review: true },
+  { id: 'web_search', name: 'Search the web', description: 'Send a reviewed search query to DuckDuckGo and return source links.', review: true },
+  { id: 'http_request', name: 'Web pages and APIs', description: 'Review the URL, HTTP method and JSON body before any network request.', review: true },
 ];
+const availableTools = () => [...tools, ...(state?.externalConnections || []).flatMap(server => server.tools.map(tool => ({ ...tool, description: tool.description, review: true })))];
 let menuSessionId, renameSessionId, deleteSessionId, welcomeSessionId;
 let connections, modelRequest = 0, keyProvider = 'openai';
 const providerLabels = { ollama: 'Ollama', openai: 'OpenAI API', chatgpt: 'ChatGPT' };
@@ -140,9 +145,9 @@ function renderMessages() {
   $('welcome').classList.toggle('hidden', !!messages.length || !!streamText);
   $('messages').classList.toggle('hidden', !messages.length && !streamText);
   $('messages').innerHTML = messages.map((message, index) => {
-    if (message.role === 'tool') { const status = resultStatus(message); return `<details class="tool-message"><summary>⌁ ${escapeHTML(tools.find(tool => tool.id === message.tool_name)?.name || message.tool_name)}<span class="tool-status ${status === 'Done' ? '' : 'failed'}">${status}</span></summary><pre class="tool-content">${escapeHTML(message.content)}</pre></details>`; }
+    if (message.role === 'tool') { const status = resultStatus(message); return `<details class="tool-message"><summary>⌁ ${escapeHTML(availableTools().find(tool => tool.id === message.tool_name)?.name || message.tool_name)}<span class="tool-status ${status === 'Done' ? '' : 'failed'}">${status}</span></summary><pre class="tool-content">${escapeHTML(message.content)}</pre></details>`; }
     const isUser = message.role === 'user';
-    if (!isUser && !message.content && message.tool_calls) return `<div class="tool-message"><span class="muted">Requested ${message.tool_calls.map(call => escapeHTML(tools.find(tool => tool.id === call.function?.name)?.name || call.function?.name || 'tool')).join(', ')}</span></div>`;
+    if (!isUser && !message.content && message.tool_calls) return `<div class="tool-message"><span class="muted">Requested ${message.tool_calls.map(call => escapeHTML(availableTools().find(tool => tool.id === call.function?.name)?.name || call.function?.name || 'tool')).join(', ')}</span></div>`;
     const images = message.images?.length ? `<div class="message-images">${message.images.map((image, imageIndex) => `<button data-message="${index}" data-image="${imageIndex}" title="${escapeHTML(message.imageNames?.[imageIndex] || 'View image')}"><img src="data:image/png;base64,${image}" alt="${escapeHTML(message.imageNames?.[imageIndex] || 'Attached image')}"></button>`).join('')}</div>` : '';
     const metrics = message.metrics?.tokens ? `<div class="message-metrics">${message.metrics.tokens} tokens · ${message.metrics.tokensPerSecond} tok/s · ${Math.round(message.metrics.seconds)}s</div>` : '';
     return `<article class="message ${isUser ? 'user' : 'assistant'}"><div class="message-header">${isUser ? '<span>▸</span> You' : '<img src="../assets/mark.svg" alt=""> Wixal'}<span class="muted">${new Date(message.created || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><button class="copy-message" data-copy="${index}">Copy</button></div><div class="message-body">${isUser ? escapeHTML(message.content) : markdown(message.content)}</div>${images}${metrics}</article>`;
@@ -168,18 +173,41 @@ function renderMemories() {
   $('memory-count').textContent = memories.length;
   $('memories').innerHTML = memories.length ? memories.map(memory => `<div class="memory-entry"><p>${escapeHTML(memory.content)}</p><footer>${new Date(memory.created).toLocaleDateString()}<button data-id="${memory.id}" title="Delete memory" ${busy ? 'disabled' : ''}>Forget</button></footer></div>`).join('') : '<p class="empty-project">Nothing saved yet. Add a preference or project decision below.</p>';
   $('memory-form').querySelector('button').disabled = busy;
+  $('auto-summary').checked = state.autoSummary !== false; $('auto-summary').disabled = busy;
+  const summary = session()?.summary;
+  $('saved-summary').classList.toggle('hidden', !summary);
+  $('summary-content').textContent = summary?.content || '';
+  $('summary-meta').textContent = summary ? `${summary.count} older messages · ${summary.method === 'excerpts' ? 'Fallback excerpts' : 'Model summary'} · ${new Date(summary.updated).toLocaleString()}. Full history remains saved.` : '';
+  $('summary-clear').disabled = busy;
   $('memories').querySelectorAll('button').forEach(button => button.onclick = async () => { try { state = await invoke('memory-delete', button.dataset.id); renderMemories(); } catch {} });
 }
 function renderToolkit() {
   const p = project();
   $('toolkit-summary').textContent = state.mode === 'chat' ? 'You’re in Chat mode. These tools become available when you switch to Agent and open a project.' : p ? `Tools for ${p.name}. Switch off anything you don’t need.` : 'Open a project folder to use these tools in Agent mode.';
-  $('tool-list').innerHTML = tools.map(tool => `<label class="tool-toggle"><input type="checkbox" data-tool="${tool.id}" ${state.enabledTools.includes(tool.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}><span><strong>${tool.name}</strong><small>${tool.description}</small>${tool.review ? '<em>REVIEW EACH TIME</em>' : ''}</span></label>`).join('');
+  const catalog = availableTools();
+  $('tool-list').innerHTML = catalog.map(tool => `<label class="tool-toggle"><input type="checkbox" data-tool="${escapeHTML(tool.id)}" ${state.enabledTools.includes(tool.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}><span><strong>${escapeHTML(tool.name)}</strong><small>${escapeHTML(tool.description)}</small>${tool.review ? '<em>REVIEW EACH TIME</em>' : ''}</span></label>`).join('');
   $('tool-list').querySelectorAll('input').forEach(input => input.onchange = async () => {
-    const enabledTools = tools.filter(tool => $('tool-list').querySelector(`[data-tool="${tool.id}"]`).checked).map(tool => tool.id);
+    const enabledTools = catalog.filter(tool => $('tool-list').querySelector(`[data-tool="${tool.id}"]`).checked).map(tool => tool.id);
+    enabledTools.push(...state.enabledTools.filter(name => !catalog.some(tool => tool.id === name)));
     try { state = await invoke('settings', { enabledTools }); render(); } catch { renderToolkit(); }
   });
   const recent = (session()?.messages || []).filter(message => message.role === 'tool').slice(-5).toReversed();
   $('tool-activity').innerHTML = recent.length ? recent.map(message => `<div class="tool-result">${escapeHTML(message.tool_name)}<span>${resultStatus(message)}</span></div>`).join('') : '<p class="empty-project">Tool results appear here after the model uses them.</p>';
+  $('manage-extensions').disabled = busy;
+  renderExtensions();
+}
+function renderExtensions() {
+  $('extension-list').innerHTML = (state.mcpServers || []).map(server => {
+    const connection = state.externalConnections?.find(c => c.id === server.id);
+    return `<div class="extension-entry"><strong>${escapeHTML(server.name)}</strong><small>${escapeHTML([server.command, ...server.args].join(' '))}</small><p>${connection ? `${escapeHTML(connection.status)} · ${connection.tools.length} tools` : 'Disconnected'}</p><div class="form-row"><button data-extension-connect="${server.id}" ${busy || connection?.status === 'connecting' ? 'disabled' : ''}>${connection ? 'Disconnect' : 'Connect'}</button><button data-extension-delete="${server.id}" ${busy ? 'disabled' : ''}>Remove</button></div></div>`;
+  }).join('') || '<p class="muted">No external tool servers saved yet.</p>';
+  $('extension-list').querySelectorAll('[data-extension-connect]').forEach(button => button.onclick = async () => {
+    const id = button.dataset.extensionConnect, connected = state.externalConnections?.some(c => c.id === id);
+    button.disabled = true; button.textContent = connected ? 'Disconnecting…' : 'Connecting…';
+    try { state = await invoke(connected ? 'mcp-disconnect' : 'mcp-connect', id); render(); if (!connected) toast('Server connected. Enable its tools in the tool kit.'); } catch { await refresh(); }
+  });
+  $('extension-list').querySelectorAll('[data-extension-delete]').forEach(button => button.onclick = async () => { try { state = await invoke('mcp-delete', button.dataset.extensionDelete); render(); } catch {} });
+  $('extension-form').querySelectorAll('input, textarea, button').forEach(input => input.disabled = busy);
 }
 function renderModelList() {
   const query = $('model-search').value.toLowerCase(), local = state?.provider === 'ollama';
@@ -189,12 +217,19 @@ function renderModelList() {
   $('model-provider-heading').textContent = local ? 'OLLAMA · ON THIS MAC' : `${providerLabels[state?.provider]} · CLOUD`;
   $('model-list').innerHTML = filtered.length ? filtered.map(model => `<button class="model-row ${state?.model === model.name ? 'selected' : ''}" data-model="${escapeHTML(model.name)}" ${busy ? 'disabled' : ''}><div class="model-row-info"><strong>${escapeHTML(model.displayName || shortModel(model.name))}${state.model === model.name ? ' <span class="muted">✓</span>' : ''}</strong><span class="model-id">${escapeHTML(model.name)}</span><div class="capabilities"><span class="capability">Chat</span>${model.capabilities?.includes('tools') ? '<span class="capability tools">Tools</span>' : ''}${model.capabilities?.includes('vision') ? '<span class="capability vision">Images</span>' : ''}${!model.capabilities ? '<span class="capability">Capabilities unavailable</span>' : ''}<span class="model-context">${escapeHTML(model.details?.parameter_size || '')}${model.contextLength ? ` · ${Math.round(model.contextLength / 1024)}k max context` : ''}</span></div></div><span class="model-size">${local ? `${(model.size / 1e9).toFixed(1)} GB<br><small>on disk</small>` : '<small>Cloud</small>'}</span></button>`).join('') : `<p class="empty-project">${query ? 'No models match that search.' : local ? connected ? 'No models installed yet.' : 'Ollama is offline.' : 'Connect this provider in Connections, then refresh the model list.'}</p>`;
   $('context-size').value = String(state?.contextSize || 16384); $('context-size').disabled = busy;
+  $('model-pull-form').classList.toggle('hidden', !local);
+  renderDownload();
   $('model-library-info').textContent = local ? connected ? `${models.length} installed models · capabilities reported by Ollama` : 'Connect Ollama, then refresh.' : `${models.length} account models · tool and image support varies by model`;
   $('ollama-help').classList.toggle('hidden', !local || (connected && models.length > 0));
   $('model-list').querySelectorAll('button').forEach(button => button.onclick = async () => {
     const model = models.find(item => item.name === button.dataset.model), mode = model.capabilities?.includes('tools') ? state.mode : 'chat';
     try { const before = state.mode; state = await invoke('settings', { model: model.name, mode }); render(); $('models-dialog').close(); if (before !== mode) toast('Switched to Chat. This model has no confirmed tool support.'); } catch {}
   });
+}
+function renderDownload(progress = state?.modelDownload) {
+  $('model-pull-button').disabled = busy || !!progress; $('model-pull-name').disabled = busy || !!progress;
+  $('model-pull-cancel').classList.toggle('hidden', !progress);
+  $('model-pull-status').textContent = progress ? `${progress.name} · ${progress.status}${progress.total ? ` · ${Math.min(100, Math.round(progress.completed / progress.total * 100))}% of current layer` : ''}` : '';
 }
 async function loadModels() {
   const request = ++modelRequest, provider = state.provider;
@@ -395,6 +430,15 @@ $('files-button').onclick = showFiles; $('welcome-open').onclick = () => project
 $('palette-button').onclick = palette; $('model-button').onclick = showModels;
 $('reveal-project').onclick = () => invoke('reveal-project').catch(() => {});
 $('session-search').oninput = renderSessions; $('model-search').oninput = renderModelList; $('file-search').oninput = renderFiles;
+$('auto-summary').onchange = async event => { try { state = await invoke('settings', { autoSummary: event.target.checked }); render(); } catch { render(); } };
+$('summary-clear').onclick = async () => { try { state = await invoke('summary-clear'); render(); } catch {} };
+$('manage-extensions').onclick = () => { renderExtensions(); $('extensions-dialog').showModal(); };
+$('extension-form').onsubmit = async event => {
+  event.preventDefault();
+  try { const args = JSON.parse($('extension-args').value); state = await invoke('mcp-save', { name: $('extension-name').value, command: $('extension-command').value, args }); $('extension-form').reset(); $('extension-args').value = '[]'; render(); } catch (error) { toast(error.message); }
+};
+$('model-pull-form').onsubmit = async event => { event.preventDefault(); try { state = await invoke('model-pull', $('model-pull-name').value.trim()); renderDownload(); } catch {} };
+$('model-pull-cancel').onclick = async () => { await api['model-pull-cancel'](); };
 $('context-size').onchange = async event => { try { state = await invoke('settings', { contextSize: Number(event.target.value) }); render(); } catch { render(); } };
 $('conversation-label').onclick = () => { if (session()) showRename(session().id); };
 $('rename-form').onsubmit = async event => { event.preventDefault(); try { state = await invoke('session-rename', $('rename-input').value, renameSessionId); $('rename-dialog').close(); render(); } catch {} };
@@ -439,9 +483,20 @@ document.addEventListener('keydown', event => {
 });
 function showApproval(data) {
   approvalId = data.id;
+  const custom = {
+    web_search: { title: 'Search the web?', description: 'This query will be sent to DuckDuckGo.', content: `${data.query || ''}\n\n${data.url || ''}` },
+    http_request: { title: 'Review network request', description: 'This request sends the shown URL and body from your Mac. Stored provider credentials are not attached.', content: `${data.method || ''} ${data.url || ''}\n\n${data.body || '(no request body)'}` },
+    save_memory: { title: 'Save project memory?', description: 'This memory will be included in future project conversations.', content: data.content },
+    external_tool: { title: `Use ${data.tool}?`, description: `Runs through ${data.server}. This server may access your files or the network.`, content: JSON.stringify(data.arguments, null, 2) },
+  }[data.name];
+  if (custom) {
+    $('approval-title').textContent = custom.title; $('approval-description').textContent = custom.description;
+    $('approval-content').innerHTML = `<pre>${escapeHTML(custom.content)}</pre>`;
+  } else {
   $('approval-title').textContent = data.name === 'write_file' ? `Review edit · ${data.path}` : 'Run this command?';
   $('approval-description').textContent = data.name === 'write_file' ? 'Check the current file and proposed replacement before saving.' : `Runs on your Mac in ${data.root}. This host shell can access files outside the project.`;
   $('approval-content').innerHTML = data.name === 'write_file' ? `<h3>BEFORE</h3><pre>${escapeHTML(data.before ?? '(new file)')}</pre><h3>AFTER</h3><pre>${escapeHTML(data.after)}</pre>` : `<pre>${escapeHTML(data.command)}</pre>`;
+  }
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('approval-dialog').showModal(); $('decline').focus();
 }
 async function respondApproval(allowed) { const id = approvalId; approvalId = null; $('approval-dialog').close(); if (id) await api.approval({ id, allowed }); }
@@ -454,7 +509,11 @@ api.onEvent(async event => {
   if (event.type === 'state') { streamText = ''; await refresh(); }
   if (event.type === 'token') { streamText += event.text; if (!streamFrame) streamFrame = requestAnimationFrame(() => { streamFrame = null; renderMessages(); }); }
   if (event.type === 'phase') $('activity-label').textContent = event.value;
-  if (event.type === 'context') $('context-note').textContent = event.omitted > 0 ? `${event.omitted} older messages outside context` : '';
+  if (event.type === 'extensions-changed') await refresh();
+  if (event.type === 'model-download') { state.modelDownload = event; renderDownload(event); }
+  if (event.type === 'model-download-done') { toast(`Downloaded ${event.name}. Choose it in the model picker.`); if (state.provider === 'ollama') await loadModels(); }
+  if (event.type === 'model-download-idle') { state.modelDownload = null; renderDownload(null); }
+  if (event.type === 'context') $('context-note').textContent = event.omitted > 0 ? event.summarized ? `${event.summarized} older messages summarized` : `${event.omitted} older messages outside context` : '';
   if (event.type === 'error') { toast(event.message); if (state.provider === 'chatgpt' && /usage limit/i.test(event.message)) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('usage-limit-dialog').showModal(); } }
   if (event.type === 'done') { streamText = ''; setBusy(false); if ($('approval-dialog').open) $('approval-dialog').close(); await refresh(); $('prompt').focus(); }
   if (event.type === 'approval') showApproval(event);

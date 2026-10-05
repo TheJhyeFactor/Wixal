@@ -16,6 +16,7 @@ async function main() {
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
     const page = await app.firstWindow(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    async function openWorkspace(id) { if (!(await page.locator(id).isVisible())) await page.click('#workspace-menu-toggle'); await page.click(id); }
     await page.locator('.session-item').first().waitFor();
     await page.locator('main.is-new-chat').waitFor();
     const more = id => page.locator(`[data-menu-id="${id}"]`);
@@ -37,8 +38,8 @@ async function main() {
     await more(history.id).click(); await page.locator('[data-session-action="archive"]').click();
     await item(history.id).waitFor({ state: 'detached' }); assert.equal(await page.locator('#archive-count').textContent(), '1');
     let saved = await snapshot(); assert.equal(saved.activeSession, start.id); assert.equal(saved.sessions.find(s => s.id === history.id).messages.length, 2);
-    await page.reload(); await page.locator('#archive-count').filter({ hasText: '1' }).waitFor();
-    await page.click('#archives-button'); await page.fill('#archive-search', 'no match'); assert.equal(await page.locator('.archive-row').count(), 0); await page.fill('#archive-search', 'saved');
+    await page.reload(); await page.locator('#archive-count').filter({ hasText: '1' }).waitFor({ state: 'attached' });
+    await openWorkspace('#archives-button'); await page.fill('#archive-search', 'no match'); assert.equal(await page.locator('.archive-row').count(), 0); await page.fill('#archive-search', 'saved');
     await page.screenshot({ path: path.join(root, 'artifacts/wixal-archives.png'), animations: 'disabled' });
     await page.click('[data-archive-view]'); await page.locator('#archived-banner').waitFor();
     assert.equal(await page.locator('#prompt').isDisabled(), true); assert.equal(await page.locator('#send').isDisabled(), true);
@@ -52,7 +53,7 @@ async function main() {
     await more(history.id).click(); await page.click('[data-session-action="delete"]'); await page.click('#confirm-delete'); await item(history.id).waitFor({ state: 'detached' });
     saved = await snapshot(); assert.ok(!saved.sessions.some(s => s.id === history.id)); assert.equal(saved.activeSession, start.id);
     await more(start.id).click(); await page.click('[data-session-action="rename"]'); await page.fill('#rename-input', 'A fresh start'); await page.locator('#rename-form button').click(); await page.locator('.session-item').filter({ hasText: 'A fresh start' }).waitFor();
-    await more(start.id).click(); await page.click('[data-session-action="archive"]'); await page.click('#archives-button'); await page.click('[data-archive-delete]'); await page.click('#confirm-delete'); await page.locator('.archive-empty').waitFor(); await page.click('[data-close="archives-dialog"]');
+    await more(start.id).click(); await page.click('[data-session-action="archive"]'); await openWorkspace('#archives-button'); await page.click('[data-archive-delete]'); await page.click('#confirm-delete'); await page.locator('.archive-empty').waitFor(); await page.click('[data-close="archives-dialog"]');
     await page.reload(); await page.locator('main.is-new-chat').waitFor(); saved = await snapshot(); assert.equal(saved.sessions.length, 1); assert.equal(saved.sessions[0].messages.length, 0);
     console.log('PASS: archive persistence, read-only history, restore, keyboard menu, delete cancel/confirm, rename and last-chat fallback');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640));

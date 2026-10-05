@@ -18,7 +18,7 @@ const root = path.resolve(__dirname, '..');
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
     const page = await app.firstWindow();
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1680, 1080));
-    await page.locator('.title-version').filter({ hasText: '0.5.1' }).waitFor();
+    await page.locator('.title-version').filter({ hasText: require('../package.json').version }).waitFor();
     await page.locator('#project-label').filter({ hasText: 'Wixal demo' }).waitFor();
     await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ state: 'attached' });
     if (await page.locator('#sidebar').evaluate(element => element.classList.contains('collapsed'))) {
@@ -55,6 +55,9 @@ const root = path.resolve(__dirname, '..');
     await page.click('[data-close="files-dialog"]');
     await openWorkspaceSection('#toolkit-button');
     await capture('toolkit', 'Choose which tools the model can use.');
+    await page.click('#manage-extensions');
+    await capture('extensions', 'Connect trusted MCP servers and review each tool call.');
+    await page.click('[data-close="extensions-dialog"]');
     await page.click('#close-toolkit');
     await openWorkspaceSection('#memory-button');
     await page.fill('#memory-input', 'Use plain JavaScript in this project.');
@@ -69,6 +72,6 @@ const root = path.resolve(__dirname, '..');
     await capture('terminal', 'Use a real zsh terminal, right beside your conversation.', 3000);
     const media = path.join(root, 'docs/media'); await fs.mkdir(media, { recursive: true });
     await sharp(Buffer.concat(frames), { raw: { width: 990, height: 772 * frames.length, channels: 3, pageHeight: 772 } }).gif({ delay: delays, loop: 1, colours: 128, dither: .4 }).toFile(path.join(media, 'workspace-tour.gif'));
-    console.log('Saved six real app screenshots and docs/media/workspace-tour.gif.');
+    console.log('Saved seven real app screenshots and docs/media/workspace-tour.gif.');
   } finally { if (app) await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

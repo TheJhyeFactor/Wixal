@@ -21,4 +21,25 @@ async function getModels(fetcher = fetch) {
   })));
   return enriched;
 }
-module.exports = { OLLAMA, getModels, modelDetails };
+async function pullModel(name, signal, onProgress, fetcher = fetch) {
+  if (typeof name !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._/:+-]{0,199}$/.test(name)) throw new Error('Enter a valid Ollama model name, such as qwen3:8b.');
+  const response = await fetcher(`${OLLAMA}/api/pull`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, stream: true }), signal });
+  if (!response.ok) throw new Error((await response.text()).slice(0, 800));
+  const decoder = new TextDecoder(); let pending = '', success = false;
+  const consume = line => {
+    if (!line.trim()) return;
+    const chunk = JSON.parse(line);
+    if (chunk.error) throw new Error(chunk.error);
+    if (chunk.status === 'success') success = true;
+    onProgress({ name, status: chunk.status || 'Downloading', completed: chunk.completed || 0, total: chunk.total || 0 });
+  };
+  for await (const bytes of response.body) {
+    pending += decoder.decode(bytes, { stream: true });
+    let newline;
+    while ((newline = pending.indexOf('\n')) >= 0) { consume(pending.slice(0, newline)); pending = pending.slice(newline + 1); }
+    if (pending.length > 100000) throw new Error('Invalid model download stream.');
+  }
+  consume(pending + decoder.decode());
+  if (!success) throw new Error('Model download ended early. Retry to resume.');
+}
+module.exports = { OLLAMA, getModels, modelDetails, pullModel };

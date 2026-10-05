@@ -21,6 +21,8 @@ class Store {
     this.data.companion ??= { enabled: false, sharedProjects: [], shareMemory: false };
     this.data.tasks ??= [];
     this.data.ui ??= { sidebarCollapsed: false };
+    this.data.autoSummary ??= true;
+    this.data.mcpServers ??= [];
   }
   save() {
     fs.writeFileSync(this.file + '.tmp', JSON.stringify(this.data, null, 2), { mode: 0o600 });

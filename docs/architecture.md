@@ -25,8 +25,11 @@ Renderer → restricted preload API → Electron main process
 | `app/chatgpt-auth.cjs` | Loopback OAuth, PKCE, JWKS identity verification, refresh and revocation |
 | `app/companion.cjs` | Loopback bridge, project consent, bounded reads and task queue |
 | `app/companion-stdio.cjs` | MCP server forwarding to the paired local bridge |
-| `app/agent.cjs` | Context selection, streaming, saved turns and the tool loop |
+| `app/agent.cjs` | Context selection, saved summaries, streaming and the tool loop |
 | `app/tools.cjs` | Project paths, file operations, tool permission checks and shell execution |
+| `app/context.cjs` | Incremental summaries, relevant memory selection and scoped history retrieval |
+| `app/network.cjs` | Reviewed search/HTTP requests, bounded response text and redirect rejection |
+| `app/extensions.cjs` | Local MCP client lifecycle, tool discovery, reviewed calls and cleanup |
 | `app/store.cjs` | Atomic local state and preference migration |
 | `ui/renderer.js` | Views, model selection, file previews, attachments and interaction |
 | `ui/styles.css` | Desktop layout and compact window adjustments |
@@ -56,7 +59,7 @@ Images remain visible in saved conversations when a text-only model is selected.
 
 State is written to a temporary JSON file with mode `0600` and renamed over the current file. Existing installations receive new preference defaults without replacing their history. This is not encrypted storage.
 
-Model context is bounded using an estimate, not a tokenizer. Whole recent turns are retained, including tool exchanges. The newest turn is always kept, so a very large turn can exceed that estimate. Runtime context is clamped to the model’s reported maximum. There is no automatic summary or semantic memory search.
+Model context is bounded using an estimate, not a tokenizer. Whole recent turns are retained, including tool exchanges. The newest turn is always kept; large tool result text is shortened only in inference requests. A very large prompt or opaque provider record can still exceed that estimate. Runtime context is clamped to the model’s reported maximum. Older complete turns are automatically condensed by the selected model in bounded chunks and saved per conversation. Summary requests have no tools; failed inference falls back to labelled relevant excerpts. A prefix hash prevents stale or redundant compaction. Explicit notes are ranked by prompt relevance; overlapping text chunks support project-scoped history search. Retrieval uses word matching rather than embeddings.
 
 ## Renderer boundaries
 
@@ -87,3 +90,11 @@ Credentials migrate the original OpenAI key into the encrypted per-provider key 
 ### Conversation lifecycle
 
 Sessions retain their project scope and messages when archived (`archivedAt`). Project selection skips archived sessions. Archives can be opened read-only; both the main-process chat handler and agent reject inference until restoration. Session mutations require an idle agent. Deletion removes linked task output copies, while leaving files and project memory intact. If the active chat is removed from the active list, Wixal selects another active chat or creates an empty one. Lifecycle state uses the existing atomic workspace save.
+
+## Network tools and MCP clients
+
+Network tools are opt-in and run in the main process. Review displays the URL, method, body or search terms before a request. Requests have a 20-second timeout, a 1 MB response cap, no automatically attached stored credentials and no automatic redirects. Search uses DuckDuckGo HTML results; HTML page responses become text. A blocked search service is an error, not a completed result.
+
+External tools use the installed MCP SDK's Client and StdioClientTransport. Saved executable/argument configurations do not auto-launch on restart. A user's Connect click starts the process; tool discovery follows catalog pagination with bounds and generates stable hashed tool names to avoid collisions. Connected definitions join the enabled tool catalog across local and cloud inference. Every invocation requires review and supports a 60-second timeout and abort signal. Disconnection and app shutdown close client transports. External server processes have the user's host permissions and may perform actions during startup.
+
+Model downloads stream Ollama's pull endpoint to the renderer through named events. Progress is per layer; the runtime requires a success record, forwards errors, and aborts the HTTP request on Cancel or app shutdown. Context preferences now include 64k and 128k, with local inference clamped to reported model limits. Neither a larger preference nor a downloaded model guarantees enough host RAM.

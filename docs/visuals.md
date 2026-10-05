@@ -15,9 +15,13 @@ The Wixal logo uses the folded W as the first letter of the name. In the reveal 
 
 The README uses the existing GIF for playback on GitHub. A picture source supplies the still frame when the browser requests reduced motion. The animated SVG also supports reduced motion.
 
+## Feature artwork
+
+[features-0.6.svg](../assets/features-0.6.svg) is the static release feature overview used in the README. It uses the same dark surfaces and muted pink accents as the app. Text describes shipped behaviours; app screenshots and the tour come from real UI captures.
+
 ## App screenshots and tour
 
-The [screenshots](screenshots) and [app tour](media/workspace-tour.gif) show Wixal 0.5.1 running with a disposable demo project. The tour covers model selection, project files, tool controls, notes, and the terminal. Captions are added after recording; the tour does not stage model replies or approval results.
+The [screenshots](screenshots) and [app tour](media/workspace-tour.gif) show Wixal 0.6.0 running with a disposable demo project. The tour covers model selection, project files, tool controls, external MCP setup, notes, and the terminal. Captions are added after recording; the tour does not stage model replies or approval results.
 
 To record updated screenshots and a tour:
 

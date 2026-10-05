@@ -90,6 +90,20 @@ dialog[open] { animation: dialog-in .16s ease-out; }
 .activity.busy .working-icon { display: block; }
 .activity.busy .activity-dot { display: none; }
 #context-note { margin-left: auto; font-size: 9px; color: #ceba9d; }
+.summary-toggle { display: flex; align-items: center; gap: 8px; margin: 16px 0; font-size: 12px; }
+.saved-summary { margin: 12px 0 20px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.saved-summary summary { cursor: pointer; }
+.saved-summary pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; max-height: 260px; overflow: auto; }
+.form-row { display: flex; align-items: center; gap: 8px; }
+.form-row input { min-width: 0; flex: 1; }
+.model-download { padding: 14px 0; border-top: 1px solid var(--line); }
+.model-download label, #extension-form label { display: block; margin: 10px 0 6px; }
+.model-download small { display: block; margin: 6px 0; color: #948d9d; font-size: 11px; line-height: 1.5; }
+#model-pull-status { font-size: 11px; color: #ceba9d; overflow-wrap: anywhere; }
+#extension-form input, #extension-form textarea { width: 100%; }
+#extension-form textarea { padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: #17181b; min-height: 72px; font: 12px var(--mono); }
+.extension-entry { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.extension-entry small { display: block; margin-top: 6px; overflow-wrap: anywhere; color: #948d9d; }
 .composer { border: 1px solid #51474f; border-radius: 8px; background: #212126; }
 .composer:focus-within { border-color: #9d798b; }
 .prompt-row { display: flex; align-items: flex-start; padding: 16px 16px 6px; gap: 15px; }

@@ -10,6 +10,7 @@ const appRequire = createRequire(path.join(appRoot,'package.json'));
 const {_electron: electron} = appRequire('playwright');
 const sharp = appRequire('sharp');
 const output = path.resolve(__dirname,'../public/assets');
+const showcaseOnly = process.argv.includes('--showcase');
 
 (async()=>{
   const temp = await fs.mkdtemp(path.join(os.tmpdir(),'wixal-website-capture-'));
@@ -32,11 +33,14 @@ const output = path.resolve(__dirname,'../public/assets');
     await page.emulateMedia({reducedMotion:'reduce'});
     if(await page.locator('#sidebar').evaluate(e=>e.classList.contains('collapsed'))) await page.click('#sidebar-toggle');
     await page.waitForFunction(()=>!document.querySelector('#sidebar').classList.contains('collapsed'));
-    async function shot(name,selector) {
+    async function shot(name,selector,endSelector) {
+      if(showcaseOnly && !['memory-context-focus','browser-card-focus'].includes(name)) return;
       await page.locator('#toast').waitFor({state:'hidden'});
       await page.mouse.move(1100,15);
       const target=selector?page.locator(selector):page;
-      const data=await target.screenshot();
+      const box = endSelector ? await target.boundingBox() : null;
+      const endBox = endSelector ? await page.locator(endSelector).boundingBox() : null;
+      const data=box ? await page.screenshot({clip:{x:box.x,y:box.y,width:box.width,height:endBox.y+endBox.height-box.y+16}}) : await target.screenshot();
       const meta=await sharp(data).metadata();
       await sharp(data).webp({quality:95}).toFile(path.join(output,name+'.webp'));
       console.log(JSON.stringify({name,width:meta.width,height:meta.height}));
@@ -54,6 +58,7 @@ const output = path.resolve(__dirname,'../public/assets');
     await page.locator('#memory-form button').click();
     await page.locator('.memory-entry').waitFor();
     await shot('memory-focus','#memory-drawer');
+    await shot('memory-context-focus','#memory-drawer','#memories');
     await shot('memory');
     await page.click('#close-memory');
     await openSection('#toolkit-button');
@@ -62,6 +67,8 @@ const output = path.resolve(__dirname,'../public/assets');
     await shot('commands-focus','#toolkit-drawer');
     await page.selectOption('#tool-category','web');
     await shot('web-cards-focus','#tool-list');
+    await shot('browser-card-focus','#tool-list .tool-toggle:first-child');
+    if(showcaseOnly) return;
     await page.click('#manage-extensions');
     await shot('extensions-focus','#extensions-dialog');
     await page.click('[data-close="extensions-dialog"]');

@@ -83,3 +83,17 @@ Local verification for this refresh:
 ## Neutral dark palette correction
 
 The user rejected the warm brown cast in the Cursor-derived surfaces. Dark appearance now uses achromatic #101010 page backgrounds, #191919 raised surfaces, #232323 hover surfaces, #333333 active controls, #ededed foreground and #a0a0a0 secondary text. All background, surface, border and text tones in the dark theme have equal red, green and blue channels. Orange remains a small link/focus accent. Browser theme-color now matches #101010. This supersedes the earlier dark colour choices; light appearance remains unchanged.
+
+## Capability showcase redesign
+
+The homepage and Product page's “One app. More ways to work.” section now shares a new layout. A split heading and six capability jump links lead into a larger Desktop feature, paired Models/Memory panels, a wider Commands feature and paired Web/Companion panels. The copy explains specific workflows, capability details remain quiet text, and the real previews open in the existing enlarged viewer. Mobile uses a single column and a two-column index, with tablet adjustments at 800px.
+
+The larger Desktop preview shows actual project files rather than an empty workspace. Models shows the prior actual usage/benchmark capture. New focused project-memory and browser-control captures come from the clean 0.7.0 app sources in the website worktree, using a disposable sample project and the existing desktop dependencies. The memory crop is an actual screenshot bounded by the drawer header and saved-note element. No model run, browser result, command-session result or integration is invented. Commands retains the actual passing sample test, and Companion remains visibly labelled as an illustration.
+
+Local verification:
+
+- Build and checks resolve 281 local page, asset and fragment links across six pages and 404, with image dimensions checked against WebP source data. Capture script syntax and git diff --check pass.
+- The shared section was exercised on Home and Products in both Light and Dark at 1280, 820, 768, 390 and 320px. There is no horizontal page overflow, out-of-bounds feature panel, broken loaded source image or overflowing capability-index label.
+- Desktop opening, models/memory balance and mobile web/companion layouts were visually inspected. Visible preview ratios match their source images; maximum measured ratio deviation was below 0.0002.
+- Capability links navigate to the intended feature under the sticky header. The new browser-control preview opens at full size; Escape closes the dialog and returns focus to its trigger.
+- No browser errors or warnings were recorded. Neutral black/charcoal Dark and the existing Light palette remain in use.

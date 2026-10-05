@@ -63,3 +63,15 @@ Styles, scripts, and screenshots use content-derived asset versions so browsers 
 The 0.7.0 update uses the actual release app captures in `docs/screenshots`, including reported usage and a completed real benchmark. The local engine, tool defaults, model manager and macOS minimum match this release.
 
 The Tools page explains explicit tool selection, reviewed file edits, command sessions, rendered web inspection, search, JSON APIs and external MCP setup. Product memory includes notes, prior-chat search and inspectable summaries. The dark appearance uses neutral #101010 black and #191919 charcoal surfaces, neutral grey text, subtle borders and restrained orange link accents; it also styles the navigation, footer, screenshot frames, gallery, buttons and enlarged viewer. Light appearance retains the original neutral palette.
+
+## Capability overview
+
+The “One app. More ways to work.” section is shared by Home and Products. Its six capability links jump to a larger Desktop feature, paired Models/Memory panels, a wide Commands feature, and paired Web/Companion panels. Each real UI preview supports full-size viewing. Mobile uses a single column and a two-column capability index. The optional companion remains a labelled illustration.
+
+For only the overview's focused memory and browser-control captures, run:
+
+```sh
+node website/scripts/capture-features.cjs /absolute/path/to/release-checkout --showcase
+```
+
+Use a clean checkout of the release with the desktop dependencies installed. This mode captures actual project-memory controls, a saved sample note and the browser-inspection control. It uses a disposable project/state and does not run a model or a web request. The memory capture frames the drawer through its actual saved-note element; no UI or result is fabricated.

@@ -2,6 +2,14 @@
 
 Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac with macOS 14 or newer. Install dependencies with `npm ci`, then run `npm run rebuild` to rebuild node-pty for Electron.
 
+## Release line
+
+Stay on the current 0.7 release line. Ship these refinements as 0.7.x patch increments, beginning with 0.7.1; do not advance to 0.8.0 without a new decision from Jhye. The current release checkout uses `main`.
+
+The local provider is always named **Wixal Local**, including when it uses an external Ollama server. Ollama is the underlying engine or separate installation option, not the provider name.
+
+The 0.7.1 model chooser opens on installed models, with a separate Downloads tab. Provider, context, hardware and collapsible local-engine controls sit beside the library. Search and filters apply to the active tab, with independent filter choices for installed models and downloads. Model deletion stays behind each model's menu and the existing confirmation dialog.
+
 ## Check a change
 
 ```sh
@@ -14,6 +22,8 @@ npm run test:refinement
 npm run test:features
 npm run test:runtime
 npm run test:performance
+npm run test:models
+npm run test:model-library
 ```
 
 The app test launches Electron with temporary state and a small test project. It exercises model selection, file previews, tool settings, image attachments, project memory, the real PTY, persistence, offline recovery, and compact window layout. Screenshots are saved in `artifacts/`.
@@ -69,3 +79,9 @@ App source, package metadata and production dependencies are unpacked from asar 
 Run `npm run runtime:stage` before `npm start`; packaging stages the verified upstream payload automatically. The ordinary app/provider suites explicitly exercise external Ollama compatibility. Use `WIXAL_SMOKE_MANAGED=1 npm run test:app` for the full image/file-tool flow through the bundled engine. `npm run test:runtime` covers real managed-engine import, inference, stop/start, library persistence and quit cleanup. Both use disposable state and independent model copies. See [local runtime development](local-runtime.md) for source builds, attribution, pinned provenance and the tested versus untested build paths.
 
 `npm run test:performance` uses protocol fixtures and real file reads through Electron to exercise explicit @tools, reported usage, benchmarks/cancellation, model filters, deletion confirmation and categorized tool controls. It complements the real managed-engine benchmark/deletion test. The command-session unit tests execute real host fixtures; browser inspection has a local rendered-page fixture in `scripts/browser-tools-smoke.cjs`.
+
+`npm run test:models` exercises the model manager through Electron with disposable state and Ollama metadata fixtures. It covers Installed/Downloads tabs, keyboard navigation, selection, search, independent filters, catalog sorting/tag choice, context persistence, cloud-provider setup, empty-library recovery and desktop/compact layouts in dark and light themes. It saves screenshots in `artifacts/`. Use `WIXAL_APP_PATH` to run against a packaged app.
+
+`npm run test:model-library` exercises the dedicated Models page, serial downloads, pause/resume/cancel/retry, completion verification, selection, persisted jobs, suggested context and memory release with protocol fixtures. `npm run test:model-download-live` downloads `gemma3:270m` from the registry into disposable managed storage, verifies installation, selects and benchmarks it, releases memory and checks restart persistence. The live check contacts the registry and removes only its temporary library. Use `WIXAL_APP_PATH` to exercise a packaged build.
+
+Model metadata is cached for five minutes by endpoint, tag and digest, with at most four requests at once and 256 cache entries. Explicit Refresh bypasses it. Download progress emits at most every 200 ms unless the stage changes, and saves happen on job transitions rather than every received chunk. Hardware identity is cached while free-memory readings stay live. The download queue is limited to 12 unfinished jobs, with bounded recent history.

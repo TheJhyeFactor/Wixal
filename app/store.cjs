@@ -22,6 +22,9 @@ class Store {
     this.data.companion ??= { enabled: false, sharedProjects: [], shareMemory: false };
     this.data.tasks ??= [];
     this.data.ui ??= { sidebarCollapsed: false };
+    this.data.ui.theme ??= 'sakura';
+    this.data.ui.textSize ??= 13;
+    this.data.ui.reduceMotion ??= false;
     this.data.autoSummary ??= true;
     this.data.mcpServers ??= [];
     this.data.localRuntimeMode ??= 'managed';
@@ -50,7 +53,7 @@ class Store {
     return project;
   }
   selectProject(id) {
-    if (!this.data.projects.some(p => p.id === id)) throw new Error('Unknown project');
+    if (id !== null && !this.data.projects.some(p => p.id === id)) throw new Error('Unknown project');
     this.data.activeProject = id;
     this.data.activeSession = this.data.sessions.findLast(s => s.projectId === id && !s.archivedAt)?.id || null;
     if (!this.data.activeSession) this.newSession();

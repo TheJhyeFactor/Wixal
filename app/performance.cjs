@@ -2,14 +2,17 @@ const os = require('node:os');
 const { createHash } = require('node:crypto');
 const { streamChat } = require('./agent.cjs');
 const { localEndpoint } = require('./models.cjs');
+let deviceIdentity;
 function hardware() {
-  const cpu = os.cpus()[0]?.model || 'Unknown CPU', totalMemory = os.totalmem();
-  return { cpu, arch: os.arch(), cores: os.cpus().length, totalMemory, freeMemory: os.freemem(),
-    memoryBudget: Math.floor(totalMemory * .75), id: createHash('sha256').update(`${cpu}:${os.arch()}:${totalMemory}`).digest('hex').slice(0, 16) };
+  if (!deviceIdentity) {
+    const cpus = os.cpus(), cpu = cpus[0]?.model || 'Unknown CPU', totalMemory = os.totalmem(), arch = os.arch();
+    deviceIdentity = { cpu, arch, cores: cpus.length, totalMemory, memoryBudget: Math.floor(totalMemory * .75), id: createHash('sha256').update(`${cpu}:${arch}:${totalMemory}`).digest('hex').slice(0, 16) };
+  }
+  return { ...deviceIdentity, freeMemory: os.freemem() };
 }
-function estimate(model, device, contextSize) {
+function estimate(model, device, contextSize, cacheBytes = 2) {
   const context = Math.min(contextSize, model.contextLength || contextSize);
-  const required = Math.ceil((model.size || 0) * 1.15 + context * (model.kvBytesPerToken || 128 * 1024) + 1024 ** 3);
+  const required = Math.ceil((model.size || 0) * 1.15 + context * (model.kvBytesPerToken ? model.kvBytesPerToken * cacheBytes : 128 * 1024) + 1024 ** 3);
   return { required, context, fits: model.size > 0 && required <= device.memoryBudget, estimated: true };
 }
 async function benchmark(model, contextSize, signal, emit, fetcher = fetch) {

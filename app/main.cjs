@@ -5,8 +5,9 @@ const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { Store } = require('./store.cjs');
 const { getModels, runAgent } = require('./agent.cjs');
-const { configureLocalRuntime, modelDetails, pullModel, deleteModel } = require('./models.cjs');
+const { configureLocalRuntime, modelDetails, clearModelMetadata, deleteModel, loadedModels, unloadModel } = require('./models.cjs');
 const { hardware, estimate, benchmark } = require('./performance.cjs');
+const { ModelDownloads } = require('./model-downloads.cjs');
 const { LocalRuntime } = require('./runtime.cjs');
 const { Extensions, serverConfig, toolPrefix } = require('./extensions.cjs');
 const { importImage } = require('./images.cjs');
@@ -20,14 +21,14 @@ function invalidateCatalog() { catalogRevision++; modelCatalog = []; catalogKey 
 const { Companion } = require('./companion.cjs');
 app.setName('Wixal');
 if (process.env.WIXAL_DATA_DIR) app.setPath('userData', process.env.WIXAL_DATA_DIR);
-let window, store, running, terminal, credentials, auth, companion, activeTask, extensions, downloading, runtime, benchmarking, quitting = false;
+let window, store, running, terminal, credentials, auth, companion, activeTask, extensions, downloads, runtime, benchmarking, quitting = false;
 let modelCatalog = [], catalogKey = '';
 const approvals = new Map();
 const images = new Map();
 const index = path.join(__dirname, '../ui/index.html');
 const emit = data => { if (window && !window.isDestroyed()) window.webContents.send('wixal:event', data); };
 function idle() { if (benchmarking) throw new Error('Stop the benchmark before changing models or starting a chat.'); if (running) throw new Error('Stop the current response before changing projects or conversations.'); }
-function snapshot() { return { ...store.snapshot(), externalConnections: extensions.snapshot(), modelDownload: downloading?.progress || null, localRuntime: runtime.snapshot(), hardware: hardware(), benchmarkProgress: benchmarking?.progress || null, modelCatalog: require('../resources/model-catalog.json').models.map(m => ({ ...m, fit: estimate(m, hardware(), store.data.contextSize) })) }; }
+function snapshot() { const device = hardware(); return { ...store.snapshot(), externalConnections: extensions.snapshot(), modelDownload: downloads?.active?.item || null, modelDownloads: downloads?.snapshot() || [], localRuntime: runtime.snapshot(), hardware: device, benchmarkProgress: benchmarking?.progress || null, modelCatalog: require('../resources/model-catalog.json').models.map(m => ({ ...m, fit: estimate(m, device, store.data.contextSize, runtime.mode === 'managed' ? 1 : 2) })) }; }
 function stop() {
   running?.abort();
   for (const resolve of approvals.values()) resolve(false);
@@ -67,7 +68,7 @@ async function selectedDetails() {
 function connectionState() {
   const appRoot = app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked');
   const quote = value => `'${value.replace(/'/g, "'\\''")}'`;
-  return { ...credentials.snapshot(), providers: Object.entries(providers).map(([id, info]) => ({ id, label: id === 'ollama' && runtime.mode === 'managed' ? 'Wixal Local' : info.label, apiKey: !['ollama', 'chatgpt'].includes(id), keysURL: info.keysURL })), customProvider: store.data.customProvider, pending: !!auth.pending, companion: { ...store.data.companion, ...companion.snapshot(), helperPath: path.join(appRoot, 'app/companion-stdio.cjs'),
+  return { ...credentials.snapshot(), providers: Object.entries(providers).map(([id, info]) => ({ id, label: info.label, apiKey: !['ollama', 'chatgpt'].includes(id), keysURL: info.keysURL })), customProvider: store.data.customProvider, pending: !!auth.pending, companion: { ...store.data.companion, ...companion.snapshot(), helperPath: path.join(appRoot, 'app/companion-stdio.cjs'),
     command: companion.server ? `node ${quote(path.join(appRoot, 'app/companion-stdio.cjs'))} ${quote(companion.file)}` : '' },
     cloudProjects: store.data.cloudProjects, cloudPersonal: store.data.cloudPersonal };
 }
@@ -104,14 +105,26 @@ function launchRun(prompt, attached, details, task = null) {
 }
 function setupIPC() {
   register('state', () => snapshot());
+  register('model-library', async () => {
+    let disk = null, loaded = null;
+    const folder = runtime.mode === 'managed' ? runtime.models : path.join(os.homedir(), '.ollama/models');
+    try { const info = await require('node:fs/promises').statfs(folder); disk = info.bavail * info.bsize; } catch {}
+    try { loaded = await loadedModels(); } catch {}
+    return { mode: runtime.mode, diskFree: disk, loaded };
+  });
+  register('model-unload', async name => {
+    idle(); if (store.data.provider !== 'ollama') throw new Error('Choose Wixal Local first.');
+    if (!(await loadedModels()).some(model => (model.name || model.model) === name)) throw new Error('This model is not loaded. Refresh first.');
+    await unloadModel(name); return true;
+  });
   register('model-delete', async name => {
-    idle(); if (downloading || runtime.importing) throw new Error('Wait for the download or import to finish.');
+    idle(); if (downloads.busy || runtime.importing) throw new Error('Wait for the download or import to finish.');
     if (store.data.provider !== 'ollama' || !(await getModels()).some(m => m.name === name)) throw new Error('Choose an installed local model.');
     await deleteModel(name); invalidateCatalog(); return snapshot();
   });
   register('benchmark-cancel', () => { benchmarking?.controller.abort(); return true; });
   register('benchmark-start', async name => {
-    idle(); if (downloading || runtime.importing || store.data.provider !== 'ollama') throw new Error('Benchmarks require an idle local engine.');
+    idle(); if (downloads.busy || runtime.importing || store.data.provider !== 'ollama') throw new Error('Benchmarks require an idle local engine.');
     const model = (await getModels()).find(m => m.name === name); idle();
     if (!model) throw new Error('Choose an installed local model.');
     const controller = new AbortController(), device = hardware(), mode = runtime.mode, context = store.data.contextSize;
@@ -124,31 +137,29 @@ function setupIPC() {
     return snapshot();
   });
   register('runtime-mode', async mode => {
-    idle(); if (downloading) throw new Error('Cancel the model download first.');
+    idle(); if (downloads.busy) throw new Error('Cancel the model download first.');
     await runtime.setMode(mode); store.data.localRuntimeMode = mode; store.save(); invalidateCatalog(); return snapshot();
   });
   register('runtime-start', async () => { idle(); await runtime.endpoint(); return snapshot(); });
-  register('runtime-stop', async () => { idle(); if (downloading) throw new Error('Cancel the model download first.'); await runtime.stop(); invalidateCatalog(); return snapshot(); });
+  register('runtime-stop', async () => { idle(); if (downloads.busy) throw new Error('Cancel the model download first.'); await runtime.stop(); invalidateCatalog(); return snapshot(); });
   register('runtime-imports', async () => (await runtime.availableImports()).map(({ name, bytes }) => ({ name, bytes })));
   register('runtime-import', async name => {
-    idle(); if (downloading) throw new Error('Wait for the model download to finish.');
+    idle(); if (downloads.busy) throw new Error('Wait for the model download to finish.');
     const imported = await runtime.importModel(name); invalidateCatalog(); return { ...snapshot(), imported };
   });
   register('runtime-reveal', async () => { await require('node:fs/promises').mkdir(runtime.models, { recursive: true, mode: 0o700 }); return shell.openPath(runtime.models); });
   register('model-pull', name => {
     idle();
-    if (downloading) throw new Error('A model download is already running.');
     if (runtime.importing) throw new Error('Wait for the model import to finish.');
-    if (store.data.provider !== 'ollama') throw new Error('Switch to a local provider to download models.');
-    const controller = new AbortController();
-    downloading = { controller, progress: { name, status: 'Starting download', completed: 0, total: 0 } };
-    pullModel(name, controller.signal, progress => { downloading.progress = progress; emit({ type: 'model-download', ...progress }); })
-      .then(() => { invalidateCatalog(); emit({ type: 'model-download-done', name }); })
-      .catch(error => emit({ type: 'error', message: controller.signal.aborted ? 'Model download cancelled. Retry to resume.' : error.message }))
-      .finally(() => { downloading = null; emit({ type: 'model-download-idle' }); });
-    return snapshot();
+    if (store.data.provider !== 'ollama') throw new Error('Switch to Wixal Local to download models.');
+    downloads.enqueue(name, runtime.mode); return snapshot();
   });
-  register('model-pull-cancel', () => { downloading?.controller.abort(); return true; });
+  register('model-download-action', (id, action) => {
+    if (['resume', 'retry'].includes(action)) idle();
+    if (store.data.provider !== 'ollama' || runtime.importing) throw new Error('Choose Wixal Local and wait for the import to finish.');
+    downloads.action(id, action, runtime.mode); return snapshot();
+  });
+  register('model-pull-cancel', () => { if (downloads.active) downloads.action(downloads.active.item.id, 'cancel', runtime.mode); return true; });
   register('mcp-save', value => {
     idle(); const config = serverConfig(value);
     if (store.data.mcpServers.length >= 12) throw new Error('Connect up to 12 MCP servers.');
@@ -168,17 +179,17 @@ function setupIPC() {
     store.data.mcpServers = store.data.mcpServers.filter(s => s.id !== id); store.save(); return snapshot();
   });
   register('summary-clear', () => { idle(); const session = store.session(); if (session) delete session.summary; store.save(); return snapshot(); });
-  register('models', async () => {
+  register('models', async (force = false) => {
     const provider = store.data.provider;
     const account = credentials.account(), revision = catalogRevision, custom = { ...store.data.customProvider };
     const key = `${provider}:${provider === 'chatgpt' ? account?.client_id || '' : ''}`;
-    const models = provider === 'ollama' ? await getModels() : await cloudModels(provider, await providerToken(provider, account), custom);
+    const models = provider === 'ollama' ? await getModels(fetch, { refresh: force === true }) : await cloudModels(provider, await providerToken(provider, account), custom);
     if (revision !== catalogRevision || provider !== store.data.provider || (provider === 'chatgpt' && account !== credentials.account())) throw new Error('Provider changed. Refresh the model list.');
     modelCatalog = models; catalogKey = key;
     if (!models.some(m => m.name === store.data.model)) {
       if (!running) { store.data.model = models.find(m => m.capabilities?.includes('tools'))?.name || models[0]?.name || ''; store.data.providerModels[provider] = store.data.model; if (models.length && !models.find(m => m.name === store.data.model)?.capabilities?.includes('tools')) store.data.mode = 'chat'; store.save(); }
     }
-    return { models: provider === 'ollama' ? models.map(m => ({ ...m, fit: estimate(m, hardware(), store.data.contextSize) })) : models, selected: store.data.model, provider };
+    return { models: provider === 'ollama' ? models.map(m => ({ ...m, fit: estimate(m, hardware(), store.data.contextSize, runtime.mode === 'managed' ? 1 : 2) })) : models, selected: store.data.model, provider };
   });
   register('layout', collapsed => {
     if (typeof collapsed !== 'boolean') throw new Error('Invalid sidebar preference.');
@@ -188,7 +199,12 @@ function setupIPC() {
   register('settings', settings => {
     idle();
     if (!settings || typeof settings !== 'object') throw new Error('Invalid settings.');
+    if (settings.theme !== undefined && !['sakura', 'midnight', 'forest', 'paper'].includes(settings.theme)) throw new Error('Unknown theme.');
+    if (settings.textSize !== undefined && ![13, 15, 17].includes(settings.textSize)) throw new Error('Invalid text size.');
+    if (settings.reduceMotion !== undefined && typeof settings.reduceMotion !== 'boolean') throw new Error('Invalid motion preference.');
+    for (const key of ['theme', 'textSize', 'reduceMotion']) if (settings[key] !== undefined) store.data.ui[key] = settings[key];
     if (settings.provider !== undefined) {
+      if (downloads.busy && settings.provider !== store.data.provider) throw new Error('Pause or cancel queued downloads before switching provider.');
       if (!Object.hasOwn(providers, settings.provider)) throw new Error('Unknown model provider.');
       store.data.providerModels[store.data.provider] = store.data.model;
       store.data.provider = settings.provider; store.data.model = store.data.providerModels[settings.provider] || '';
@@ -206,11 +222,12 @@ function setupIPC() {
     if (typeof settings.autoSummary === 'boolean') store.data.autoSummary = settings.autoSummary;
     store.save(); return snapshot();
   });
-  register('project-open', async () => {
-    idle();
-    const result = await dialog.showOpenDialog(window, { title: 'Open a project in Wixal', properties: ['openDirectory'] });
-    if (!result.canceled) { idle(); store.addProject(result.filePaths[0]); destroyTerminal(); images.clear(); }
-    return { ...snapshot(), opened: !result.canceled };
+  register('project-browse', async (folder, showHidden) => require('./project-folders.cjs').browseFolder(folder, showHidden === true));
+  register('project-create-folder', async (parent, name) => { idle(); return require('./project-folders.cjs').createFolder(parent, name); });
+  register('project-open', async folder => {
+    idle(); const root = await require('./project-folders.cjs').directory(folder); idle();
+    store.addProject(root); destroyTerminal(); images.clear();
+    return { ...snapshot(), opened: true };
   });
   register('project-select', id => { idle(); store.selectProject(id); destroyTerminal(); images.clear(); return snapshot(); });
   register('project-files', () => executeTool('list_files', {}, { root: store.project()?.root }));
@@ -350,6 +367,10 @@ app.whenReady().then(() => {
     payload: app.isPackaged ? path.join(process.resourcesPath, 'ollama') : path.join(app.getAppPath(), 'runtime/ollama'),
     mode: store.data.localRuntimeMode, onChange: value => emit({ type: 'runtime', value }) });
   configureLocalRuntime(runtime);
+  downloads = new ModelDownloads({ store, emit, verify: async name => {
+    clearModelMetadata();
+    if (!(await getModels()).some(model => model.name === name || model.name === `${name}:latest`)) throw new Error('The download finished but the model is not in the library. Retry and refresh.');
+  }, complete: name => { invalidateCatalog(); emit({ type: 'model-download-done', name }); } });
   extensions = new Extensions(() => emit({ type: 'extensions-changed' }));
   credentials = new Credentials(app.getPath('userData'), safeStorage);
   auth = new ChatGPTAuth({ credentials, openBrowser: url => shell.openExternal(url), onChange: event => { invalidateCatalog(); emit(event); } });
@@ -370,6 +391,6 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('before-quit', event => {
   if (quitting || !runtime) return;
-  event.preventDefault(); stop(); downloading?.controller.abort(); benchmarking?.controller.abort(); destroyTerminal(); auth?.cancel();
+  event.preventDefault(); stop(); downloads?.shutdown(); benchmarking?.controller.abort(); destroyTerminal(); auth?.cancel();
   Promise.allSettled([runtime.close(), extensions?.close(), companion?.stop()]).finally(() => { quitting = true; app.quit(); });
 });

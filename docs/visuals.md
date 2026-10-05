@@ -29,7 +29,7 @@ To record updated screenshots and a tour:
 npm run media
 ```
 
-The capture script needs Ollama running with a model installed. It uses temporary app data and leaves your saved projects and conversations alone.
+The capture script imports an existing Gemma 3 12B model into a disposable Wixal Local library, measures it, and downloads Gemma 3 270M through the app. It uses temporary app data and leaves your saved projects, conversations and original model files alone. Set WIXAL_APP_PATH to the packaged executable to capture the release app.
 
 Keep screenshots current when the interface changes. Check them for private paths, credentials, and personal conversations before publishing.
 

@@ -13,16 +13,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.0/Wixal-0.7.0-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.0/Wixal-0.7.0-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.0">Release notes</a>
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.1/Wixal-0.7.1-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.1/Wixal-0.7.1-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.1">Release notes</a>
   <br>
-  <sub>Version 0.7.0 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
+  <sub>Version 0.7.1 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
 </p>
 
 <p align="center">
   <a href="#a-place-for-your-project">Overview</a> &nbsp;/&nbsp;
-  <a href="#new-in-070">What’s new</a> &nbsp;/&nbsp;
+  <a href="#new-in-071">What’s new</a> &nbsp;/&nbsp;
   <a href="#choose-your-model">Models</a> &nbsp;/&nbsp;
   <a href="#get-started">Get started</a> &nbsp;/&nbsp;
   <a href="#guides--development">Guides</a>
@@ -34,7 +34,7 @@
 
 Open a folder and start a conversation. Your files, saved notes, and terminal are there when you need them.
 
-![The Wixal 0.7.0 workspace, with project and conversation navigation beside the chat composer](docs/screenshots/workspace.png)
+![The Wixal 0.7.1 workspace, with project and conversation navigation beside the chat composer](docs/screenshots/workspace.png)
 
 - **Bring the context.** Browse and search project files, attach images, and save notes for future conversations.
 - **Review the work.** Choose which tools the model can use. Approve file edits and commands before they run.
@@ -43,32 +43,27 @@ Open a folder and start a conversation. Your files, saved notes, and terminal ar
 <details>
 <summary><strong>See Wixal in action</strong> — a short tour of the app</summary>
 
-![Recorded tour of model selection, project files, tool controls, notes, and the terminal in Wixal 0.7.0](docs/media/workspace-tour.gif)
+![Recorded tour of model selection, project files, tool controls, notes, and the terminal in Wixal 0.7.1](docs/media/workspace-tour.gif)
 
 [View the screenshots](docs/screenshots) for a still version of the tour.
 
 </details>
 
-## New in 0.7.0
+## New in 0.7.1
 
-**Wixal Local is included.** No separate Ollama app is required. The app manages its engine, keeps a model library of its own, and can import models already on your Mac.
+**A clearer place for your models.** Open **Models** in the sidebar to manage your library, or use **⌘L** for quick selection. The local provider is **Wixal Local**, with the engine included in the app.
 
-![Wixal Local in the real app: bundled engine status, model import and download controls](docs/screenshots/models.png)
+![Wixal 0.7.1 Models page: installed models, context and memory settings](docs/screenshots/models-page.png)
 
-| You control | How it works |
-| :--- | :--- |
-| **The local engine** | Starts with local model requests, runs on loopback, and shuts down with Wixal. Start or stop it from the picker. |
-| **Your model library** | Download by registry tag or import an existing Ollama model. Imports make independent copies and verify the model files. |
-| **Your performance** | View reported tokens and speed, run real benchmarks, filter by type/size/hardware fit, and delete models from the active library. |
-| **Your tools** | Search a redesigned tool kit, enable all tools, and explicitly request a tool with @ in chat. |
-| **Your setup** | Use the included engine or switch to a separate Ollama server. Cloud providers remain optional. |
-| **Our foundation** | Built on pinned open-source Ollama 0.35.1, with its name, copyrights and dependency notices preserved. Staging and source-build workflows are included. |
+- **Download in the app.** Browse models or enter a registry tag. Queue downloads, pause, resume, cancel or retry, then select the verified installation.
+- **Choose with useful information.** Check tools and image support, disk size and estimated memory fit. Run a benchmark on your Mac and release loaded model memory when needed.
+- **A tidier workspace.** Separate Installed and Downloads views, quieter filters, aligned sidebar controls, appearance settings and an in-app project folder picker.
 
-[How Wixal Local works and how to build on it →](docs/local-runtime.md) · [0.7.0 release notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.0) · [Upstream credits](THIRD_PARTY_NOTICES.md)
+Model metadata is cached, parallel requests are bounded, and download progress updates are throttled to keep the interface responsive. Interrupted downloads remain paused until you resume them.
 
-![Real Gemma model benchmark results in Wixal on this Mac](docs/screenshots/performance.png)
+[0.7.1 release notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.1) · [Models and performance guide](docs/performance.md) · [How Wixal Local works](docs/local-runtime.md)
 
-[Model management, benchmarks and @tools →](docs/performance.md)
+Wixal Local is built on pinned open-source Ollama 0.35.1, with its original credits and notices preserved. A separate Ollama server and cloud providers remain optional. [Upstream credits](THIRD_PARTY_NOTICES.md)
 
 ## Project tools, memory and connections
 
@@ -80,7 +75,7 @@ Open a folder and start a conversation. Your files, saved notes, and terminal ar
 | **Real project work** | Read files in chunks, review edits, and execute commands with output, exit status and cancellation. |
 | **Web pages and APIs** | Enable web search or HTTP tools, review the request, and get real source links, page text or JSON. |
 | **External MCP tools** | Connect trusted local servers for additional capabilities and choose which tools the model can call. |
-| **Models on your terms** | Download local Ollama models from the picker, cancel downloads, and choose context windows up to 128k when supported. |
+| **Models on your terms** | Download and manage local models in Wixal, and choose context windows up to 128k when supported. |
 
 Built-in tools start enabled. Search or filter them in **Workspace → Tool kit**, or type **@tool_name** in chat to explicitly select a tool. Actions that edit files, run commands, save memories or use external services still come to you for review. Local inference, chats and notes stay on your Mac unless you enable a cloud provider or approve an external action.
 
@@ -112,11 +107,11 @@ Conversations and project notes are saved on your Mac. When you use a cloud mode
 
 ## Get started
 
-1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.0/Wixal-0.7.0-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
-2. **Connect a model.** Choose Wixal Local in **⌘L** and download or import a model, or open **Workspace → Connections** to add a provider.
+1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.1/Wixal-0.7.1-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
+2. **Connect a model.** Open **Models** in the sidebar and download or import a model with Wixal Local, or open **Workspace → Connections** to add a provider.
 3. **Open your project.** Press **⌘O** to choose a folder and **⌘L** to choose a model. Then start a conversation.
 
-This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.0#install).
+This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.1#install).
 
 ## Guides & development
 

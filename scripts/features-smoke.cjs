@@ -21,17 +21,19 @@ async function main() {
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
     const page = await app.firstWindow(), errors = []; page.on('pageerror', error => errors.push(error.message));
-    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ state: 'attached' });
+    await page.locator('#connection-label').filter({ hasText: 'Wixal Local connected' }).waitFor({ state: 'attached' });
     await app.evaluate(async (_electron, url) => {
       const original = globalThis.fetch;
+      const fixtureModels = [{ name: 'fixture', size: 1000000 }];
       globalThis.fetch = async (target, request) => {
         if (!String(target).startsWith('http://127.0.0.1:11434')) return original(target, request);
         const json = data => new Response(JSON.stringify(data));
-        if (String(target).endsWith('/api/tags')) return json({ models: [{ name: 'fixture', size: 1000000 }] });
+        if (String(target).endsWith('/api/tags')) return json({ models: fixtureModels });
         if (String(target).endsWith('/api/show')) return json({ capabilities: ['tools'], model_info: { 'fixture.context_length': 8192 } });
         if (String(target).endsWith('/api/pull')) {
           const name = JSON.parse(request.body).model;
           if (name === 'cancel:fixture') return new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('{"status":"pulling","total":100,"completed":25}\n')); request.signal.addEventListener('abort', () => controller.error(new Error('Aborted'))); } }));
+          fixtureModels.push({ name, size: 1000000 });
           return new Response('{"status":"pulling","total":100,"completed":50}\n{"status":"success"}\n');
         }
         const body = JSON.parse(request.body), last = body.messages.at(-1);
@@ -62,7 +64,7 @@ async function main() {
     await send('Fetch fixture and approve'); await page.locator('#approval-dialog[open]').waitFor(); await page.click('#approve'); await finished(); assert.equal(hits, 1); assert.match(await page.textContent('#messages'), /real-http-result/);
     await send('Remember fixture'); await page.locator('#approval-dialog[open]').waitFor(); assert.match(await page.textContent('#approval-title'), /Save project memory/); await page.click('#approve'); await finished();
     await send('Echo fixture'); await page.locator('#approval-dialog[open]').waitFor(); assert.match(await page.textContent('#approval-description'), /Fixture tools/); await page.click('#approve'); await finished(); assert.match(await page.textContent('#messages'), /real MCP UI result/);
-    await page.click('#model-button'); await page.fill('#model-pull-name', 'download:fixture'); await page.click('#model-pull-button');
+    await page.click('#model-button'); await page.click('#model-downloads-tab'); await page.fill('#model-pull-name', 'download:fixture'); await page.click('#model-pull-button');
     await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Downloaded download:fixture'));
     await page.fill('#model-pull-name', 'cancel:fixture'); await page.click('#model-pull-button'); await page.locator('#model-pull-cancel').waitFor(); await page.click('#model-pull-cancel');
     await page.waitForFunction(() => document.querySelector('#model-pull-button').disabled === false);
@@ -73,7 +75,7 @@ async function main() {
     const screenshots = path.join(os.tmpdir(), 'wixal-0.6.0-qa'); await fs.mkdir(screenshots, { recursive: true });
     await page.screenshot({ path: path.join(screenshots, 'external-tools.png'), animations: 'disabled' }); await page.click('[data-close="extensions-dialog"]'); await page.click('#close-toolkit');
     await workspace('#memory-button'); await page.locator('#saved-summary summary').click(); await page.screenshot({ path: path.join(screenshots, 'memory.png'), animations: 'disabled' }); await page.click('#close-memory');
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640)); await page.click('#model-button');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640)); await page.click('#model-button'); await page.click('#model-downloads-tab');
     assert.ok((await page.locator('#model-pull-button').boundingBox()).x < 920); await page.screenshot({ path: path.join(screenshots, 'models-compact.png'), animations: 'disabled' });
     assert.deepEqual(errors, []);
     await app.close();

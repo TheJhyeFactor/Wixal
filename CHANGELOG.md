@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.1 — 6 October 2026
+
+- Reorganized the model chooser around Installed and Downloads tabs, with provider, current model, context and local-engine settings in a separate setup panel.
+- Added download search and sorting, independent filters for each library view, clearer selected-model and memory-fit information, and a model menu for deletion.
+- Added a dedicated Models page, direct catalog downloads, a persistent serial queue with pause/resume/cancel/retry, installation verification and selection after download.
+- Added model-drive space and loaded-memory readings, explicit memory release and suggested context settings.
+- Cached unchanged model metadata, bounded metadata requests, throttled progress updates and reused hardware identity. External-engine memory estimates now account for higher precision context caches.
+- Kept the local provider branded as Wixal Local in both bundled-engine and external-server modes.
+- Aligned the bottom-left Models, Settings and Workspace controls with equal hit areas and icon positions in expanded and collapsed sidebars; kept the menu anchored on resize.
+- Added appearance and workspace preferences, sidebar resizing and an in-app project folder picker.
+- Refreshed actual app screenshots, the model tour and product information.
+- Kept development on the 0.7.x patch release line.
+
+## 0.7.0 — 6 October 2026
+
+- Included the managed Wixal Local engine and independent model imports, with upstream credits and pinned runtime provenance.
+- Added reported usage, real local benchmarks and model fit filters.
+- Added explicit @tools, rendered-page inspection and longer command sessions.
+- See [the 0.7.0 release notes](docs/release-0.7.0.md) for the complete release and verification details.
+
 ## 0.6.0 — 6 October 2026
 
 - Added reviewed DuckDuckGo web search and HTTP requests for web pages and JSON APIs, disabled until enabled in the tool kit.

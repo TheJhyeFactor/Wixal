@@ -1,5 +1,5 @@
 const providers = Object.freeze({
-  ollama: { label: 'Ollama', protocol: 'ollama' },
+  ollama: { label: 'Wixal Local', protocol: 'ollama' },
   openai: { label: 'OpenAI API', protocol: 'responses', baseURL: 'https://api.openai.com/v1', keysURL: 'https://platform.openai.com/api-keys' },
   chatgpt: { label: 'ChatGPT', protocol: 'responses', baseURL: 'https://api.openai.com/v1' },
   xai: { label: 'xAI · Grok', protocol: 'responses', baseURL: 'https://api.x.ai/v1', keysURL: 'https://console.x.ai' },

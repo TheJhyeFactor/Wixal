@@ -39,7 +39,7 @@ const alive = pid => { try { process.kill(pid, 0); return true; } catch { return
     while (Date.now() < benchDeadline) { const value = await page.evaluate(() => window.wixal.state()); if (value.benchmarks.length && !value.benchmarkProgress) break; await new Promise(r => setTimeout(r, 200)); }
     const result = await page.evaluate(async () => (await window.wixal.state()).benchmarks.at(-1));
     assert.ok(result.tokensPerSecond > 0); assert.equal(result.samples.length, 2); console.log('Real benchmark:', JSON.stringify(result));
-    await page.selectOption('#model-fit-filter', 'tested'); assert.equal(await page.locator('.model-row').count(), 1); await page.selectOption('#model-fit-filter', 'all');
+    await page.locator('#model-filter-panel > summary').click(); await page.selectOption('#model-fit-filter', 'tested'); assert.equal(await page.locator('.model-row').count(), 1); await page.selectOption('#model-fit-filter', 'all');
     await page.click('#runtime-stop');
     await waitState(page, state => state.localRuntime.status === 'stopped'); assert.equal(alive(lastPid), false);
     await page.click('#runtime-start'); await waitState(page, state => state.localRuntime.status === 'ready');
@@ -53,8 +53,8 @@ const alive = pid => { try { process.kill(pid, 0); return true; } catch { return
     await app.close(); app = null; assert.equal(alive(lastPid), false);
     page = await launch(); lastPid = await page.evaluate(async () => (await window.wixal.state()).localRuntime.pid);
     assert.match(await page.evaluate(async () => (await window.wixal.state()).sessions.at(-1).messages.findLast(m => m.role === 'assistant')?.content || ''), /WIXAL_LOCAL_OK/); await page.click('#model-button'); await page.locator('.model-row').first().waitFor(); assert.equal(await page.locator('.model-row').count(), 1);
-    await page.click('[data-model-delete]'); await page.locator('#model-delete-dialog[open]').waitFor(); await page.click('#confirm-model-delete');
-    await page.waitForFunction(() => document.querySelector('#model-list').textContent.includes('No models installed'));
+    await page.locator('.model-manage summary').click(); await page.click('[data-model-delete]'); await page.locator('#model-delete-dialog[open]').waitFor(); await page.click('#confirm-model-delete');
+    await page.waitForFunction(() => document.querySelector('#model-list').textContent.includes('Your library is empty'));
     await fs.access(path.join(os.homedir(), '.ollama/models/manifests/registry.ollama.ai/library/gemma3/12b'));
     assert.deepEqual(errors, []); await app.close(); app = null; assert.equal(alive(lastPid), false);
     console.log('PASS: bundled engine, import, real inference, stop/start, external switch, persistent library/chat, benchmark/filter, scoped deletion and quit cleanup');

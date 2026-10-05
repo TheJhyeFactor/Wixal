@@ -69,7 +69,7 @@ async function streamCompletions({ model, messages, instructions, tools, provide
   const reasoningDetails = [...reasoningBlocks.values()];
   const chatOutput = { role: 'assistant', content: chunkContent ? contentChunks : content || null, ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
     ...(reasoning ? { reasoning_content: reasoning } : {}), ...(reasoningDetails.length ? { reasoning_details: reasoningDetails } : {}) };
-  return { role: 'assistant', provider, ...(provider === 'custom' ? { endpoint: info.baseURL } : {}), content, chatOutput, ...(toolCalls.length ? { tool_calls: toolCalls.map(c => ({ call_id: c.id, function: c.function })) } : {}), metrics: metrics(started, usage?.completion_tokens) };
+  return { role: 'assistant', provider, ...(provider === 'custom' ? { endpoint: info.baseURL } : {}), content, chatOutput, ...(toolCalls.length ? { tool_calls: toolCalls.map(c => ({ call_id: c.id, function: c.function })) } : {}), metrics: { ...metrics(started, usage?.completion_tokens), inputTokens: usage?.prompt_tokens ?? null } };
 }
 function anthropicMessages(messages) {
   const result = []; let pending = [];
@@ -97,7 +97,7 @@ async function streamAnthropic({ model, messages, instructions, tools, provider,
     ...(tools.length ? { tools: tools.map(({ function: f }) => ({ name: f.name, description: f.description, input_schema: f.parameters })) } : {}) };
   const response = await fetcher(`${info.baseURL}/messages`, { method: 'POST', redirect: 'error', headers: headers(info, token), body: JSON.stringify(body), signal });
   if (!response.ok) throw providerError(info.label, response.status);
-  const blocks = new Map(), fragments = new Map(), stopped = new Set(); let content = '', finish, ended = false, tokens = 0;
+  const blocks = new Map(), fragments = new Map(), stopped = new Set(); let content = '', finish, ended = false, tokens = 0, inputTokens = null;
   await readEvents(response, data => {
     const event = JSON.parse(data);
     if (event.type === 'error') throw providerError(info.label, event.error?.type === 'overloaded_error' ? 529 : 500);
@@ -111,6 +111,7 @@ async function streamAnthropic({ model, messages, instructions, tools, provider,
       if (delta.type === 'signature_delta') block.signature = (block.signature || '') + delta.signature;
     }
     if (event.type === 'content_block_stop') stopped.add(event.index);
+    if (event.type === 'message_start') inputTokens = event.message?.usage?.input_tokens ?? null;
     if (event.type === 'message_delta') { finish = event.delta?.stop_reason; tokens = event.usage?.output_tokens || tokens; }
     if (event.type === 'message_stop') ended = true;
     if (JSON.stringify([...blocks.values()]).length + [...fragments.values()].join('').length > 10 * 1024 * 1024) throw new Error('Claude response exceeded the size limit.');
@@ -123,7 +124,7 @@ async function streamAnthropic({ model, messages, instructions, tools, provider,
   });
   const calls = output.filter(c => c.type === 'tool_use');
   if (calls.length && (finish !== 'tool_use' || calls.some(c => !c.id || !c.name || !c.input))) throw new Error('Claude returned incomplete tool calls.');
-  return { role: 'assistant', provider, content, anthropicOutput: output, ...(calls.length ? { tool_calls: calls.map(c => ({ call_id: c.id, function: { name: c.name, arguments: JSON.stringify(c.input) } })) } : {}), metrics: metrics(started, tokens) };
+  return { role: 'assistant', provider, content, anthropicOutput: output, ...(calls.length ? { tool_calls: calls.map(c => ({ call_id: c.id, function: { name: c.name, arguments: JSON.stringify(c.input) } })) } : {}), metrics: { ...metrics(started, tokens), inputTokens } };
 }
 async function streamCloud(options) {
   const info = providerInfo(options.provider, options.provider === 'custom' ? customSettings(options.custom) : {});

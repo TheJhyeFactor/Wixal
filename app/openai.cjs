@@ -59,7 +59,7 @@ async function streamResponses({ model, messages, instructions, tools, provider,
   const responseOutput = output.map(item => { const copy = { ...item }; delete copy.id; return copy; });
   const calls = output.filter(item => item.type === 'function_call').map(item => ({ call_id: item.call_id, namespace: item.namespace, function: { name: item.name, arguments: item.arguments } }));
   return { role: 'assistant', provider, content: content || output.filter(i => i.type === 'message').flatMap(i => i.content || []).filter(c => c.type === 'output_text').map(c => c.text).join(''), responseOutput,
-    ...(calls.length ? { tool_calls: calls } : {}), metrics: { tokens, seconds, tokensPerSecond: seconds ? Math.round(tokens / seconds * 10) / 10 : 0 } };
+    ...(calls.length ? { tool_calls: calls } : {}), metrics: { inputTokens: usage?.input_tokens ?? null, tokens, seconds, tokensPerSecond: seconds ? Math.round(tokens / seconds * 10) / 10 : 0 } };
 }
 async function cloudModels(provider, token, fetcher = fetch) {
   const response = await fetcher(`${API}/models`, { headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(15000) });

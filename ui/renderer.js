@@ -2,13 +2,26 @@
 const $ = id => document.getElementById(id);
 const api = window.wixal;
 const tools = [
+  { id: 'command_start', name: 'Start command session', description: 'Run an AI-selected host command for up to an hour. Read its results in this chat.', review: true },
+  { id: 'command_read', name: 'Review command output', description: 'Read output chunks, errors and completion status from a command session.' },
+  { id: 'command_write', name: 'Send command input', description: 'Send reviewed stdin text to a running command.', review: true },
+  { id: 'command_stop', name: 'Stop command session', description: 'Cancel a command and its child processes.' },
+  { id: 'command_save_output', name: 'Save command evidence', description: 'Save captured output and status to a project file.', review: true },
+  { id: 'browser_inspect', name: 'Inspect rendered website', description: 'Read a JavaScript-rendered page, links, forms and console messages.', review: true },
+
   { id: 'list_files', name: 'List files', description: 'See the files in the selected project.' },
   { id: 'read_file', name: 'Read files', description: 'Read text files to understand the code.' },
   { id: 'search_files', name: 'Search the project', description: 'Find text across project files.' },
   { id: 'write_file', name: 'Edit and create files', description: 'Review the existing and proposed contents before saving.', review: true },
   { id: 'run_command', name: 'Run commands', description: 'Run a command in the project. Stops after 60 seconds.', review: true },
+  { id: 'search_history', name: 'Recall project conversations', description: 'Search saved conversations in this project.' },
+  { id: 'save_memory', name: 'Save project memory', description: 'Keep reviewed decisions and preferences for future chats.', review: true },
+  { id: 'web_search', name: 'Search the web', description: 'Send a reviewed search query to DuckDuckGo and return source links.', review: true },
+  { id: 'http_request', name: 'Web pages and APIs', description: 'Review the URL, HTTP method and JSON body before any network request.', review: true },
 ];
+const availableTools = () => [...tools, ...(state?.externalConnections || []).flatMap(server => server.tools.map(tool => ({ ...tool, description: tool.description, review: true })))];
 let menuSessionId, renameSessionId, deleteSessionId, welcomeSessionId;
+let deleteModelName, mentionIndex = 0, mentionCandidates = [];
 let connections, modelRequest = 0, keyProvider = 'openai';
 const providerLabels = { ollama: 'Ollama', openai: 'OpenAI API', chatgpt: 'ChatGPT' };
 let state, models = [], connected = false, busy = false, streamText = '', terminal, fitAddon;
@@ -26,6 +39,7 @@ function toast(message) {
 async function invoke(name, ...args) { try { return await api[name](...args); } catch (error) { toast(error.message); throw error; } }
 async function refresh() { state = await api.state(); render(); }
 function render() {
+  providerLabels.ollama = state.localRuntime?.mode === 'managed' ? 'Wixal Local' : 'Ollama';
   const p = project(), s = session(), model = selectedModel();
   applySidebarLayout();
   $('title-project').textContent = p?.name || 'workspace';
@@ -47,7 +61,7 @@ function render() {
   $('tools-count').textContent = state.enabledTools.length;
   $('bottom-model').textContent = connected ? `${state.mode === 'agent' && p ? 'Agent' : 'Chat'} · ${model?.name || 'Choose a model'}` : `${providerLabels[state.provider]} · open the model picker to connect`;
   const recent = s?.messages.findLast(message => message.metrics?.tokens);
-  $('response-stats').textContent = recent ? `${recent.metrics.tokens} tokens · ${recent.metrics.tokensPerSecond} tok/s` : 'Stored on this Mac';
+  $('response-stats').textContent = recent ? `${recent.metrics.tokens} tokens · ${recent.metrics.tokensPerSecond} tok/s` : 'Usage & performance ↗';
   const cloud = state.provider !== 'ollama', allowed = p ? state.cloudProjects.includes(p.id) : state.cloudPersonal;
   $('cloud-notice').classList.toggle('hidden', !cloud);
   $('cloud-notice-text').textContent = allowed ? `${state.provider === 'chatgpt' ? 'Using ChatGPT plan' : providerLabels[state.provider]} · conversation and enabled project context sent to ${state.provider === 'custom' ? state.customProvider.baseURL : providerLabels[state.provider]}` : `${providerLabels[state.provider]} · enable cloud context before sending`;
@@ -58,7 +72,7 @@ function render() {
   $('prompt').disabled = busy || archived; $('send').disabled = archived; $('attach-image').disabled = busy || archived;
   $('activity-label').textContent = archived ? 'Restore to continue chatting' : busy ? state.provider === 'ollama' ? 'Working locally…' : 'Working…' : 'Ready';
   renderArchives();
-  renderMessages(); renderMemories(); renderToolkit(); renderModelList(); renderAttachments(); renderTasks();
+  renderMessages(); renderMemories(); renderToolkit(); renderPerformance(); renderModelList(); renderAttachments(); renderTasks();
 }
 function renderSessions() {
   const query = $('session-search').value.toLowerCase();
@@ -129,6 +143,9 @@ function markdown(text) { return DOMPurify.sanitize(marked.parse(text || '', { b
 function resultStatus(message) {
   if (message.content.startsWith('Error:')) return 'Failed';
   if (message.content.startsWith('User declined')) return 'Declined';
+  if (['command_start', 'command_read', 'command_stop'].includes(message.tool_name)) {
+    try { const result = JSON.parse(message.content); return result.state === 'running' ? 'Running' : result.state === 'stopped' ? 'Stopped' : result.state === 'failed' ? 'Failed' : result.exitCode === 0 ? 'Done' : `Exit ${result.exitCode ?? '?'}`; } catch {}
+  }
   if (message.tool_name === 'run_command') {
     try { const result = JSON.parse(message.content); return result.stopped ? 'Stopped' : result.exitCode === 0 ? 'Done' : `Exit ${result.exitCode ?? '?'}`; } catch {}
   }
@@ -140,9 +157,9 @@ function renderMessages() {
   $('welcome').classList.toggle('hidden', !!messages.length || !!streamText);
   $('messages').classList.toggle('hidden', !messages.length && !streamText);
   $('messages').innerHTML = messages.map((message, index) => {
-    if (message.role === 'tool') { const status = resultStatus(message); return `<details class="tool-message"><summary>⌁ ${escapeHTML(tools.find(tool => tool.id === message.tool_name)?.name || message.tool_name)}<span class="tool-status ${status === 'Done' ? '' : 'failed'}">${status}</span></summary><pre class="tool-content">${escapeHTML(message.content)}</pre></details>`; }
+    if (message.role === 'tool') { const status = resultStatus(message); return `<details class="tool-message" ${['command_read', 'browser_inspect'].includes(message.tool_name) ? 'open' : ''}><summary>⌁ ${escapeHTML(availableTools().find(tool => tool.id === message.tool_name)?.name || message.tool_name)}<span class="tool-status ${['Done', 'Running'].includes(status) ? '' : 'failed'}">${status}</span></summary><pre class="tool-content">${escapeHTML(message.content)}</pre></details>`; }
     const isUser = message.role === 'user';
-    if (!isUser && !message.content && message.tool_calls) return `<div class="tool-message"><span class="muted">Requested ${message.tool_calls.map(call => escapeHTML(tools.find(tool => tool.id === call.function?.name)?.name || call.function?.name || 'tool')).join(', ')}</span></div>`;
+    if (!isUser && !message.content && message.tool_calls) return `<div class="tool-message"><span class="muted">Requested ${message.tool_calls.map(call => escapeHTML(availableTools().find(tool => tool.id === call.function?.name)?.name || call.function?.name || 'tool')).join(', ')}</span></div>`;
     const images = message.images?.length ? `<div class="message-images">${message.images.map((image, imageIndex) => `<button data-message="${index}" data-image="${imageIndex}" title="${escapeHTML(message.imageNames?.[imageIndex] || 'View image')}"><img src="data:image/png;base64,${image}" alt="${escapeHTML(message.imageNames?.[imageIndex] || 'Attached image')}"></button>`).join('')}</div>` : '';
     const metrics = message.metrics?.tokens ? `<div class="message-metrics">${message.metrics.tokens} tokens · ${message.metrics.tokensPerSecond} tok/s · ${Math.round(message.metrics.seconds)}s</div>` : '';
     return `<article class="message ${isUser ? 'user' : 'assistant'}"><div class="message-header">${isUser ? '<span>▸</span> You' : '<img src="../assets/mark.svg" alt=""> Wixal'}<span class="muted">${new Date(message.created || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><button class="copy-message" data-copy="${index}">Copy</button></div><div class="message-body">${isUser ? escapeHTML(message.content) : markdown(message.content)}</div>${images}${metrics}</article>`;
@@ -168,33 +185,126 @@ function renderMemories() {
   $('memory-count').textContent = memories.length;
   $('memories').innerHTML = memories.length ? memories.map(memory => `<div class="memory-entry"><p>${escapeHTML(memory.content)}</p><footer>${new Date(memory.created).toLocaleDateString()}<button data-id="${memory.id}" title="Delete memory" ${busy ? 'disabled' : ''}>Forget</button></footer></div>`).join('') : '<p class="empty-project">Nothing saved yet. Add a preference or project decision below.</p>';
   $('memory-form').querySelector('button').disabled = busy;
+  $('auto-summary').checked = state.autoSummary !== false; $('auto-summary').disabled = busy;
+  const summary = session()?.summary;
+  $('saved-summary').classList.toggle('hidden', !summary);
+  $('summary-content').textContent = summary?.content || '';
+  $('summary-meta').textContent = summary ? `${summary.count} older messages · ${summary.method === 'excerpts' ? 'Fallback excerpts' : 'Model summary'} · ${new Date(summary.updated).toLocaleString()}. Full history remains saved.` : '';
+  $('summary-clear').disabled = busy;
   $('memories').querySelectorAll('button').forEach(button => button.onclick = async () => { try { state = await invoke('memory-delete', button.dataset.id); renderMemories(); } catch {} });
 }
+function toolCategory(id) { return id.startsWith('mcp_') ? 'external' : id.startsWith('command_') || id === 'run_command' ? 'commands' : ['web_search', 'http_request', 'browser_inspect'].includes(id) ? 'web' : ['search_history', 'save_memory'].includes(id) ? 'memory' : 'files'; }
 function renderToolkit() {
   const p = project();
-  $('toolkit-summary').textContent = state.mode === 'chat' ? 'You’re in Chat mode. These tools become available when you switch to Agent and open a project.' : p ? `Tools for ${p.name}. Switch off anything you don’t need.` : 'Open a project folder to use these tools in Agent mode.';
-  $('tool-list').innerHTML = tools.map(tool => `<label class="tool-toggle"><input type="checkbox" data-tool="${tool.id}" ${state.enabledTools.includes(tool.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}><span><strong>${tool.name}</strong><small>${tool.description}</small>${tool.review ? '<em>REVIEW EACH TIME</em>' : ''}</span></label>`).join('');
+  $('toolkit-summary').textContent = state.mode === 'chat' ? 'You’re in Chat mode. Use @tool_name to call a tool from Chat, or switch to Agent for automatic selection. File tools need a project.' : p ? `Tools for ${p.name}. Tools are enabled by default. Type @ in chat to select one explicitly.` : 'Open a project folder to use these tools in Agent mode.';
+  const catalog = availableTools(), query = $('tool-search').value.toLowerCase();
+  $('tool-list').innerHTML = catalog.filter(tool => ($('tool-category').value === 'all' || toolCategory(tool.id) === $('tool-category').value) && `${tool.name} ${tool.id} ${tool.description}`.toLowerCase().includes(query)).sort((a, b) => ['files', 'commands', 'web', 'memory', 'external'].indexOf(toolCategory(a.id)) - ['files', 'commands', 'web', 'memory', 'external'].indexOf(toolCategory(b.id))).map(tool => `<label class="tool-toggle"><input type="checkbox" data-tool="${escapeHTML(tool.id)}" ${state.enabledTools.includes(tool.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}><span><strong>${escapeHTML(tool.name)}</strong><code>@${escapeHTML(tool.id)}</code><small>${escapeHTML(tool.description)}</small>${tool.review ? '<em>REVIEW EACH TIME</em>' : ''}</span></label>`).join('');
   $('tool-list').querySelectorAll('input').forEach(input => input.onchange = async () => {
-    const enabledTools = tools.filter(tool => $('tool-list').querySelector(`[data-tool="${tool.id}"]`).checked).map(tool => tool.id);
+    const enabledTools = [...new Set([...state.enabledTools.filter(name => name !== input.dataset.tool), ...(input.checked ? [input.dataset.tool] : [])])];
+    enabledTools.push(...state.enabledTools.filter(name => !catalog.some(tool => tool.id === name)));
     try { state = await invoke('settings', { enabledTools }); render(); } catch { renderToolkit(); }
   });
   const recent = (session()?.messages || []).filter(message => message.role === 'tool').slice(-5).toReversed();
   $('tool-activity').innerHTML = recent.length ? recent.map(message => `<div class="tool-result">${escapeHTML(message.tool_name)}<span>${resultStatus(message)}</span></div>`).join('') : '<p class="empty-project">Tool results appear here after the model uses them.</p>';
+  $('manage-extensions').disabled = busy; $('tools-enable-all').disabled = busy;
+  renderExtensions();
+}
+function renderExtensions() {
+  $('extension-list').innerHTML = (state.mcpServers || []).map(server => {
+    const connection = state.externalConnections?.find(c => c.id === server.id);
+    return `<div class="extension-entry"><strong>${escapeHTML(server.name)}</strong><small>${escapeHTML([server.command, ...server.args].join(' '))}</small><p>${connection ? `${escapeHTML(connection.status)} · ${connection.tools.length} tools` : 'Disconnected'}</p><div class="form-row"><button data-extension-connect="${server.id}" ${busy || connection?.status === 'connecting' ? 'disabled' : ''}>${connection ? 'Disconnect' : 'Connect'}</button><button data-extension-delete="${server.id}" ${busy ? 'disabled' : ''}>Remove</button></div></div>`;
+  }).join('') || '<p class="muted">No external tool servers saved yet.</p>';
+  $('extension-list').querySelectorAll('[data-extension-connect]').forEach(button => button.onclick = async () => {
+    const id = button.dataset.extensionConnect, connected = state.externalConnections?.some(c => c.id === id);
+    button.disabled = true; button.textContent = connected ? 'Disconnecting…' : 'Connecting…';
+    try { state = await invoke(connected ? 'mcp-disconnect' : 'mcp-connect', id); render(); if (!connected) toast('Server connected. Enable its tools in the tool kit.'); } catch { await refresh(); }
+  });
+  $('extension-list').querySelectorAll('[data-extension-delete]').forEach(button => button.onclick = async () => { try { state = await invoke('mcp-delete', button.dataset.extensionDelete); render(); } catch {} });
+  $('extension-form').querySelectorAll('input, textarea, button').forEach(input => input.disabled = busy);
 }
 function renderModelList() {
   const query = $('model-search').value.toLowerCase(), local = state?.provider === 'ollama';
-  const filtered = models.filter(model => `${model.name} ${model.displayName || ''}`.toLowerCase().includes(query));
-  if (connections?.providers) { for (const item of connections.providers) providerLabels[item.id] = item.label; $('provider-select').innerHTML = connections.providers.map(item => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.label)}${item.id === 'ollama' ? ' · local' : item.id === 'chatgpt' ? ' · connected account' : ''}</option>`).join(''); }
-  $('provider-select').value = state?.provider || 'ollama'; $('provider-select').disabled = busy;
-  $('model-provider-heading').textContent = local ? 'OLLAMA · ON THIS MAC' : `${providerLabels[state?.provider]} · CLOUD`;
-  $('model-list').innerHTML = filtered.length ? filtered.map(model => `<button class="model-row ${state?.model === model.name ? 'selected' : ''}" data-model="${escapeHTML(model.name)}" ${busy ? 'disabled' : ''}><div class="model-row-info"><strong>${escapeHTML(model.displayName || shortModel(model.name))}${state.model === model.name ? ' <span class="muted">✓</span>' : ''}</strong><span class="model-id">${escapeHTML(model.name)}</span><div class="capabilities"><span class="capability">Chat</span>${model.capabilities?.includes('tools') ? '<span class="capability tools">Tools</span>' : ''}${model.capabilities?.includes('vision') ? '<span class="capability vision">Images</span>' : ''}${!model.capabilities ? '<span class="capability">Capabilities unavailable</span>' : ''}<span class="model-context">${escapeHTML(model.details?.parameter_size || '')}${model.contextLength ? ` · ${Math.round(model.contextLength / 1024)}k max context` : ''}</span></div></div><span class="model-size">${local ? `${(model.size / 1e9).toFixed(1)} GB<br><small>on disk</small>` : '<small>Cloud</small>'}</span></button>`).join('') : `<p class="empty-project">${query ? 'No models match that search.' : local ? connected ? 'No models installed yet.' : 'Ollama is offline.' : 'Connect this provider in Connections, then refresh the model list.'}</p>`;
-  $('context-size').value = String(state?.contextSize || 16384); $('context-size').disabled = busy;
-  $('model-library-info').textContent = local ? connected ? `${models.length} installed models · capabilities reported by Ollama` : 'Connect Ollama, then refresh.' : `${models.length} account models · tool and image support varies by model`;
+  const type = $('model-type-filter').value, fit = $('model-fit-filter').value;
+  const sizeLimit = Number($('model-size-filter').value) * 1e9;
+  const filtered = models.filter(model => (!local || !sizeLimit || model.size <= sizeLimit) && `${model.name} ${model.displayName || ''}`.toLowerCase().includes(query) && (type === 'all' || model.capabilities?.includes(type)) && (!local || fit === 'all' || (fit === 'estimated' ? model.fit?.fits : fit === 'tested' ? !!modelBenchmark(model) : (modelBenchmark(model)?.tokensPerSecond || 0) >= 20)));
+  filtered.sort((a, b) => $('model-sort').value === 'size' ? a.size - b.size : $('model-sort').value === 'speed' ? (modelBenchmark(b)?.tokensPerSecond || 0) - (modelBenchmark(a)?.tokensPerSecond || 0) : a.name.localeCompare(b.name));
+  const benchmarkBusy = !!state.benchmarkProgress;
+  $('hardware-hint').textContent = local ? `${state.hardware.cpu} · ${(state.hardware.totalMemory / 1024 ** 3).toFixed(0)} GB RAM. Fit estimates reserve 25% for the system and use the selected context. Benchmark to measure actual performance.` : 'Performance and memory depend on the cloud provider.';
+  $('model-fit-filter').disabled = !local; $('model-sort').disabled = !local;
+  renderBenchmarkProgress(); renderCatalog();
+  if (connections?.providers) { for (const item of connections.providers) providerLabels[item.id] = item.id === 'ollama' ? state.localRuntime?.mode === 'managed' ? 'Wixal Local' : 'Ollama' : item.label; $('provider-select').innerHTML = connections.providers.map(item => `<option value="${escapeHTML(item.id)}">${escapeHTML(providerLabels[item.id])}${item.id === 'ollama' ? ' · local' : item.id === 'chatgpt' ? ' · connected account' : ''}</option>`).join(''); }
+  $('provider-select').value = state?.provider || 'ollama'; $('provider-select').disabled = busy || !!state.benchmarkProgress;
+  $('model-provider-heading').textContent = local ? `${providerLabels.ollama.toUpperCase()} · ON THIS MAC` : `${providerLabels[state?.provider]} · CLOUD`;
+  $('model-list').innerHTML = filtered.length ? filtered.map(model => `<div class="model-entry"><button class="model-row ${state?.model === model.name ? 'selected' : ''}" data-model="${escapeHTML(model.name)}" ${busy || benchmarkBusy ? 'disabled' : ''}><div class="model-row-info"><strong>${escapeHTML(model.displayName || shortModel(model.name))}${state.model === model.name ? ' <span class="muted">✓</span>' : ''}</strong><span class="model-id">${escapeHTML(model.name)}</span><div class="capabilities"><span class="capability">Chat</span>${model.capabilities?.includes('tools') ? '<span class="capability tools">Tools</span>' : ''}${model.capabilities?.includes('vision') ? '<span class="capability vision">Images</span>' : ''}${!model.capabilities ? '<span class="capability">Capabilities unavailable</span>' : ''}<span class="model-context">${escapeHTML(model.details?.parameter_size || '')}${model.contextLength ? ` · ${Math.round(model.contextLength / 1024)}k max context` : ''}</span></div></div><span class="model-size">${local ? `${(model.size / 1e9).toFixed(1)} GB<br><small>on disk</small>` : '<small>Cloud</small>'}</span></button>${local ? `<div class="model-actions"><span>${modelBenchmark(model) ? `${modelBenchmark(model).tokensPerSecond} tok/s · tested at ${Math.round(modelBenchmark(model).context / 1024)}k` : model.fit?.fits ? `Estimated fit · ${(model.fit.required / 1024 ** 3).toFixed(1)} GiB` : `May exceed RAM · ${((model.fit?.required || 0) / 1024 ** 3).toFixed(1)} GiB estimate`}</span><button data-benchmark="${escapeHTML(model.name)}" ${busy || benchmarkBusy || state.modelDownload ? 'disabled' : ''}>Benchmark</button><button data-model-delete="${escapeHTML(model.name)}" ${busy || benchmarkBusy || state.modelDownload ? 'disabled' : ''}>Delete</button></div>` : ''}</div>`).join('') : `<p class="empty-project">${query ? 'No models match that search.' : local ? connected ? 'No models installed yet.' : 'The local engine is offline.' : 'Connect this provider in Connections, then refresh the model list.'}</p>`;
+  $('model-list').querySelectorAll('[data-benchmark]').forEach(button => button.onclick = async () => { try { state = await invoke('benchmark-start', button.dataset.benchmark); render(); } catch {} });
+  $('model-list').querySelectorAll('[data-model-delete]').forEach(button => button.onclick = () => { deleteModelName = button.dataset.modelDelete; $('model-delete-description').textContent = `${deleteModelName} · ${state.localRuntime.mode === 'managed' ? 'Wixal Local library' : 'external Ollama library'}`; $('models-dialog').close(); $('model-delete-dialog').showModal(); });
+  $('context-size').value = String(state?.contextSize || 16384); $('context-size').disabled = busy || !!state.benchmarkProgress;
+  $('model-pull-form').classList.toggle('hidden', !local);
+  renderDownload(); renderRuntime();
+  $('model-library-info').textContent = local ? connected ? `${models.length} installed models · capabilities reported by Ollama` : 'Start the local engine, then refresh.' : `${models.length} account models · tool and image support varies by model`;
   $('ollama-help').classList.toggle('hidden', !local || (connected && models.length > 0));
-  $('model-list').querySelectorAll('button').forEach(button => button.onclick = async () => {
+  $('model-list').querySelectorAll('[data-model]').forEach(button => button.onclick = async () => {
     const model = models.find(item => item.name === button.dataset.model), mode = model.capabilities?.includes('tools') ? state.mode : 'chat';
     try { const before = state.mode; state = await invoke('settings', { model: model.name, mode }); render(); $('models-dialog').close(); if (before !== mode) toast('Switched to Chat. This model has no confirmed tool support.'); } catch {}
   });
+}
+function renderCatalog() {
+  const local = state.provider === 'ollama', type = $('model-type-filter').value, fit = $('model-fit-filter').value;
+  $('model-discover').classList.toggle('hidden', !local);
+  const sizeLimit = Number($('model-size-filter').value) * 1e9;
+  const items = (state.modelCatalog || []).filter(m => (!sizeLimit || m.size <= sizeLimit) && (type === 'all' || m.capabilities.includes(type)) && (fit === 'all' || fit === 'estimated' && m.fit.fits));
+  $('model-catalog-list').innerHTML = items.map(m => `<button type="button" class="catalog-row" data-download-tag="${escapeHTML(m.name)}"><strong>${escapeHTML(m.name)}</strong><small>${(m.size / 1e9).toFixed(1)} GB download · ${m.capabilities.join(', ') || 'text chat'} · ${m.fit.fits ? 'estimated fit' : 'may exceed RAM'}</small><span>Choose tag →</span></button>`).join('') || '<p class="muted">No download suggestions match. Benchmark filters apply to installed models.</p>';
+  $('model-catalog-list').querySelectorAll('button').forEach(button => button.onclick = () => { $('model-pull-name').value = button.dataset.downloadTag; $('model-pull-name').focus(); });
+}
+function modelBenchmark(model) { return state.benchmarks?.findLast(b => b.name === model.name && b.digest === model.digest && b.hardwareId === state.hardware.id && b.mode === state.localRuntime.mode && b.status === 'completed'); }
+function renderBenchmarkProgress() {
+  const progress = state.benchmarkProgress;
+  $('benchmark-progress').classList.toggle('hidden', !progress);
+  $('benchmark-status').textContent = progress ? `${progress.name} · ${progress.phase}${progress.sample ? ` · run ${progress.sample}/2` : ''}` : '';
+}
+function renderPerformance() {
+  if (!state.hardware) return;
+  const records = state.usage || [], chat = records.filter(r => r.sessionId === session()?.id), sum = (rows, key) => rows.reduce((n, r) => n + (r[key] || 0), 0), latest = records.at(-1);
+  $('performance-hardware').textContent = `${state.hardware.cpu} · ${state.hardware.arch} · ${state.hardware.cores} cores · ${(state.hardware.totalMemory / 1024 ** 3).toFixed(0)} GB RAM`;
+  const cards = [['Reported chat input', chat.length && !chat.some(r => r.inputTokens != null) ? 'Unavailable' : sum(chat, 'inputTokens').toLocaleString()], ['Reported chat output', sum(chat, 'tokens').toLocaleString()], ['Reported saved output', sum(records, 'tokens').toLocaleString()], ['Last generation', latest ? `${latest.tokensPerSecond} tok/s` : 'No runs yet'], ['First output', latest?.timeToFirstToken != null ? `${latest.timeToFirstToken.toFixed(2)}s` : 'Unavailable'], ['Saved requests', records.length]];
+  $('performance-totals').innerHTML = cards.map(([label, value]) => `<div><small>${escapeHTML(label)}</small><strong>${escapeHTML(value)}</strong></div>`).join('') + '<p>Counts use engine/provider reports. Missing usage is unavailable. Includes tool steps, summaries and retries; saved totals cover the last 2,000 requests. Benchmarks are listed separately.</p>';
+  $('performance-benchmarks').innerHTML = (state.benchmarks || []).filter(b => b.hardwareId === state.hardware.id).toReversed().map(b => `<div class="benchmark-result"><strong>${escapeHTML(b.name)}</strong><span>${b.tokensPerSecond} tok/s · ${Math.round(b.context / 1024)}k context</span><small>${b.timeToFirstToken != null ? `First output ${b.timeToFirstToken.toFixed(2)}s · ` : ''}${b.loadedBytes ? `${(b.loadedBytes / 1024 ** 3).toFixed(1)} GiB loaded · ` : ''}${new Date(b.created).toLocaleString()}</small></div>`).join('') || '<p class="muted">Benchmark an installed local model from the model manager.</p>';
+}
+function renderMentions() {
+  const text = $('prompt').value, cursor = $('prompt').selectionStart, match = text.slice(0, cursor).match(/(?:^|\s)@([a-zA-Z0-9_]*)$/);
+  mentionCandidates = match ? availableTools().filter(t => state.enabledTools.includes(t.id) && `${t.id} ${t.name}`.toLowerCase().includes(match[1].toLowerCase())).sort((a, b) => Number(!a.id.startsWith(match[1])) - Number(!b.id.startsWith(match[1])) || a.id.localeCompare(b.id)).slice(0, 10) : [];
+  mentionIndex = Math.min(mentionIndex, Math.max(0, mentionCandidates.length - 1));
+  $('tool-mentions').classList.toggle('hidden', !mentionCandidates.length);
+  $('tool-mentions').innerHTML = mentionCandidates.map((t, index) => `<button type="button" role="option" aria-selected="${index === mentionIndex}" data-mention="${escapeHTML(t.id)}"><strong>@${escapeHTML(t.id)}</strong><small>${escapeHTML(t.name)}</small></button>`).join('');
+  $('tool-mentions').querySelectorAll('button').forEach(b => b.onclick = () => insertMention(b.dataset.mention));
+  const selected = availableTools().filter(t => new RegExp(`(?:^|\\s)@${t.id}(?=\\s|$|[.,!?])`).test(text));
+  $('selected-mentions').classList.toggle('hidden', !selected.length);
+  $('selected-mentions').textContent = selected.length ? `Explicit tools: ${selected.map(t => '@' + t.id).join(', ')}` : '';
+}
+function insertMention(id) {
+  const input = $('prompt'), cursor = input.selectionStart, before = input.value.slice(0, cursor), replaced = before.replace(/@([a-zA-Z0-9_]*)$/, '@' + id + ' ');
+  input.value = replaced + input.value.slice(cursor); input.focus(); input.setSelectionRange(replaced.length, replaced.length); sizePrompt(); renderMentions();
+}
+function renderRuntime() {
+  const runtime = state?.localRuntime; if (!runtime) return;
+  const local = state.provider === 'ollama', managed = runtime.mode === 'managed';
+  $('runtime-panel').classList.toggle('hidden', !local);
+  $('runtime-mode').value = runtime.mode;
+  $('ollama-help').querySelector('p').textContent = managed ? 'Wixal includes the local engine. Download a model above or import one from your existing Ollama library.' : 'Install and open Ollama, then download a model above and refresh the list.';
+  const locked = busy || !!state.benchmarkProgress || !!state.modelDownload || runtime.importing || ['starting', 'stopping'].includes(runtime.status);
+  $('runtime-mode').disabled = locked;
+  $('runtime-status').textContent = runtime.importing ? 'Importing…' : managed ? `${runtime.status} · ${runtime.version}` : 'External server';
+  $('runtime-description').textContent = managed ? 'Your model library lives with Wixal. No separate Ollama app is required.' : 'Uses your Ollama server on this Mac at port 11434 and its existing model library.';
+  if (managed && runtime.error) $('runtime-panel').open = true;
+  $('runtime-error').textContent = runtime.error; $('runtime-error').classList.toggle('hidden', !runtime.error || !managed);
+  $('runtime-start').disabled = locked || runtime.status === 'ready'; $('runtime-stop').disabled = locked || runtime.status !== 'ready';
+  for (const id of ['runtime-start', 'runtime-stop', 'runtime-reveal', 'runtime-import-section']) $(id).classList.toggle('hidden', !managed);
+  $('runtime-scan').disabled = locked; $('runtime-import').disabled = locked || !$('runtime-import-model').value;
+}
+function renderDownload(progress = state?.modelDownload) {
+  $('model-pull-button').disabled = busy || !!state.benchmarkProgress || !!progress || !!state?.localRuntime?.importing; $('model-pull-name').disabled = busy || !!state.benchmarkProgress || !!progress || !!state?.localRuntime?.importing;
+  $('model-pull-cancel').classList.toggle('hidden', !progress);
+  $('model-pull-status').textContent = progress ? `${progress.name} · ${progress.status}${progress.total ? ` · ${Math.min(100, Math.round(progress.completed / progress.total * 100))}% of current layer` : ''}` : '';
 }
 async function loadModels() {
   const request = ++modelRequest, provider = state.provider;
@@ -207,8 +317,8 @@ async function loadModels() {
     $('connection-dot').classList.remove('offline'); state = await api.state();
   } catch (error) {
     if (request !== modelRequest) return;
-    connected = false; models = []; $('connection-label').textContent = provider === 'ollama' ? 'Ollama offline' : `${providerLabels[provider]} not connected`;
-    $('connection-dot').classList.add('offline'); if (provider !== 'ollama') toast(error.message);
+    connected = false; models = []; $('connection-label').textContent = provider === 'ollama' ? `${providerLabels.ollama} offline` : `${providerLabels[provider]} not connected`;
+    $('connection-dot').classList.add('offline'); state = await api.state(); if (provider !== 'ollama') toast(error.message);
   }
   render();
 }
@@ -304,7 +414,7 @@ document.querySelectorAll('[data-link]').forEach(button => button.onclick = () =
 $('provider-select').onchange = async event => {
   try { state = await invoke('settings', { provider: event.target.value }); models = []; connected = false; render(); await loadModels(); } catch { renderModelList(); }
 };
-function clearDraft() { streamText = ''; attachments = []; $('prompt').value = ''; sizePrompt(); $('context-note').textContent = ''; renderAttachments(); }
+function clearDraft() { streamText = ''; attachments = []; $('prompt').value = ''; sizePrompt(); renderMentions(); $('context-note').textContent = ''; renderAttachments(); }
 async function openProject() { try { state = await invoke('project-open'); if (state.opened) { clearDraft(); resetTerminal(); } render(); } catch {} }
 async function switchProject(id) { try { state = await invoke('project-select', id); clearDraft(); resetTerminal(); render(); } catch {} }
 async function newSession() { try { state = await invoke('session-new'); clearDraft(); $('session-search').value = ''; render(); $('prompt').focus(); } catch {} }
@@ -395,7 +505,42 @@ $('files-button').onclick = showFiles; $('welcome-open').onclick = () => project
 $('palette-button').onclick = palette; $('model-button').onclick = showModels;
 $('reveal-project').onclick = () => invoke('reveal-project').catch(() => {});
 $('session-search').oninput = renderSessions; $('model-search').oninput = renderModelList; $('file-search').oninput = renderFiles;
-$('context-size').onchange = async event => { try { state = await invoke('settings', { contextSize: Number(event.target.value) }); render(); } catch { render(); } };
+$('auto-summary').onchange = async event => { try { state = await invoke('settings', { autoSummary: event.target.checked }); render(); } catch { render(); } };
+$('summary-clear').onclick = async () => { try { state = await invoke('summary-clear'); render(); } catch {} };
+$('manage-extensions').onclick = () => { renderExtensions(); $('extensions-dialog').showModal(); };
+$('extension-form').onsubmit = async event => {
+  event.preventDefault();
+  try { const args = JSON.parse($('extension-args').value); state = await invoke('mcp-save', { name: $('extension-name').value, command: $('extension-command').value, args }); $('extension-form').reset(); $('extension-args').value = '[]'; render(); } catch (error) { toast(error.message); }
+};
+$('runtime-mode').onchange = async event => {
+  try { ++modelRequest; state = await invoke('runtime-mode', event.target.value); models = []; connected = false; connections = await api.connections(); render(); await loadModels(); } catch { renderRuntime(); }
+};
+$('runtime-start').onclick = async () => { try { state = await invoke('runtime-start'); await loadModels(); } catch { await refresh(); } };
+$('runtime-stop').onclick = async () => { try { ++modelRequest; state = await invoke('runtime-stop'); models = []; connected = false; $('connection-label').textContent = 'Wixal Local stopped'; $('connection-dot').classList.add('offline'); render(); } catch {} };
+$('runtime-reveal').onclick = () => invoke('runtime-reveal').catch(() => {});
+$('runtime-scan').onclick = async () => {
+  try {
+    const imports = await invoke('runtime-imports');
+    $('runtime-import-model').innerHTML = imports.map(model => `<option value="${escapeHTML(model.name)}">${escapeHTML(model.name)} · ${(model.bytes / 1e9).toFixed(1)} GB</option>`).join('');
+    $('runtime-import-form').classList.toggle('hidden', !imports.length);
+    $('runtime-import-status').textContent = imports.length ? 'Choose a model to copy into Wixal.' : 'No supported models found in ~/.ollama/models.'; renderRuntime();
+  } catch {}
+};
+$('runtime-import').onclick = async () => {
+  $('runtime-import-status').textContent = 'Copying and verifying model files…';
+  try { state = await invoke('runtime-import', $('runtime-import-model').value); $('runtime-import-status').textContent = `Imported ${state.imported.name}.`; await loadModels(); }
+  catch (error) { $('runtime-import-status').textContent = error.message; await refresh(); }
+};
+$('tool-search').oninput = renderToolkit; $('tool-category').onchange = renderToolkit;
+$('tools-enable-all').onclick = async () => { try { state = await invoke('settings', { enabledTools: availableTools().map(t => t.id) }); render(); } catch {} };
+for (const id of ['model-type-filter', 'model-fit-filter', 'model-size-filter', 'model-sort']) $(id).onchange = renderModelList;
+$('response-stats').onclick = () => { renderPerformance(); $('performance-dialog').showModal(); };
+$('performance-models').onclick = () => { $('performance-dialog').close(); showModels(); };
+$('benchmark-cancel').onclick = () => api['benchmark-cancel']();
+$('confirm-model-delete').onclick = async () => { try { state = await invoke('model-delete', deleteModelName); $('model-delete-dialog').close(); await loadModels(); showModels(); toast(`Deleted ${deleteModelName}.`); } catch {} };
+$('model-pull-form').onsubmit = async event => { event.preventDefault(); try { state = await invoke('model-pull', $('model-pull-name').value.trim()); renderDownload(); } catch {} };
+$('model-pull-cancel').onclick = async () => { await api['model-pull-cancel'](); };
+$('context-size').onchange = async event => { try { state = await invoke('settings', { contextSize: Number(event.target.value) }); await loadModels(); render(); } catch { render(); } };
 $('conversation-label').onclick = () => { if (session()) showRename(session().id); };
 $('rename-form').onsubmit = async event => { event.preventDefault(); try { state = await invoke('session-rename', $('rename-input').value, renameSessionId); $('rename-dialog').close(); render(); } catch {} };
 $('archives-button').onclick = showArchives; $('archive-search').oninput = renderArchives;
@@ -424,10 +569,11 @@ $('composer').onsubmit = async event => {
   if (state.mode === 'agent' && project() && !selectedModel().capabilities?.includes('tools')) { toast('This model needs Chat mode, or choose a model marked Tools.'); showModels(); return; }
   if (attachments.length && !selectedModel().capabilities?.includes('vision')) { toast('The attached images need a model marked Images.'); showModels(); return; }
   streamText = ''; setBusy(true);
-  try { await invoke('chat', prompt, attachments.map(image => image.id)); $('prompt').value = ''; attachments = []; sizePrompt(); renderAttachments(); $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight; }
+  try { await invoke('chat', prompt, attachments.map(image => image.id)); $('prompt').value = ''; renderMentions(); attachments = []; sizePrompt(); renderAttachments(); $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight; }
   catch { setBusy(false); }
 };
-$('prompt').oninput = sizePrompt;
+$('prompt').oninput = () => { sizePrompt(); mentionIndex = 0; renderMentions(); };
+$('prompt').addEventListener('keydown', event => { if (!mentionCandidates.length) return; if (['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); mentionIndex = (mentionIndex + (event.key === 'ArrowDown' ? 1 : mentionCandidates.length - 1)) % mentionCandidates.length; renderMentions(); } else if (['Enter', 'Tab'].includes(event.key)) { event.preventDefault(); event.stopImmediatePropagation(); insertMention(mentionCandidates[mentionIndex].id); } else if (event.key === 'Escape') { $('tool-mentions').classList.add('hidden'); mentionCandidates = []; } }, true);
 $('prompt').onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } };
 $('stop').onclick = () => api.stop();
 document.querySelectorAll('[data-prompt]').forEach(button => button.onclick = () => { $('prompt').value = button.dataset.prompt; sizePrompt(); $('prompt').focus(); if (button.dataset.project && !project()) toast('Open a project folder to explore its files.'); });
@@ -439,22 +585,45 @@ document.addEventListener('keydown', event => {
 });
 function showApproval(data) {
   approvalId = data.id;
+  const custom = {
+    browser_inspect: { title: 'Inspect this website?', description: 'Loads scripts and page resources in a fresh browser session. Returns rendered content to this conversation.', content: data.url },
+    command_start: { title: 'Start command session?', description: `Runs on your Mac in ${data.root}. Timeout: ${data.timeout_seconds} seconds. This host shell can access files outside the project.`, content: data.command },
+    command_write: { title: 'Send command input?', description: `Sends stdin to session ${data.session_id}.`, content: data.command },
+    web_search: { title: 'Search the web?', description: 'This query will be sent to DuckDuckGo.', content: `${data.query || ''}\n\n${data.url || ''}` },
+    http_request: { title: 'Review network request', description: 'This request sends the shown URL and body from your Mac. Stored provider credentials are not attached.', content: `${data.method || ''} ${data.url || ''}\n\n${data.body || '(no request body)'}` },
+    save_memory: { title: 'Save project memory?', description: 'This memory will be included in future project conversations.', content: data.content },
+    external_tool: { title: `Use ${data.tool}?`, description: `Runs through ${data.server}. This server may access your files or the network.`, content: JSON.stringify(data.arguments, null, 2) },
+  }[data.name];
+  if (custom) {
+    $('approval-title').textContent = custom.title; $('approval-description').textContent = custom.description;
+    $('approval-content').innerHTML = `<pre>${escapeHTML(custom.content)}</pre>`;
+  } else {
   $('approval-title').textContent = data.name === 'write_file' ? `Review edit · ${data.path}` : 'Run this command?';
   $('approval-description').textContent = data.name === 'write_file' ? 'Check the current file and proposed replacement before saving.' : `Runs on your Mac in ${data.root}. This host shell can access files outside the project.`;
   $('approval-content').innerHTML = data.name === 'write_file' ? `<h3>BEFORE</h3><pre>${escapeHTML(data.before ?? '(new file)')}</pre><h3>AFTER</h3><pre>${escapeHTML(data.after)}</pre>` : `<pre>${escapeHTML(data.command)}</pre>`;
+  }
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('approval-dialog').showModal(); $('decline').focus();
 }
 async function respondApproval(allowed) { const id = approvalId; approvalId = null; $('approval-dialog').close(); if (id) await api.approval({ id, allowed }); }
 $('approve').onclick = () => respondApproval(true); $('decline').onclick = () => respondApproval(false);
 $('approval-dialog').addEventListener('cancel', event => { event.preventDefault(); respondApproval(false); });
 api.onEvent(async event => {
+  if (event.type === 'runtime' && state) { state.localRuntime = event.value; renderRuntime(); renderDownload(); if (event.value.status === 'error' && state.provider === 'ollama') { connected = false; $('connection-label').textContent = 'Wixal Local offline'; $('connection-dot').classList.add('offline'); } }
   if (event.type === 'run-started') { streamText = ''; setBusy(true); }
+  if (event.type === 'benchmark') { state.benchmarkProgress = event.value; renderBenchmarkProgress(); }
+  if (event.type === 'benchmark-done') { toast(`Benchmark saved for ${event.name}.`); await refresh(); }
+  if (event.type === 'benchmark-idle') { state.benchmarkProgress = null; await refresh(); }
+  if (event.type === 'usage') { state = await api.state(); renderPerformance(); }
   if (event.type === 'tasks') await refresh();
   if (event.type === 'connections') { connections = await api.connections(); renderConnections(); if (event.message) toast(event.message); if (event.firstPlanUse) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('plan-notice-dialog').showModal(); } if (state.provider !== 'ollama') await loadModels(); }
   if (event.type === 'state') { streamText = ''; await refresh(); }
   if (event.type === 'token') { streamText += event.text; if (!streamFrame) streamFrame = requestAnimationFrame(() => { streamFrame = null; renderMessages(); }); }
   if (event.type === 'phase') $('activity-label').textContent = event.value;
-  if (event.type === 'context') $('context-note').textContent = event.omitted > 0 ? `${event.omitted} older messages outside context` : '';
+  if (event.type === 'extensions-changed') await refresh();
+  if (event.type === 'model-download') { state.modelDownload = event; renderDownload(event); }
+  if (event.type === 'model-download-done') { toast(`Downloaded ${event.name}. Choose it in the model picker.`); if (state.provider === 'ollama') await loadModels(); }
+  if (event.type === 'model-download-idle') { state.modelDownload = null; renderDownload(null); }
+  if (event.type === 'context') $('context-note').textContent = event.omitted > 0 ? event.summarized ? `${event.summarized} older messages summarized` : `${event.omitted} older messages outside context` : '';
   if (event.type === 'error') { toast(event.message); if (state.provider === 'chatgpt' && /usage limit/i.test(event.message)) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('usage-limit-dialog').showModal(); } }
   if (event.type === 'done') { streamText = ''; setBusy(false); if ($('approval-dialog').open) $('approval-dialog').close(); await refresh(); $('prompt').focus(); }
   if (event.type === 'approval') showApproval(event);

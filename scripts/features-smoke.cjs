@@ -1,0 +1,90 @@
+const { _electron: electron } = require('playwright');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const os = require('node:os');
+const http = require('node:http');
+const assert = require('node:assert/strict');
+const { Store } = require('../app/store.cjs');
+const root = path.resolve(__dirname, '..');
+async function main() {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-feature-ui-'));
+  const project = path.join(temp, 'Feature demo'); await fs.mkdir(project);
+  const store = new Store(path.join(temp, 'state')); store.addProject(project); store.data.model = 'fixture'; store.data.contextSize = 8192;
+  store.session().messages = [{ role: 'user', content: 'Project codename sapphire. '.repeat(500) }, { role: 'assistant', content: 'Use pnpm. '.repeat(400) }]; store.save();
+  const fixture = path.join(temp, 'server.cjs');
+  await fs.writeFile(fixture, `const {Server}=require(${JSON.stringify(path.join(root,'node_modules/@modelcontextprotocol/sdk/dist/cjs/server/index.js'))});const {StdioServerTransport}=require(${JSON.stringify(path.join(root,'node_modules/@modelcontextprotocol/sdk/dist/cjs/server/stdio.js'))});const {ListToolsRequestSchema,CallToolRequestSchema}=require(${JSON.stringify(path.join(root,'node_modules/@modelcontextprotocol/sdk/dist/cjs/types.js'))});const server=new Server({name:'feature-demo',version:'1'},{capabilities:{tools:{}}});server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{name:'echo',description:'Echo text',inputSchema:{type:'object',properties:{text:{type:'string'}},required:['text']}}]}));server.setRequestHandler(CallToolRequestSchema,async r=>({content:[{type:'text',text:r.params.arguments.text}]}));server.connect(new StdioServerTransport());`);
+  let hits = 0;
+  const server = http.createServer((_req, res) => { hits++; res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"proof":"real-http-result"}'); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const url = `http://127.0.0.1:${server.address().port}/proof`;
+  const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: path.join(temp, 'state') }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_TEST_PROJECT;
+  let app;
+  try {
+    app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
+    const page = await app.firstWindow(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ state: 'attached' });
+    await app.evaluate(async (_electron, url) => {
+      const original = globalThis.fetch;
+      globalThis.fetch = async (target, request) => {
+        if (!String(target).startsWith('http://127.0.0.1:11434')) return original(target, request);
+        const json = data => new Response(JSON.stringify(data));
+        if (String(target).endsWith('/api/tags')) return json({ models: [{ name: 'fixture', size: 1000000 }] });
+        if (String(target).endsWith('/api/show')) return json({ capabilities: ['tools'], model_info: { 'fixture.context_length': 8192 } });
+        if (String(target).endsWith('/api/pull')) {
+          const name = JSON.parse(request.body).model;
+          if (name === 'cancel:fixture') return new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('{"status":"pulling","total":100,"completed":25}\n')); request.signal.addEventListener('abort', () => controller.error(new Error('Aborted'))); } }));
+          return new Response('{"status":"pulling","total":100,"completed":50}\n{"status":"success"}\n');
+        }
+        const body = JSON.parse(request.body), last = body.messages.at(-1);
+        let message = { content: 'Feature request finished.' };
+        if (body.messages[0].content.startsWith('Summarize')) message = { content: 'Project codename sapphire. Use pnpm.' };
+        else if (last.role === 'tool') message = { content: `Verified tool result: ${last.content}` };
+        else if (last.content.startsWith('Fetch fixture')) message = { content: '', tool_calls: [{ function: { name: 'http_request', arguments: { url } } }] };
+        else if (last.content.startsWith('Remember fixture')) message = { content: '', tool_calls: [{ function: { name: 'save_memory', arguments: { content: 'Sapphire uses pnpm.' } } }] };
+        else if (last.content.startsWith('Echo fixture')) message = { content: '', tool_calls: [{ function: { name: body.tools.find(t => t.function.name.startsWith('mcp_')).function.name, arguments: { text: 'real MCP UI result' } } }] };
+        return json({ message, done: true });
+      };
+    }, url);
+    await page.locator('#prompt').waitFor(); await page.click('#model-button'); await page.click('#model-refresh'); await page.locator('.model-row').filter({ hasText: 'fixture' }).click();
+    await page.waitForFunction(async () => (await window.wixal.state()).model === 'fixture');
+    const workspace = async id => { if (!(await page.locator(id).isVisible())) await page.click('#workspace-menu-toggle'); await page.click(id); };
+    const send = async prompt => { await page.fill('#prompt', prompt); await page.click('#send'); };
+    const finished = async () => { await page.waitForFunction(() => !document.querySelector('#send').classList.contains('hidden')); await page.waitForFunction(() => document.querySelector('#stop').classList.contains('hidden')); };
+    await send('Continue sapphire'); await finished();
+    await workspace('#memory-button'); await page.locator('#saved-summary').waitFor();
+    await page.locator('#saved-summary summary').click(); assert.match(await page.textContent('#summary-content'), /sapphire/);
+    await page.locator('#auto-summary').uncheck(); await page.waitForFunction(async () => !(await window.wixal.state()).autoSummary);
+    await page.locator('#auto-summary').check(); await page.click('#close-memory');
+    await workspace('#toolkit-button'); await page.locator('[data-tool="http_request"]').check(); await page.locator('[data-tool="save_memory"]').check();
+    await page.click('#manage-extensions'); await page.fill('#extension-name', 'Fixture tools'); await page.fill('#extension-command', process.execPath); await page.fill('#extension-args', JSON.stringify([fixture])); await page.locator('#extension-form button').click();
+    await page.locator('[data-extension-connect]').click(); await page.locator('.extension-entry').filter({ hasText: 'connected · 1 tools' }).waitFor();
+    await page.click('[data-close="extensions-dialog"]'); await page.locator('[data-tool^="mcp_"]').check(); await page.click('#close-toolkit');
+    await send('Fetch fixture and decline'); await page.locator('#approval-dialog[open]').waitFor(); assert.match(await page.textContent('#approval-content'), /127.0.0.1/); await page.click('#decline'); await finished(); assert.equal(hits, 0);
+    await send('Fetch fixture and approve'); await page.locator('#approval-dialog[open]').waitFor(); await page.click('#approve'); await finished(); assert.equal(hits, 1); assert.match(await page.textContent('#messages'), /real-http-result/);
+    await send('Remember fixture'); await page.locator('#approval-dialog[open]').waitFor(); assert.match(await page.textContent('#approval-title'), /Save project memory/); await page.click('#approve'); await finished();
+    await send('Echo fixture'); await page.locator('#approval-dialog[open]').waitFor(); assert.match(await page.textContent('#approval-description'), /Fixture tools/); await page.click('#approve'); await finished(); assert.match(await page.textContent('#messages'), /real MCP UI result/);
+    await page.click('#model-button'); await page.fill('#model-pull-name', 'download:fixture'); await page.click('#model-pull-button');
+    await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Downloaded download:fixture'));
+    await page.fill('#model-pull-name', 'cancel:fixture'); await page.click('#model-pull-button'); await page.locator('#model-pull-cancel').waitFor(); await page.click('#model-pull-cancel');
+    await page.waitForFunction(() => document.querySelector('#model-pull-button').disabled === false);
+    await page.selectOption('#context-size', '131072'); await page.waitForFunction(async () => (await window.wixal.state()).contextSize === 131072); await page.click('[data-close="models-dialog"]');
+    await page.reload(); await page.locator('#prompt').waitFor();
+    const saved = await page.evaluate(() => window.wixal.state()); assert.ok(saved.sessions.find(s => s.id === saved.activeSession).summary); assert.equal(saved.memories.length, 1); assert.equal(saved.mcpServers.length, 1); assert.equal(saved.externalConnections.length, 1);
+    await workspace('#toolkit-button'); await page.click('#manage-extensions'); await page.locator('[data-extension-connect]').click(); await page.locator('.extension-entry').filter({ hasText: 'Disconnected' }).waitFor();
+    const screenshots = path.join(os.tmpdir(), 'wixal-0.6.0-qa'); await fs.mkdir(screenshots, { recursive: true });
+    await page.screenshot({ path: path.join(screenshots, 'external-tools.png'), animations: 'disabled' }); await page.click('[data-close="extensions-dialog"]'); await page.click('#close-toolkit');
+    await workspace('#memory-button'); await page.locator('#saved-summary summary').click(); await page.screenshot({ path: path.join(screenshots, 'memory.png'), animations: 'disabled' }); await page.click('#close-memory');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640)); await page.click('#model-button');
+    assert.ok((await page.locator('#model-pull-button').boundingBox()).x < 920); await page.screenshot({ path: path.join(screenshots, 'models-compact.png'), animations: 'disabled' });
+    assert.deepEqual(errors, []);
+    await app.close();
+    app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
+    const restarted = await app.firstWindow(); await restarted.locator('#prompt').waitFor();
+    const restored = await restarted.evaluate(() => window.wixal.state());
+    assert.equal(restored.mcpServers.length, 1); assert.equal(restored.externalConnections.length, 0);
+    assert.ok(restored.enabledTools.some(name => name.startsWith('mcp_'))); assert.equal(restored.memories.length, 1);
+    assert.ok(restored.sessions.find(s => s.id === restored.activeSession).summary);
+    console.log('PASS: automatic summary, preference persistence, declined/approved real HTTP requests, reviewed memory, real MCP through UI, model progress/cancel, 128k preference and reload.');
+    console.log(`PASS: no renderer errors; desktop and compact screenshot evidence in ${screenshots}`);
+  } finally { if (app) await app.close(); await new Promise(resolve => server.close(resolve)); await fs.rm(temp, { recursive: true, force: true }); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

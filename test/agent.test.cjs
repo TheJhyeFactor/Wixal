@@ -49,7 +49,7 @@ test('old state gets tool preferences without losing saved conversations', async
   const options = await setup(t); options.store.session().messages.push({ role: 'user', content: 'Keep me' });
   delete options.store.data.enabledTools; delete options.store.data.contextSize; options.store.save();
   const migrated = new Store(path.join(options.root, 'state'));
-  assert.equal(migrated.session().messages[0].content, 'Keep me'); assert.equal(migrated.data.enabledTools.length, 5); assert.equal(migrated.data.contextSize, 16384);
+  assert.equal(migrated.session().messages[0].content, 'Keep me'); assert.equal(migrated.data.enabledTools.length, require('../app/tools.cjs').definitions.length); assert.equal(migrated.data.contextSize, 16384);
 });
 test('model information comes from show, including missing capabilities', async () => {
   const fetcher = async url => new Response(JSON.stringify(url.endsWith('/tags') ? { models: [{ name: 'working' }, { name: 'gone' }] } : { capabilities: ['tools', 'vision'], details: { parameter_size: '12B' }, model_info: { 'fixture.context_length': 32768 } }));
@@ -60,4 +60,27 @@ test('model information comes from show, including missing capabilities', async 
 test('an incomplete or error stream never looks like a completed response', async () => {
   await assert.rejects(streamChat({}, undefined, () => {}, async () => new Response('{"message":{"content":"partial"}}\n')), /ended.*early/);
   await assert.rejects(streamChat({}, undefined, () => {}, async () => new Response('{"error":"out of memory"}\n')), /out of memory/);
+});
+test('command output returns to the model, drives a follow-up command and persists in the same chat', async t => {
+  const options = await setup(t);
+  options.store.data.enabledTools = ['command_start', 'command_read', 'command_save_output', 'write_file'];
+  let step = 0, first, second;
+  const call = (name, args) => response({ content: '', tool_calls: [{ function: { name, arguments: args } }] });
+  await runAgent({ ...options, prompt: 'Inspect, follow up and save evidence', details: { capabilities: ['tools'], contextLength: 32768 }, fetcher: async (_url, request) => {
+    const body = JSON.parse(request.body), last = body.messages.at(-1);
+    switch (step++) {
+      case 0: return call('command_start', { command: 'print initial-observation' });
+      case 1: first = JSON.parse(last.content).session_id; return call('command_read', { session_id: first });
+      case 2: assert.match(JSON.parse(last.content).output, /initial-observation/); return call('command_start', { command: 'print follow-up-evidence' });
+      case 3: second = JSON.parse(last.content).session_id; return call('command_read', { session_id: second });
+      case 4: assert.match(JSON.parse(last.content).output, /follow-up-evidence/); return call('command_save_output', { session_id: second, path: 'output.json' });
+      case 5: return call('write_file', { path: 'findings.md', content: 'Reviewed initial observation and follow-up evidence.' });
+      default: return response({ content: 'Review complete; evidence and findings saved.' });
+    }
+  } });
+  assert.match(await fs.readFile(path.join(options.root, 'output.json'), 'utf8'), /follow-up-evidence/);
+  assert.match(await fs.readFile(path.join(options.root, 'findings.md'), 'utf8'), /Reviewed/);
+  const reloaded = new Store(path.join(options.root, 'state'));
+  assert.equal(reloaded.session().messages.filter(m => m.role === 'tool').length, 6);
+  assert.match(reloaded.session().messages.at(-1).content, /Review complete/);
 });

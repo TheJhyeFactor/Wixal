@@ -1,6 +1,6 @@
 # Developing Wixal
 
-Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac. Install dependencies with `npm ci`, then run `npm run rebuild` to rebuild node-pty for Electron.
+Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac with macOS 14 or newer. Install dependencies with `npm ci`, then run `npm run rebuild` to rebuild node-pty for Electron.
 
 ## Check a change
 
@@ -11,6 +11,9 @@ npm run test:app
 npm run test:connections
 npm run test:providers
 npm run test:refinement
+npm run test:features
+npm run test:runtime
+npm run test:performance
 ```
 
 The app test launches Electron with temporary state and a small test project. It exercises model selection, file previews, tool settings, image attachments, project memory, the real PTY, persistence, offline recovery, and compact window layout. Screenshots are saved in `artifacts/`.
@@ -53,8 +56,16 @@ To run the connection checks against the packaged app:
 WIXAL_APP_PATH="$PWD/release/Wixal-darwin-arm64/Wixal.app/Contents/MacOS/Wixal" npm run test:connections
 ```
 
-App source and production dependencies are unpacked from asar so the external Node MCP helper can run from the packaged app. The existing PTY native helper remains unpacked as well. Do not put real credentials into fixtures or screenshots. See [connection setup](connections.md) for live account verification.
+App source, package metadata and production dependencies are unpacked from asar so the external Node MCP helper can run from the packaged app. The existing PTY native helper remains unpacked as well. Do not put real credentials into fixtures or screenshots. See [connection setup](connections.md) for live account verification.
 
 `npm run test:providers` runs all added providers with protocol fixtures and real Electron UI/macOS encryption. It verifies provider key isolation, catalogs, native Claude and compatible tool continuation, reviewed file writes, a declined edit, custom endpoint configuration and reload persistence. It does not contact real cloud inference accounts. Run it against a packaged binary with `WIXAL_APP_PATH` as for the connection smoke test.
 
 `npm run test:refinement` uses disposable conversations to exercise archive/restart/read/restore, rename, keyboard menu navigation, cancellation and confirmation of deletion, and the last-chat fallback. It also checks the centred composer, prompt suggestions, textarea growth, compact layout and reduced motion, with screenshots in `artifacts/`. It does not change your real chats or require cloud accounts. Use `WIXAL_APP_PATH` to test the packaged build.
+
+`npm run test:features` uses model/download protocol fixtures, a real local HTTP service and a real stdio MCP process to exercise the feature UI: summary generation/inspection, preferences, declined and approved requests, reviewed memory, external tool invocation, download progress/cancel, 128k settings and reload. It captures desktop and compact screenshots outside the checkout in the system temporary directory. Use `WIXAL_APP_PATH` for the packaged build. The separate web-search unit test uses a protocol fixture; live search availability depends on its upstream service.
+
+## Wixal Local development
+
+Run `npm run runtime:stage` before `npm start`; packaging stages the verified upstream payload automatically. The ordinary app/provider suites explicitly exercise external Ollama compatibility. Use `WIXAL_SMOKE_MANAGED=1 npm run test:app` for the full image/file-tool flow through the bundled engine. `npm run test:runtime` covers real managed-engine import, inference, stop/start, library persistence and quit cleanup. Both use disposable state and independent model copies. See [local runtime development](local-runtime.md) for source builds, attribution, pinned provenance and the tested versus untested build paths.
+
+`npm run test:performance` uses protocol fixtures and real file reads through Electron to exercise explicit @tools, reported usage, benchmarks/cancellation, model filters, deletion confirmation and categorized tool controls. It complements the real managed-engine benchmark/deletion test. The command-session unit tests execute real host fixtures; browser inspection has a local rendered-page fixture in `scripts/browser-tools-smoke.cjs`.

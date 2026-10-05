@@ -19,7 +19,8 @@ for (const [file,html] of documents) {
   for (const match of html.matchAll(/(?:href|src)="([^"\s]+)"/g)) {
     const value = match[1];
     if (/^https?:/.test(value)) continue;
-    const [path,hash] = value.split('#');
+    const [pathWithQuery,hash] = value.split('#');
+    const path = pathWithQuery.split('?')[0];
     const target = !path ? file : resolve(root, path.startsWith(base) ? path.slice(base.length) : path.replace(/^\//,''));
     const actual = (await stat(target)).isDirectory() ? resolve(target,'index.html') : target;
     if (hash && actual.endsWith('.html')) {
@@ -29,7 +30,7 @@ for (const [file,html] of documents) {
     checked++;
   }
   // Prevent wrong intrinsic dimensions from creating stretched or shifting media.
-  for (const match of html.matchAll(/<img[^>]+src="([^"]+\.webp)"[^>]+width="(\d+)" height="(\d+)"/g)) {
+  for (const match of html.matchAll(/<img[^>]+src="([^"]+\.webp)(?:\?[^"]*)?"[^>]+width="(\d+)" height="(\d+)"/g)) {
     const actual = await webpSize(resolve(root, match[1].slice(base.length)));
     assert.deepEqual({ width: Number(match[2]), height: Number(match[3]) }, actual, `Incorrect image dimensions: ${match[1]}`);
   }

@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, writeFile, cp, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { webpSize } from './image-size.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -15,6 +16,8 @@ const release = `${repo}/releases/tag/v${version}`;
 const dmg = `${repo}/releases/download/v${version}/Wixal-${version}-macOS-arm64.dmg`;
 const zip = `${repo}/releases/download/v${version}/Wixal-${version}-macOS-arm64.zip`;
 const url = path => base + path;
+const assetHashes = new Map(await Promise.all(['styles.css', 'site.js', ...[...sizes.keys()].map(name => `assets/${name}.webp`)].map(async path => [path, createHash('sha256').update(await readFile(resolve(root, path.startsWith('assets/') ? 'public' : 'src', path))).digest('hex').slice(0, 10)])));
+const assetUrl = path => `${url(path)}?v=${assetHashes.get(path)}`;
 const arrow = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const external = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const down = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v14m-5-5 5 5 5-5M5 21h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -25,7 +28,7 @@ const link = (href, label, icon = arrow, cls = '') => `<a class="text-link ${cls
 const button = (href, label = 'Download for macOS', cls = '', icon = down) => `<a class="button ${cls}" href="${href}">${label}${icon}</a>`;
 const screenshot = (name, alt, eager = false) => {
   const { width, height } = sizes.get(name);
-  return `<img src="${url(`assets/${name}.webp`)}" alt="${alt}" width="${width}" height="${height}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">`;
+  return `<img src="${assetUrl(`assets/${name}.webp`)}" alt="${alt}" width="${width}" height="${height}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">`;
 };
 const preview = (name, alt, eager = false, cls = '') => `<figure class="feature-media ${cls}" style="--image-ratio:${sizes.get(name).width / sizes.get(name).height}"><button class="image-preview" data-preview aria-label="Enlarge ${alt}">${screenshot(name, alt, eager)}</button><figcaption><span>Wixal ${version}</span><button data-preview>View full size ${external}</button></figcaption></figure>`;
 const sun = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" stroke="currentColor" stroke-width="1.5"/></svg>';
@@ -82,7 +85,7 @@ const pages = [
 ];
 function document(page) {
   const canonical = `${origin}${url(page.path)}`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${page.title}</title><meta name="description" content="${page.description}"><meta name="theme-color" content="#f7f7f4"><meta property="og:type" content="website"><meta property="og:title" content="${page.title}"><meta property="og:description" content="${page.description}"><meta property="og:url" content="${canonical}"><meta property="og:image" content="${origin}${url('assets/social-card.png')}"><meta name="twitter:card" content="summary_large_image"><link rel="canonical" href="${canonical}"><link rel="icon" href="${url('assets/favicon.svg')}" type="image/svg+xml"><script>try{const t=localStorage.getItem("wixal-site-theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch{}</script><link rel="stylesheet" href="${url('styles.css')}"><script type="module" src="${url('site.js')}"></script></head><body>${header(page.active)}<main id="main">${page.content}</main>${footer()}<dialog class="preview-dialog" aria-label="Wixal screenshot preview"><div class="preview-toolbar"><p>Inside Wixal</p><button data-preview-close aria-label="Close screenshot preview">Close ×</button></div><div class="preview-image"><img alt=""></div><p class="preview-description"></p></dialog></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${page.title}</title><meta name="description" content="${page.description}"><meta name="theme-color" content="#f7f7f4"><meta property="og:type" content="website"><meta property="og:title" content="${page.title}"><meta property="og:description" content="${page.description}"><meta property="og:url" content="${canonical}"><meta property="og:image" content="${origin}${url('assets/social-card.png')}"><meta name="twitter:card" content="summary_large_image"><link rel="canonical" href="${canonical}"><link rel="icon" href="${url('assets/favicon.svg')}" type="image/svg+xml"><script>try{const t=localStorage.getItem("wixal-site-theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch{}</script><link rel="stylesheet" href="${assetUrl('styles.css')}"><script type="module" src="${assetUrl('site.js')}"></script></head><body>${header(page.active)}<main id="main">${page.content}</main>${footer()}<dialog class="preview-dialog" aria-label="Wixal screenshot preview"><div class="preview-toolbar"><p>Inside Wixal</p><button data-preview-close aria-label="Close screenshot preview">Close ×</button></div><div class="preview-image"><img alt=""></div><p class="preview-description"></p></dialog></body></html>`;
 }
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });

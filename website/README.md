@@ -57,3 +57,5 @@ node website/scripts/capture-app.cjs /absolute/path/to/Wixal
 The capture script opens the actual desktop app using temporary project and app data, previews real files, saves a project note, and executes the sample project's test in its terminal. It removes only this temporary fixture after capture. Capture from the release version used by the site. No model response is fabricated and no provider credential is configured. The example terminal output is an actual passing test run.
 
 The build reads intrinsic WebP dimensions directly and uses them in each image's HTML. Preview frames reserve the same proportions before lazy loading, keeping section links stable. The check validates image attributes against their source dimensions. Header and footer theme controls share a saved preference, which is applied before the stylesheet loads to avoid a flash of the opposite theme.
+
+Styles, scripts, and screenshots use content-derived asset versions so browsers fetch updated files after a deployment.

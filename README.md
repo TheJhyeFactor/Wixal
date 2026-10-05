@@ -64,7 +64,7 @@ Agent commands have a 60 second timeout. Responses can be stopped, and the agent
 
 ## Images and memory
 
-Attach up to three PNG, JPEG or WebP images per message. Input files must be under 12 MB. Images are converted to PNG and resized to a maximum of 1,600 pixels on the longest edge before being sent to the local model. The resized copies are saved with the conversation. Image messages follow Ollama’s [vision API](https://docs.ollama.com/capabilities/vision).
+Attach up to three PNG, JPEG or WebP images per message. Input files must be under 12 MB. Photo orientation is applied, then images are converted to PNG and resized to a maximum of 1,600 pixels on the longest edge before being sent to the local model. The resized copies are saved with the conversation. Image messages follow Ollama’s [vision API](https://docs.ollama.com/capabilities/vision).
 
 Project memories are saved only when you explicitly add them. There are no hidden automatic memory writes. Full conversations, resized images and preferences live in:
 

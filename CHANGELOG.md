@@ -7,7 +7,7 @@
 - Added saved context settings and capability checks before inference.
 - Added a configurable tool kit with controller enforcement and recent results.
 - Added project file browsing, previews and prompt context.
-- Added local photo and screenshot attachments, conversation thumbnails and image previews.
+- Added PNG/JPEG/WebP photo and screenshot attachments with orientation handling, conversation thumbnails and image previews.
 - Added conversation search and renaming, response copying and generation stats.
 - Added offline recovery guidance and compact-window checks.
 - Expanded automated and real-app verification.

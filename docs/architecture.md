@@ -16,6 +16,7 @@ Renderer → restricted preload API → Electron main process
 | --- | --- |
 | `app/main.cjs` | App lifecycle, validated IPC, dialogs, image import, approvals and PTY |
 | `app/preload.cjs` | Named API calls and events exposed to the renderer |
+| `app/images.cjs` | Validated PNG/JPEG/WebP import, photo orientation and resizing |
 | `app/models.cjs` | Installed-model listing and capability/context discovery |
 | `app/agent.cjs` | Context selection, streaming, saved turns and the tool loop |
 | `app/tools.cjs` | Project paths, file operations, tool permission checks and shell execution |
@@ -40,7 +41,7 @@ An approved shell command can access anything available to the user account. The
 
 ## Images
 
-Only user-selected images are imported. The main process limits file size, decodes the image, resizes it and converts it to PNG. The renderer receives a thumbnail and an opaque ID. Sending a message resolves IDs from the main process cache, rather than accepting arbitrary paths or image bytes from the renderer. Resized images are saved in the user turn and sent using Ollama’s base64 image field.
+Only user-selected images are imported. The main process limits file size, decodes PNG/JPEG/WebP with sharp, applies photo orientation metadata, resizes it and converts it to PNG. The renderer receives a thumbnail and an opaque ID. Sending a message resolves IDs from the main process cache, rather than accepting arbitrary paths or image bytes from the renderer. Resized images are saved in the user turn and sent using Ollama’s base64 image field.
 
 Images remain visible in saved conversations when a text-only model is selected. Their bytes are excluded from that model’s request.
 

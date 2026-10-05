@@ -3,10 +3,10 @@ const path = require('node:path');
 const os = require('node:os');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
-const fs = require('node:fs/promises');
 const { Store } = require('./store.cjs');
 const { getModels, runAgent } = require('./agent.cjs');
 const { modelDetails } = require('./models.cjs');
+const { importImage } = require('./images.cjs');
 const { definitions, executeTool } = require('./tools.cjs');
 app.setName('Wixal');
 if (process.env.WIXAL_DATA_DIR) app.setPath('userData', process.env.WIXAL_DATA_DIR);
@@ -76,14 +76,7 @@ function setupIPC() {
     if (result.filePaths.length + images.size > 3) throw new Error('Attach up to three images per message.');
     const prepared = [];
     for (const file of result.filePaths) {
-      if ((await fs.stat(file)).size > 12 * 1024 * 1024) throw new Error('Images must be smaller than 12 MB.');
-      let image = nativeImage.createFromPath(file);
-      if (image.isEmpty()) throw new Error(`Couldn't open ${path.basename(file)}. Try a PNG or JPEG.`);
-      const size = image.getSize();
-      if (size.width > 1600 || size.height > 1600) image = image.resize(size.width > size.height ? { width: 1600 } : { height: 1600 });
-      const base64 = image.toPNG().toString('base64');
-      if (base64.length > 6 * 1024 * 1024) throw new Error('This image is too large after resizing. Try a smaller image.');
-      prepared.push({ id: randomUUID(), name: path.basename(file), base64 });
+      prepared.push({ id: randomUUID(), ...await importImage(file) });
     }
     for (const image of prepared) images.set(image.id, image);
     return prepared;

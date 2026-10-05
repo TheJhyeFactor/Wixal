@@ -13,6 +13,14 @@ class Store {
     // Fill in new preferences without replacing existing projects or conversations.
     this.data.enabledTools ??= ['list_files', 'read_file', 'search_files', 'write_file', 'run_command'];
     this.data.contextSize ??= 16384;
+    this.data.provider ??= 'ollama';
+    this.data.providerModels ??= { ollama: this.data.model, openai: '', chatgpt: '' };
+    this.data.customProvider ??= { baseURL: '', model: '', tools: false, vision: false };
+    this.data.cloudProjects ??= [];
+    this.data.cloudPersonal ??= false;
+    this.data.companion ??= { enabled: false, sharedProjects: [], shareMemory: false };
+    this.data.tasks ??= [];
+    this.data.ui ??= { sidebarCollapsed: false };
   }
   save() {
     fs.writeFileSync(this.file + '.tmp', JSON.stringify(this.data, null, 2), { mode: 0o600 });
@@ -34,7 +42,7 @@ class Store {
   selectProject(id) {
     if (!this.data.projects.some(p => p.id === id)) throw new Error('Unknown project');
     this.data.activeProject = id;
-    this.data.activeSession = this.data.sessions.findLast(s => s.projectId === id)?.id || null;
+    this.data.activeSession = this.data.sessions.findLast(s => s.projectId === id && !s.archivedAt)?.id || null;
     if (!this.data.activeSession) this.newSession();
     this.save();
   }
@@ -46,9 +54,37 @@ class Store {
     return session;
   }
   selectSession(id) {
+    this.scopedSession(id);
+    this.data.activeSession = id;
+    this.save();
+  }
+  scopedSession(id) {
     const session = this.data.sessions.find(s => s.id === id && s.projectId === this.data.activeProject);
     if (!session) throw new Error('Unknown conversation');
+    return session;
+  }
+  nextSession() {
+    this.data.activeSession = this.data.sessions.findLast(s => s.projectId === this.data.activeProject && !s.archivedAt)?.id || null;
+    if (!this.data.activeSession) this.newSession();
+  }
+  archiveSession(id) {
+    const session = this.scopedSession(id);
+    session.archivedAt ||= Date.now();
+    if (this.data.activeSession === id) this.nextSession();
+    this.save();
+  }
+  restoreSession(id) {
+    const session = this.scopedSession(id);
+    delete session.archivedAt;
     this.data.activeSession = id;
+    this.save();
+  }
+  deleteSession(id) {
+    this.scopedSession(id);
+    this.data.sessions = this.data.sessions.filter(s => s.id !== id);
+    // Task results copy conversation output, so remove those copies as well.
+    this.data.tasks = this.data.tasks.filter(task => task.sessionId !== id);
+    if (this.data.activeSession === id) this.nextSession();
     this.save();
   }
   remember(content) {

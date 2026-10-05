@@ -1,0 +1,73 @@
+const { _electron: electron } = require('playwright');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const os = require('node:os');
+const assert = require('node:assert/strict');
+const { Store } = require('../app/store.cjs');
+const root = path.resolve(__dirname, '..');
+async function main() {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-refinement-'));
+  const project = path.join(temp, 'Workspace demo'); await fs.mkdir(project);
+  const directory = path.join(temp, 'data'), store = new Store(directory); store.addProject(project);
+  const history = store.session(); history.title = 'A saved conversation'; history.messages = [{ role: 'user', content: 'A message to preserve', created: Date.now() }, { role: 'assistant', content: 'An answer to preserve', created: Date.now() }];
+  const start = store.newSession(); store.save();
+  const env = { ...process.env, WIXAL_DATA_DIR: directory }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_TEST_PROJECT;
+  let app;
+  try {
+    app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
+    const page = await app.firstWindow(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.locator('.session-item').first().waitFor();
+    await page.locator('main.is-new-chat').waitFor();
+    const more = id => page.locator(`[data-menu-id="${id}"]`);
+    const item = id => page.locator(`.session-item[data-id="${id}"]`);
+    const snapshot = () => page.evaluate(() => window.wixal.state());
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 880));
+    await fs.mkdir(path.join(root, 'artifacts'), { recursive: true });
+    await page.screenshot({ path: path.join(root, 'artifacts/wixal-start.png'), animations: 'disabled' });
+    assert.equal(await page.locator('#welcome img').count(), 0);
+    const layout = await page.evaluate(() => {
+      const main = document.querySelector('main').getBoundingClientRect(), form = document.querySelector('#composer').getBoundingClientRect();
+      return { centred: Math.abs((main.left + main.right) / 2 - (form.left + form.right) / 2), y: form.top, h: window.innerHeight };
+    });
+    assert.ok(layout.centred < 2); assert.ok(layout.y < layout.h * .65);
+    await page.locator('[data-prompt]').first().click(); assert.match(await page.inputValue('#prompt'), /practical plan/);
+    await page.fill('#prompt', 'A long thought\n'.repeat(10)); assert.ok((await page.locator('#prompt').boundingBox()).height > 100);
+    await page.fill('#prompt', '');
+    await item(history.id).click();
+    await more(history.id).click(); await page.locator('[data-session-action="archive"]').click();
+    await item(history.id).waitFor({ state: 'detached' }); assert.equal(await page.locator('#archive-count').textContent(), '1');
+    let saved = await snapshot(); assert.equal(saved.activeSession, start.id); assert.equal(saved.sessions.find(s => s.id === history.id).messages.length, 2);
+    await page.reload(); await page.locator('#archive-count').filter({ hasText: '1' }).waitFor();
+    await page.click('#archives-button'); await page.fill('#archive-search', 'no match'); assert.equal(await page.locator('.archive-row').count(), 0); await page.fill('#archive-search', 'saved');
+    await page.screenshot({ path: path.join(root, 'artifacts/wixal-archives.png'), animations: 'disabled' });
+    await page.click('[data-archive-view]'); await page.locator('#archived-banner').waitFor();
+    assert.equal(await page.locator('#prompt').isDisabled(), true); assert.equal(await page.locator('#send').isDisabled(), true);
+    assert.match(await page.locator('#messages').textContent(), /An answer to preserve/);
+    const rejected = await page.evaluate(async () => { try { await window.wixal.chat('Archived must not send'); return ''; } catch (error) { return error.message; } });
+    assert.match(rejected, /Restore this conversation/);
+    await page.click('#restore-current'); await item(history.id).waitFor(); assert.equal(await page.locator('#prompt').isDisabled(), false);
+    await more(history.id).click(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+    await page.locator('#delete-dialog[open]').waitFor(); assert.equal(await page.locator('#cancel-delete').evaluate(button => button === document.activeElement), true);
+    await page.click('#cancel-delete'); assert.ok((await snapshot()).sessions.some(s => s.id === history.id));
+    await more(history.id).click(); await page.click('[data-session-action="delete"]'); await page.click('#confirm-delete'); await item(history.id).waitFor({ state: 'detached' });
+    saved = await snapshot(); assert.ok(!saved.sessions.some(s => s.id === history.id)); assert.equal(saved.activeSession, start.id);
+    await more(start.id).click(); await page.click('[data-session-action="rename"]'); await page.fill('#rename-input', 'A fresh start'); await page.locator('#rename-form button').click(); await page.locator('.session-item').filter({ hasText: 'A fresh start' }).waitFor();
+    await more(start.id).click(); await page.click('[data-session-action="archive"]'); await page.click('#archives-button'); await page.click('[data-archive-delete]'); await page.click('#confirm-delete'); await page.locator('.archive-empty').waitFor(); await page.click('[data-close="archives-dialog"]');
+    await page.reload(); await page.locator('main.is-new-chat').waitFor(); saved = await snapshot(); assert.equal(saved.sessions.length, 1); assert.equal(saved.sessions[0].messages.length, 0);
+    console.log('PASS: archive persistence, read-only history, restore, keyboard menu, delete cancel/confirm, rename and last-chat fallback');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 640));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await page.locator('.welcome-wordmark span').first().evaluate(node => getComputedStyle(node).animationName), 'none');
+    const compact = await page.evaluate(() => {
+      const form = document.querySelector('#composer').getBoundingClientRect(), sidebar = document.querySelector('.sidebar');
+      return { x: form.left, right: form.right, bottom: form.bottom, h: innerHeight, width: innerWidth, sidebarOverflow: sidebar.scrollHeight - sidebar.clientHeight, horizontal: document.body.scrollWidth - innerWidth };
+    });
+    assert.ok(compact.bottom < compact.h); assert.ok(compact.right <= compact.width); assert.ok(compact.sidebarOverflow <= 1, JSON.stringify(compact)); assert.ok(compact.horizontal <= 1);
+    await page.locator('#toast').waitFor({ state: 'hidden', timeout: 12000 });
+    await page.screenshot({ path: path.join(root, 'artifacts/wixal-start-compact.png'), animations: 'disabled' });
+    assert.deepEqual(errors, []);
+    const disk = JSON.parse(await fs.readFile(path.join(directory, 'workspace.json'), 'utf8')); assert.equal(disk.sessions.length, 1);
+    console.log('PASS: centred starting composer, prompt suggestions/autogrow, compact 920×640 layout, reduced motion and no renderer errors');
+  } finally { if (app) await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

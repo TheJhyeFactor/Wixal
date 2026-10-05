@@ -1,11 +1,13 @@
 # How Wixal fits together
 
-Wixal is an Electron app with a local HTML/CSS/JavaScript interface. Ollama handles inference on `127.0.0.1:11434`. There is no hosted service in the current build.
+Wixal is an Electron app with a local HTML/CSS/JavaScript interface. Ollama handles inference on `127.0.0.1:11434`. OpenAI, ChatGPT, xAI, DeepSeek, Anthropic, Gemini, Groq, Mistral and OpenRouter are optional providers; a custom Chat Completions endpoint is also supported. The companion bridge binds only to loopback and exposes shared projects through a separate MCP stdio process.
 
 ```text
 Renderer → restricted preload API → Electron main process
                                       ├─ Store: local projects, conversations and memories
-                                      ├─ Ollama: model metadata and streaming chat
+                                      ├─ Ollama / provider adapters: catalogs and streaming inference
+                                      ├─ Credentials / ChatGPTAuth: encrypted keys and browser OAuth
+                                      ├─ Companion: paired local bridge and persistent task inbox
                                       ├─ Tools: project files and reviewed commands
                                       └─ node-pty: interactive zsh terminal
 ```
@@ -18,6 +20,11 @@ Renderer → restricted preload API → Electron main process
 | `app/preload.cjs` | Named API calls and events exposed to the renderer |
 | `app/images.cjs` | Validated PNG/JPEG/WebP import, photo orientation and resizing |
 | `app/models.cjs` | Installed-model listing and capability/context discovery |
+| `app/openai.cjs` | Stateless Responses requests, SSE parsing and provider input conversion |
+| `app/credentials.cjs` | Main-process macOS-encrypted API keys and account records |
+| `app/chatgpt-auth.cjs` | Loopback OAuth, PKCE, JWKS identity verification, refresh and revocation |
+| `app/companion.cjs` | Loopback bridge, project consent, bounded reads and task queue |
+| `app/companion-stdio.cjs` | MCP server forwarding to the paired local bridge |
 | `app/agent.cjs` | Context selection, streaming, saved turns and the tool loop |
 | `app/tools.cjs` | Project paths, file operations, tool permission checks and shell execution |
 | `app/store.cjs` | Atomic local state and preference migration |
@@ -29,7 +36,7 @@ Renderer → restricted preload API → Electron main process
 
 The main process checks the current model and validates image attachment IDs. Agent mode requires tool support when a project is open. Images require vision support. Unsupported requests fail before a user turn is added.
 
-The agent adds the user message, loads explicit project memories and selects recent complete turns. It sends the allowed tool definitions to Ollama, streams the response, then stores the completed assistant message and generation stats.
+The agent adds the user message, loads explicit project memories and selects recent complete turns. It sends the allowed tool definitions to the selected provider, streams the response, then stores the completed assistant message and generation stats.
 
 When a model calls a tool, the controller checks that it is enabled. Reads return bounded results. Writes and commands wait for review. The result goes back into the conversation and the loop continues. Cancellation reaches both inference and command process groups. There is a 12 step limit.
 
@@ -54,3 +61,29 @@ Model context is bounded using an estimate, not a tokenizer. Whole recent turns 
 ## Renderer boundaries
 
 Node integration is off; context isolation and Electron sandboxing are on. IPC checks the calling web contents and frame URL. Navigation and new windows are denied. Markdown is sanitised, remote media is blocked and file/shell access uses only the named preload methods.
+
+## Cloud credentials and consent
+
+The renderer never receives stored API keys, access tokens, refresh tokens or ID tokens. Credentials are encrypted with Electron safeStorage and written atomically with owner-only permissions. No plaintext fallback is used. A credential-loading failure preserves the existing file and leaves local models available.
+
+Each project and the personal workspace require explicit cloud context consent before inference. OpenAI requests use the public Responses endpoint with store:false and stream:true. ChatGPT plan requests use namespaced local function tools, omit unsupported preview fields and send the required history explicitly. Encrypted reasoning output and matching tool call IDs are retained for stateless continuation. A provider switch converts earlier tool evidence to text instead of reusing foreign call IDs. Streams must reach response.completed before their assistant turn is committed.
+
+The browser OAuth transaction has fresh state, nonce and PKCE, expires after five minutes and is consumed once. The listener binds to 127.0.0.1, validates its Host and state, and verifies ID-token signature, issuer, audience, expiry and nonce against OpenAI JWKS. Separate account registrations retain their issued client IDs and stable host ID. Refresh is serialized per account. Sign-out attempts revocation before removing local tokens and reports unconfirmed remote revocation.
+
+## Private companion
+
+Only the six declared companion tools are exposed through MCP. They list shared projects, read/search bounded project text, queue tasks and return task state. Shared project checks apply before and after disk reads; file tools still respect the enabled tool kit. Memory sharing is a separate preference. No shell or file-write tool is exposed remotely.
+
+The bridge listens on a random loopback port. A rotating pairing token is stored in wixal-connection.json with mode 0600; the main process and MCP stdio helper use it locally. The bridge rejects browser-origin traffic and unexpected Host values, requires pairing, bounds requests and limits request rate. The pairing file and encrypted credentials are blocked by the project file tools. Pausing removes pairing and stops the bridge. The Secure MCP Tunnel process authenticates separately to OpenAI and forwards MCP over stdio. Tunnel transport keeps the server private; data returned to ChatGPT still reaches the cloud.
+
+Tasks remain queued until started through trusted UI IPC. Each run uses its own conversation and captures its provider/account. Commands and writes use the existing review path. Task status distinguishes queued, running, waiting_review, completed, failed, cancelled and interrupted; a restart marks unfinished runs interrupted. Completed means the agent response finished, while tool outcomes separately report errors, declined actions and command exit status.
+
+## Provider adapters
+
+`app/providers.cjs` declares fixed service endpoints and validates explicit custom URLs. `app/cloud.cjs` selects Responses for OpenAI/ChatGPT/xAI, native Messages for Claude, and Chat Completions for the remaining services. `app/sse.cjs` decodes UTF-8 and split CRLF event boundaries. Each adapter waits for protocol completion before handing tools to the shared reviewed runtime. Claude requires both stopped content blocks and message completion. Chat Completions requires a finish reason and DONE; length/content filtering stops are errors.
+
+Credentials migrate the original OpenAI key into the encrypted per-provider key map. No key reaches renderer snapshots. Catalog invalidation has a revision counter so late requests cannot replace a newly changed connection's models. Runs capture their connection credentials and custom endpoint; settings cannot change during a response. Custom endpoints reject redirects and require HTTPS except on loopback. Their model ID and capability choices are explicit user configuration.
+
+### Conversation lifecycle
+
+Sessions retain their project scope and messages when archived (`archivedAt`). Project selection skips archived sessions. Archives can be opened read-only; both the main-process chat handler and agent reject inference until restoration. Session mutations require an idle agent. Deletion removes linked task output copies, while leaving files and project memory intact. If the active chat is removed from the active list, Wixal selects another active chat or creates an empty one. Lifecycle state uses the existing atomic workspace save.

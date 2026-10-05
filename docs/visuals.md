@@ -1,51 +1,47 @@
-# Wixal logo and motion
+# Artwork and motion
 
-Download the Wixal logo, app icon, and animation files below. Use the primary logo on dark backgrounds and the dark logo on light backgrounds.
+Wixal uses a simple lettermark, a quiet Japanese night illustration, and small SVG icons. The application and README share the same colours and artwork.
 
-[Open the local preview](brand.html)
+Open [the visual preview](brand.html) locally to see the assets together, pause the animation, and play the app tour.
 
-## Logo files
+## Source files
 
-| Asset | Vector | Raster |
+| Asset | Editable source | Ready to use |
 | --- | --- | --- |
-| Primary logo for dark backgrounds | [wixal.svg](../assets/logo/wixal.svg) | [wixal.png](../assets/logo/wixal.png) |
-| Logo for light backgrounds | [wixal-dark.svg](../assets/logo/wixal-dark.svg) | [wixal-dark.png](../assets/logo/wixal-dark.png) |
-| Single colour logo | [wixal-mono.svg](../assets/logo/wixal-mono.svg) | [wixal-mono.png](../assets/logo/wixal-mono.png) |
-| Symbol | [symbol.svg](../assets/logo/symbol.svg) | [symbol.png](../assets/logo/symbol.png) |
-| Wordmark | [wordmark.svg](../assets/logo/wordmark.svg) | SVG |
+| GitHub banner | [repo-banner.svg](../assets/repo-banner.svg) | [repo-banner.png](../assets/repo-banner.png) |
+| Social preview | [social-card.svg](../assets/social-card.svg) | [social-card.png](../assets/social-card.png) |
 | Mac app icon | [app-icon.svg](../assets/app-icon.svg) | [icon.png](../assets/icon.png), [Wixal.icns](../assets/Wixal.icns) |
-| Logo reveal | [logo-reveal.svg](../assets/motion/logo-reveal.svg) | [logo-reveal.gif](../assets/motion/logo-reveal.gif) |
+| Lettermark | [mark.svg](../assets/mark.svg) | SVG |
+| Workspace illustration | [night-shrine.png](../assets/artwork/night-shrine.png) | [night-shrine.webp](../assets/artwork/night-shrine.webp) |
+| Workflow | [workflow.svg](../assets/workflow.svg) | SVG |
+| Working indicator | [working.svg](../assets/motion/working.svg) | Animated SVG |
+| App tour | [capture-media.cjs](../scripts/capture-media.cjs) | [workspace-tour.gif](media/workspace-tour.gif) |
 
-The symbol and lettering are drawn as vector paths. They don't depend on a font installation. The PNG logo exports have transparent backgrounds. Keep the proportions intact and leave clear space around the logo; use the symbol alone where the full name would be too small. Use the light background version on white or pale surfaces, and the primary version on charcoal.
+The [icon directory](../assets/icons) contains nine SVGs for files, tools, memory, the terminal, search, new work, models, images, and review. Each uses a 24 × 24 viewBox with consistent strokes.
 
-## Page graphics and recordings
+The banner and social card have vector text with the illustration embedded. Their PNG exports are used where SVG image support varies, including the README banner. The social card is ready for GitHub's repository social preview setting; committing the image alone does not set that repository preference.
 
-| Graphic | Files |
-| --- | --- |
-| GitHub header | [Animated GIF](../assets/motion/github-hero.gif), [static SVG](../assets/repo-banner.svg), [static PNG](../assets/repo-banner.png) |
-| Social preview | [SVG](../assets/social-card.svg), [PNG](../assets/social-card.png) |
-| Full workspace tour | [GIF](media/workspace-tour.gif), [workspace still](screenshots/workspace.png) |
-| Model picker | [GIF](media/choose-model.gif), [model still](screenshots/models.png) |
-| Project files | [GIF](media/project-files.gif), [file still](screenshots/files.png) |
-| Terminal | [GIF](media/terminal.gif), [terminal still](screenshots/terminal.png) |
-
-The clips show model selection, file browsing, and terminal use. Still images are available for each clip. The local preview includes a pause button and follows reduced motion settings.
-
-Upload the social card in the repository’s social preview settings to use it on shared GitHub links.
-
-## Rebuild
+## Rebuild or record
 
 ```sh
 npm run assets
 npm run media
-npm run assets
-npm run motion
 ```
 
-Build the logo and icons, record the current app, rebuild the header with the fresh workspace screenshot, then export the header and logo animations. `assets` uses macOS `iconutil` for the ICNS. `media` needs Ollama and the Qwen model used by its search demonstration.
+`assets` rebuilds the vectors and raster exports, including the ICNS icon. It requires macOS for `iconutil`. Change the vector artwork or wording in [graphics.cjs](../scripts/graphics.cjs), then rebuild.
 
-Edit [graphics.cjs](../scripts/graphics.cjs) for the vector identity and layouts, [motion.cjs](../scripts/motion.cjs) for GIF timing, or [capture-media.cjs](../scripts/capture-media.cjs) for app recordings. The [interface icon set](../assets/icons) uses consistent 24 pixel SVGs.
+`media` opens the actual Electron app with a temporary project. It records the workspace, model picker, file browser, tool controls, saved memory, and interactive terminal. It needs Ollama running with at least one model installed. It does not run model inference or modify your saved workspace.
 
-## Illustration provenance
+The GIF has captions added after capture and plays once. Its screenshots come from real UI interactions. No model replies or approval results are simulated.
 
-The shrine illustration was generated with the built-in image generation tool. Its [source image](../assets/artwork/night-shrine.png) and [prompt](artwork-prompt.txt) are included. The logo and page graphics are SVGs defined in [graphics.cjs](../scripts/graphics.cjs).
+## Motion
+
+The welcome artwork has three small moving petals. They run for two slow cycles and then settle. Dialogs and drawers have short entrance transitions, and the working indicator animates only while a response is active.
+
+The interface and animated SVG respect `prefers-reduced-motion`. The README keeps the GIF behind an expandable section; a static workspace screenshot is visible by default. The local visual preview lets you pause its SVG animation and opt into playing the GIF.
+
+## Artwork provenance
+
+The shrine illustration was generated with the built-in image generation tool for this project. It is illustrative artwork, not a photograph of a real location. The fox is drawn as part of the scene; the product logo is a separate lettermark.
+
+The complete generation prompt is saved in [artwork-prompt.txt](artwork-prompt.txt). The SVGs, layout, captions, and motion are implemented in the repository. App screenshots and the GIF are captured from Wixal itself.

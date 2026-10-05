@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.2.1",
+  "version": "0.5.1",
   "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
   "main": "app/main.cjs",
   "private": true,
@@ -9,20 +9,24 @@
     "test": "node --test test/*.test.cjs",
     "test:app": "node scripts/smoke.cjs",
     "rebuild": "electron-rebuild -f -w node-pty",
-    "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{node_modules/node-pty,node_modules/@img}' --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(release|test|scripts|artifacts|docs|\\.git)($|/)'",
-    "check": "node --check app/main.cjs && node --check app/agent.cjs && node --check app/models.cjs && node --check app/images.cjs && node --check app/store.cjs && node --check app/tools.cjs && node --check app/preload.cjs && node --check ui/renderer.js",
+    "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{app,node_modules}' --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(release|test|scripts|artifacts|docs|\\.git)($|/)'",
+    "check": "node scripts/check.cjs",
     "assets": "node scripts/graphics.cjs && node scripts/icon.cjs",
     "media": "node scripts/capture-media.cjs",
-    "motion": "node scripts/motion.cjs",
-    "release:package": "npm run package && node scripts/release.cjs"
+    "test:connections": "node scripts/connections-smoke.cjs",
+    "test:providers": "node scripts/providers-smoke.cjs",
+    "test:refinement": "node scripts/refinement-smoke.cjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "dompurify": "^3.2.7",
+    "jose": "^6.2.12",
     "marked": "^17.0.0",
     "node-pty": "1.1.0",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

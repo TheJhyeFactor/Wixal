@@ -1,13 +1,15 @@
 const { definitions, executeTool } = require('./tools.cjs');
 const { OLLAMA, getModels, modelDetails } = require('./models.cjs');
+const { streamCloud } = require('./cloud.cjs');
+const { providerInfo } = require('./providers.cjs');
 
 function contextMessages(messages, budget = 44000, vision = true) {
   const turns = [];
   for (const message of messages) {
     if (message.role === 'user') turns.push([]);
     if (!turns.length) continue;
-    const { role, content, tool_calls, tool_name, images } = message;
-    turns.at(-1).push({ role, content, ...(tool_calls ? { tool_calls } : {}), ...(tool_name ? { tool_name } : {}), ...(vision && images?.length ? { images } : {}) });
+    const { role, content, tool_calls, tool_name, images, responseOutput, chatOutput, anthropicOutput, endpoint, provider } = message;
+    turns.at(-1).push({ role, content, ...(tool_calls ? { tool_calls } : {}), ...(tool_name ? { tool_name } : {}), ...(provider ? { provider } : {}), ...(responseOutput ? { responseOutput } : {}), ...(chatOutput ? { chatOutput, endpoint } : {}), ...(anthropicOutput ? { anthropicOutput } : {}), ...(vision && images?.length ? { images } : {}) });
   }
   const kept = [];
   let size = 0;
@@ -18,6 +20,18 @@ function contextMessages(messages, budget = 44000, vision = true) {
     size += length;
   }
   return { messages: kept, omitted: messages.length - kept.length };
+}
+
+function ollamaMessages(messages) {
+  let foreign = false;
+  return messages.map(message => {
+    if (message.role === 'assistant') foreign = !!message.provider && message.provider !== 'ollama';
+    if (message.role === 'user') foreign = false;
+    if (message.role === 'tool' && foreign) return { role: 'user', content: `Previous tool evidence (${message.tool_name}):\n${message.content}` };
+    if (message.role === 'assistant' && foreign) return { role: 'assistant', content: [message.content, message.tool_calls?.length ? `Previously requested tools: ${message.tool_calls.map(c => c.function.name).join(', ')}` : ''].filter(Boolean).join('\n') };
+    const { role, content, images, tool_calls, tool_name } = message;
+    return { role, content, ...(images ? { images } : {}), ...(tool_calls ? { tool_calls } : {}), ...(tool_name ? { tool_name } : {}) };
+  }).filter(message => message.content || message.images?.length || message.tool_calls?.length);
 }
 
 async function streamChat(body, signal, onToken, fetcher = fetch) {
@@ -46,11 +60,14 @@ async function streamChat(body, signal, onToken, fetcher = fetch) {
   return { role: 'assistant', content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}), metrics };
 }
 
-async function runAgent({ store, prompt, images = [], details, signal, emit, approve, fetcher = fetch, getDetails = modelDetails }) {
+async function runAgent({ store, prompt, images = [], details, signal, emit, approve, fetcher = fetch, getDetails = modelDetails, cloudToken, custom = store.data.customProvider }) {
   const session = store.session() || store.newSession();
+  if (session.archivedAt) throw new Error('Restore this conversation before sending a message.');
   const project = store.project();
-  if (!store.data.model) throw new Error('Select an installed model first.');
+  if (!store.data.model) throw new Error('Select a model first.');
   const model = store.data.model;
+  const provider = store.data.provider || 'ollama';
+  if (provider !== 'ollama' && !(project ? store.data.cloudProjects.includes(project.id) : store.data.cloudPersonal)) throw new Error('Enable cloud context for this workspace in Connections first.');
   const info = details || await getDetails(model, fetcher);
   const agentMode = store.data.mode === 'agent' && !!project;
   if (agentMode && !info.capabilities.includes('tools')) throw new Error('This model cannot use project tools. Choose a tool-capable model or switch to Chat.');
@@ -67,8 +84,9 @@ async function runAgent({ store, prompt, images = [], details, signal, emit, app
     if (signal.aborted) throw new Error('Stopped');
     const context = contextMessages(session.messages, Math.floor(store.data.contextSize * 2.5), info.capabilities.includes('vision'));
     emit({ type: 'context', omitted: context.omitted });
-    emit({ type: 'phase', value: step ? 'Reading tool results' : 'Thinking locally' });
-    const message = await streamChat({ model, messages: [{ role: 'system', content: system }, ...context.messages],
+    emit({ type: 'phase', value: step ? 'Reading tool results' : provider === 'ollama' ? 'Thinking locally' : `Waiting for ${providerInfo(provider).label}` });
+    const message = provider !== 'ollama' ? await streamCloud({ model, messages: context.messages, instructions: system.replace('practical local AI', 'practical AI'), tools: selectedTools, provider, custom, details: info,
+      token: await cloudToken(), signal, onToken: text => emit({ type: 'token', text }), fetcher }) : await streamChat({ model, messages: [{ role: 'system', content: system }, ...ollamaMessages(context.messages)],
       stream: true, ...(info.capabilities.includes('thinking') ? { think: false } : {}), options: { num_ctx: Math.min(store.data.contextSize, info.contextLength || store.data.contextSize) }, ...(selectedTools.length ? { tools: selectedTools } : {}),
     }, signal, text => emit({ type: 'token', text }), fetcher);
     session.messages.push({ ...message, created: Date.now() });
@@ -81,6 +99,7 @@ async function runAgent({ store, prompt, images = [], details, signal, emit, app
       emit({ type: 'phase', value: `Using ${name}` });
       try {
         if (!agentMode) throw new Error('Tools are disabled in chat mode.');
+        if (call.namespace && call.namespace !== 'wixal') throw new Error('Unknown tool namespace.');
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
         result = await executeTool(name, args, { root: project.root, signal, approve, allowedTools,
           onOutput: text => emit({ type: 'command-output', text }),

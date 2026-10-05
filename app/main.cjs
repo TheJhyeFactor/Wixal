@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeImage, clipboard, safeStorage } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const { pathToFileURL } = require('node:url');
@@ -8,9 +8,17 @@ const { getModels, runAgent } = require('./agent.cjs');
 const { modelDetails } = require('./models.cjs');
 const { importImage } = require('./images.cjs');
 const { definitions, executeTool } = require('./tools.cjs');
+const { Credentials } = require('./credentials.cjs');
+const { ChatGPTAuth } = require('./chatgpt-auth.cjs');
+const { cloudModels } = require('./cloud.cjs');
+const { providers, providerInfo, customSettings } = require('./providers.cjs');
+let catalogRevision = 0;
+function invalidateCatalog() { catalogRevision++; modelCatalog = []; catalogKey = ''; }
+const { Companion } = require('./companion.cjs');
 app.setName('Wixal');
 if (process.env.WIXAL_DATA_DIR) app.setPath('userData', process.env.WIXAL_DATA_DIR);
-let window, store, running, terminal;
+let window, store, running, terminal, credentials, auth, companion, activeTask;
+let modelCatalog = [], catalogKey = '';
 const approvals = new Map();
 const images = new Map();
 const index = path.join(__dirname, '../ui/index.html');
@@ -25,6 +33,7 @@ function approve(request) {
   if (running?.signal.aborted) return Promise.resolve(false);
   const id = randomUUID();
   return new Promise(resolve => {
+    if (activeTask) { activeTask.status = 'waiting_review'; store.save(); emit({ type: 'tasks' }); }
     approvals.set(id, resolve);
     emit({ type: 'approval', id, ...request });
   });
@@ -36,19 +45,87 @@ function register(name, handler) {
     return handler(...args);
   });
 }
+async function providerToken(provider, account = credentials.account()) {
+  if (provider === 'chatgpt') return auth.accessToken(account);
+  const key = credentials.key(provider);
+  if (!key && provider !== 'custom') throw new Error(`Add a ${providerInfo(provider).label} API key in Connections first.`);
+  return key;
+}
+async function selectedDetails() {
+  if (!store.data.model) throw new Error('Choose a model first.');
+  if (store.data.provider === 'ollama') return modelDetails(store.data.model);
+  const key = `${store.data.provider}:${store.data.provider === 'chatgpt' ? credentials.data.activeAccount || '' : ''}`;
+  const model = catalogKey === key && modelCatalog.find(m => m.name === store.data.model);
+  if (!model) throw new Error('Refresh the model list for this account and choose a model.');
+  return model;
+}
+function connectionState() {
+  const appRoot = app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked');
+  const quote = value => `'${value.replace(/'/g, "'\\''")}'`;
+  return { ...credentials.snapshot(), providers: Object.entries(providers).map(([id, info]) => ({ id, label: info.label, apiKey: !['ollama', 'chatgpt'].includes(id), keysURL: info.keysURL })), customProvider: store.data.customProvider, pending: !!auth.pending, companion: { ...store.data.companion, ...companion.snapshot(), helperPath: path.join(appRoot, 'app/companion-stdio.cjs'),
+    command: companion.server ? `node ${quote(path.join(appRoot, 'app/companion-stdio.cjs'))} ${quote(companion.file)}` : '' },
+    cloudProjects: store.data.cloudProjects, cloudPersonal: store.data.cloudPersonal };
+}
+function launchRun(prompt, attached, details, task = null) {
+  const provider = store.data.provider, account = credentials.account(), apiKey = credentials.key(provider), custom = { ...store.data.customProvider };
+  if (provider !== 'ollama' && !(store.project() ? store.data.cloudProjects.includes(store.data.activeProject) : store.data.cloudPersonal)) throw new Error('Enable cloud context for this workspace in Connections first.');
+  running = new AbortController(); const controller = running; activeTask = task;
+  emit({ type: 'run-started' });
+  (async () => {
+    try {
+      await runAgent({ store, prompt, images: attached, details, signal: controller.signal, emit, approve,
+        custom, cloudToken: () => provider === 'chatgpt' ? auth.accessToken(account) : Promise.resolve(apiKey) });
+      if (task) {
+        task.status = 'completed';
+        const messages = store.session().messages;
+        task.result = messages.findLast(m => m.role === 'assistant')?.content || '';
+
+      }
+    } catch (error) {
+      const message = controller.signal.aborted ? 'Response stopped.' : error.message;
+      if (task) { task.status = controller.signal.aborted ? 'cancelled' : 'failed'; task.error = message; }
+      emit({ type: 'error', message });
+    } finally {
+      if (task) {
+        task.outcomes = (store.data.sessions.find(s => s.id === task.sessionId)?.messages || []).filter(m => m.role === 'tool').map(m => {
+          if (m.tool_name === 'run_command') { try { const result = JSON.parse(m.content); return { tool: m.tool_name, exitCode: result.exitCode, stopped: result.stopped }; } catch {} }
+          return { tool: m.tool_name, status: m.content.startsWith('Error:') ? 'failed' : m.content.startsWith('User declined') ? 'declined' : 'done' };
+        });
+        task.updated = Date.now(); store.save();
+      }
+      running = null; activeTask = null; emit({ type: 'done' }); emit({ type: 'tasks' });
+    }
+  })();
+}
 function setupIPC() {
   register('state', () => store.snapshot());
   register('models', async () => {
-    const models = await getModels();
+    const provider = store.data.provider;
+    const account = credentials.account(), revision = catalogRevision, custom = { ...store.data.customProvider };
+    const key = `${provider}:${provider === 'chatgpt' ? account?.client_id || '' : ''}`;
+    const models = provider === 'ollama' ? await getModels() : await cloudModels(provider, await providerToken(provider, account), custom);
+    if (revision !== catalogRevision || provider !== store.data.provider || (provider === 'chatgpt' && account !== credentials.account())) throw new Error('Provider changed. Refresh the model list.');
+    modelCatalog = models; catalogKey = key;
     if (!models.some(m => m.name === store.data.model)) {
-      if (!running) { store.data.model = models.find(m => m.capabilities?.includes('tools'))?.name || models[0]?.name || ''; store.save(); }
+      if (!running) { store.data.model = models.find(m => m.capabilities?.includes('tools'))?.name || models[0]?.name || ''; store.data.providerModels[provider] = store.data.model; store.save(); }
     }
-    return { models, selected: store.data.model };
+    return { models, selected: store.data.model, provider };
+  });
+  register('layout', collapsed => {
+    if (typeof collapsed !== 'boolean') throw new Error('Invalid sidebar preference.');
+    store.data.ui.sidebarCollapsed = collapsed;
+    store.save(); return store.snapshot();
   });
   register('settings', settings => {
     idle();
     if (!settings || typeof settings !== 'object') throw new Error('Invalid settings.');
-    if (typeof settings.model === 'string' && settings.model.length < 200) store.data.model = settings.model;
+    if (settings.provider !== undefined) {
+      if (!Object.hasOwn(providers, settings.provider)) throw new Error('Unknown model provider.');
+      store.data.providerModels[store.data.provider] = store.data.model;
+      store.data.provider = settings.provider; store.data.model = store.data.providerModels[settings.provider] || '';
+      invalidateCatalog();
+    }
+    if (typeof settings.model === 'string' && settings.model.length < 200) { store.data.model = settings.model; store.data.providerModels[store.data.provider] = settings.model; }
     if (['agent', 'chat'].includes(settings.mode)) store.data.mode = settings.mode;
     if (Array.isArray(settings.enabledTools)) {
       const names = definitions.map(tool => tool.function.name);
@@ -84,38 +161,85 @@ function setupIPC() {
   register('image-remove', id => { idle(); images.delete(id); });
   register('session-new', () => { idle(); store.newSession(); images.clear(); return store.snapshot(); });
   register('session-select', id => { idle(); store.selectSession(id); images.clear(); return store.snapshot(); });
-  register('session-rename', title => {
+  for (const action of ['archive', 'restore', 'delete']) register(`session-${action}`, id => {
+    idle(); const active = store.data.activeSession; store[`${action}Session`](id);
+    if (store.data.activeSession !== active) images.clear();
+    return store.snapshot();
+  });
+  register('session-rename', (title, id = store.data.activeSession) => {
     idle();
     if (typeof title !== 'string' || !title.trim() || title.length > 80) throw new Error('Use a conversation name under 80 characters.');
-    if (!store.session()) throw new Error('Start a conversation first.');
-    store.session().title = title.trim(); store.save(); return store.snapshot();
+    store.scopedSession(id).title = title.trim(); store.save(); return store.snapshot();
   });
   register('memory-add', content => { idle(); store.remember(content); return store.snapshot(); });
   register('memory-delete', id => { idle(); store.data.memories = store.data.memories.filter(m => m.id !== id || m.projectId !== store.data.activeProject); store.save(); return store.snapshot(); });
   register('chat', async (prompt, imageIds = []) => {
     idle();
+    if (store.session()?.archivedAt) throw new Error('Restore this conversation before sending a message.');
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 16000) throw new Error('Enter a message under 16,000 characters.');
     if (!Array.isArray(imageIds) || imageIds.length > 3 || imageIds.some(id => !images.has(id)) || new Set(imageIds).size !== imageIds.length) throw new Error('These attachments are no longer available. Attach them again.');
     const attached = imageIds.map(id => images.get(id));
-    if (!store.data.model) throw new Error('Choose a local model first.');
+    if (!store.data.model) throw new Error('Choose a model first.');
     const model = store.data.model, projectId = store.data.activeProject, sessionId = store.data.activeSession;
-    const details = await modelDetails(model);
+    const provider = store.data.provider, revision = catalogRevision;
+    const details = await selectedDetails();
     idle();
-    if (model !== store.data.model || projectId !== store.data.activeProject || sessionId !== store.data.activeSession) throw new Error('Workspace changed. Send your message again.');
+    if (revision !== catalogRevision || provider !== store.data.provider || model !== store.data.model || projectId !== store.data.activeProject || sessionId !== store.data.activeSession) throw new Error('Workspace changed. Send your message again.');
     if (store.data.mode === 'agent' && store.project() && !details.capabilities.includes('tools')) throw new Error('Choose a model with tools or switch to Chat.');
     if (attached.length && !details.capabilities.includes('vision')) throw new Error('Choose a model with image support.');
-    running = new AbortController();
-    const controller = running;
-    (async () => {
-      try { await runAgent({ store, prompt: prompt.trim(), images: attached, details, signal: controller.signal, emit, approve }); }
-      catch (error) { emit({ type: 'error', message: controller.signal.aborted ? 'Response stopped.' : error.message }); }
-      finally { running = null; emit({ type: 'done' }); }
-    })();
+    launchRun(prompt.trim(), attached, details);
     imageIds.forEach(id => images.delete(id));
     return true;
   });
   register('stop', () => { stop(); return true; });
-  register('approval', ({ id, allowed }) => { approvals.get(id)?.(allowed === true); approvals.delete(id); });
+  register('approval', ({ id, allowed }) => { approvals.get(id)?.(allowed === true); approvals.delete(id); if (activeTask) { activeTask.status = 'running'; store.save(); emit({ type: 'tasks' }); } });
+  register('connections', () => connectionState());
+  register('api-key-save', key => { idle(); if (typeof key !== 'string') throw new Error('Invalid API key.'); credentials.setKey(key.trim()); if (store.data.provider === 'openai') invalidateCatalog(); return connectionState(); });
+  register('api-key-remove', () => { idle(); credentials.setKey(''); if (store.data.provider === 'openai') invalidateCatalog(); return connectionState(); });
+  register('provider-key-save', value => { idle(); if (!value || typeof value.provider !== 'string' || typeof value.key !== 'string') throw new Error('Invalid API key.'); credentials.setKey(value.key.trim(), value.provider); if (store.data.provider === value.provider) invalidateCatalog(); return connectionState(); });
+  register('provider-key-remove', provider => { idle(); if (typeof provider !== 'string') throw new Error('Invalid provider.'); credentials.setKey('', provider); if (store.data.provider === provider) invalidateCatalog(); return connectionState(); });
+  register('custom-provider-save', value => {
+    idle(); const settings = customSettings(value);
+    if (typeof value.key !== 'string') throw new Error('Invalid API key.');
+    // A new endpoint gets a new explicitly supplied key; never reuse the old endpoint's credential.
+    credentials.setKey(value.key.trim(), 'custom'); store.data.customProvider = settings;
+    store.data.providerModels.custom = settings.model;
+    if (store.data.provider === 'custom') store.data.model = settings.model;
+    store.save(); if (store.data.provider === 'custom') invalidateCatalog(); return connectionState();
+  });
+  register('chatgpt-sign-in', id => { idle(); return auth.start(id); });
+  register('chatgpt-cancel', () => { auth.cancel(); return connectionState(); });
+  register('chatgpt-plan-notice', () => { const account = credentials.account(); if (account) { account.planNoticeSeen = true; credentials.save(); } });
+  register('chatgpt-select', id => { idle(); auth.select(id); invalidateCatalog(); return connectionState(); });
+  register('chatgpt-sign-out', async id => { idle(); const result = await auth.signOut(id); invalidateCatalog(); return { ...connectionState(), message: result.message }; });
+  register('sharing', async settings => {
+    idle(); if (!settings || typeof settings !== 'object') throw new Error('Invalid sharing settings.');
+    const ids = store.data.projects.map(p => p.id);
+    for (const key of ['cloudProjects', 'sharedProjects']) if (settings[key] !== undefined && (!Array.isArray(settings[key]) || settings[key].some(id => !ids.includes(id)))) throw new Error('Unknown shared project.');
+    if (settings.cloudProjects) store.data.cloudProjects = [...new Set(settings.cloudProjects)];
+    if (typeof settings.cloudPersonal === 'boolean') store.data.cloudPersonal = settings.cloudPersonal;
+    if (settings.sharedProjects) store.data.companion.sharedProjects = [...new Set(settings.sharedProjects)];
+    if (typeof settings.shareMemory === 'boolean') store.data.companion.shareMemory = settings.shareMemory;
+    if (typeof settings.enabled === 'boolean') { if (settings.enabled) await companion.start(); else await companion.stop(); store.data.companion.enabled = settings.enabled; }
+    store.save(); return connectionState();
+  });
+  register('connection-link', name => {
+    const urls = { usage: 'https://chatgpt.com/settings/usage', keys: 'https://platform.openai.com/api-keys', tunnel: 'https://platform.openai.com/settings/organization/tunnels', guide: 'https://developers.openai.com/api/docs/guides/secure-mcp-tunnels', plugins: 'https://chatgpt.com/plugins' };
+    if (typeof name === 'string' && name.startsWith('provider:')) { const info = providerInfo(name.slice(9)); if (!info.keysURL) throw new Error('This provider has no key page.'); return shell.openExternal(info.keysURL); }
+    if (!urls[name]) throw new Error('Unknown connection link.'); return shell.openExternal(urls[name]);
+  });
+  register('task-start', async id => {
+    idle(); const task = store.data.tasks.find(t => t.id === id); if (!task || !['queued', 'failed', 'interrupted', 'cancelled'].includes(task.status)) throw new Error('This task cannot be started.');
+    const model = store.data.model, provider = store.data.provider, revision = catalogRevision;
+    const details = await selectedDetails(); idle();
+    if (revision !== catalogRevision || model !== store.data.model || provider !== store.data.provider) throw new Error('Provider changed. Start the task again.');
+    if (!details.capabilities.includes('tools')) throw new Error('Choose a model with tools to start a project task.');
+    if (provider !== 'ollama' && !store.data.cloudProjects.includes(task.projectId)) throw new Error('Enable cloud context for this task’s project in Connections first.');
+    store.selectProject(task.projectId); destroyTerminal(); images.clear(); store.newSession();
+    task.sessionId = store.data.activeSession; task.status = 'running'; task.error = null; task.result = null; task.outcomes = []; task.updated = Date.now();
+    store.data.mode = 'agent'; store.save(); launchRun(task.prompt, [], details, task); return store.snapshot();
+  });
+  register('task-cancel', id => { idle(); const task = store.data.tasks.find(t => t.id === id); if (!task || task.status !== 'queued') throw new Error('Only queued tasks can be dismissed.'); task.status = 'cancelled'; task.updated = Date.now(); store.save(); return store.snapshot(); });
   register('terminal-open', () => {
     if (!store.project()) throw new Error('Open a project folder first.');
     if (terminal) return { root: store.project().root };
@@ -150,6 +274,11 @@ function createWindow() {
 }
 app.whenReady().then(() => {
   store = new Store(app.getPath('userData'));
+  credentials = new Credentials(app.getPath('userData'), safeStorage);
+  auth = new ChatGPTAuth({ credentials, openBrowser: url => shell.openExternal(url), onChange: event => { invalidateCatalog(); emit(event); } });
+  companion = new Companion(store, app.getPath('userData'), () => emit({ type: 'tasks' }));
+  store.save();
+  if (store.data.companion.enabled) companion.start().catch(error => { store.data.companion.enabled = false; store.save(); emit({ type: 'error', message: error.message }); });
   if (process.env.WIXAL_TEST_PROJECT) store.addProject(process.env.WIXAL_TEST_PROJECT);
   if (process.platform === 'darwin') app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, '../assets/icon.png')));
   setupIPC();
@@ -162,4 +291,4 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (!window) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { stop(); destroyTerminal(); });
+app.on('before-quit', () => { stop(); destroyTerminal(); auth?.cancel(); companion?.stop().catch(() => {}); });

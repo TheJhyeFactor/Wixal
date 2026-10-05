@@ -1,16 +1,6 @@
 # Developing Wixal
 
-Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac. To run from source:
-
-```sh
-git clone https://github.com/TheJhyeFactor/Wixal.git
-cd Wixal
-npm ci
-npm run rebuild
-npm start
-```
-
-`npm run rebuild` builds node-pty for Electron.
+Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac. Install dependencies with `npm ci`, then run `npm run rebuild` to rebuild node-pty for Electron.
 
 ## Check a change
 
@@ -18,6 +8,9 @@ npm start
 npm test
 npm run check
 npm run test:app
+npm run test:connections
+npm run test:providers
+npm run test:refinement
 ```
 
 The app test launches Electron with temporary state and a small test project. It exercises model selection, file previews, tool settings, image attachments, project memory, the real PTY, persistence, offline recovery, and compact window layout. Screenshots are saved in `artifacts/`.
@@ -41,23 +34,27 @@ WIXAL_APP_PATH="$PWD/release/Wixal-darwin-arm64/Wixal.app/Contents/MacOS/Wixal" 
 
 Packaging creates `release/Wixal-darwin-arm64/Wixal.app`. The native node-pty module is unpacked from asar so its spawn helper can run. The app is not Developer ID signed or notarised.
 
-## Build release downloads
-
-Commit the release version and source changes first, then run:
-
-```sh
-npm run release:package
-```
-
-This builds the app, seals it with an ad hoc signature, and creates a DMG, ZIP, SHA-256 checksums, and a source commit manifest under `release/v<VERSION>/`. The DMG includes an Applications shortcut and installation notes. Ad hoc signing does not provide Developer ID trust or notarisation. Test the app extracted from the ZIP and mounted from the DMG before publishing the release.
-
 ## Update the graphics
 
 ```sh
 npm run assets
 npm run media
-npm run assets
-npm run motion
 ```
 
-Build the assets, record fresh app media, then rebuild the header with the new workspace screenshot and export its motion. The recording uses a real app session with disposable demo data. See [the visual guide](visuals.md) for source files and motion behaviour.
+The first command rebuilds the SVG assets, PNG exports, and macOS icon from the checked-in sources. The second records screenshots and the GIF tour from a real app session with disposable demo data. See [the visual guide](visuals.md) for source files and motion behaviour.
+
+## Connection checks
+
+`npm run test:connections` runs the real Electron UI, macOS credential encryption, a real MCP stdio client and the actual file tool/review path. It simulates OpenAI model catalogs, Responses streams and OAuth endpoints; its fixture identity is signed and verified through JWKS. It checks API-key save/removal, shared reads, queued task handoff, approved and declined edits, account sign-in/sign-out, provider switching, persistence and sharing revocation. It does not prove live account eligibility, billable inference or ChatGPT tunnel connectivity. Ollama metadata is required for the initial local model picker.
+
+To run the connection checks against the packaged app:
+
+```sh
+WIXAL_APP_PATH="$PWD/release/Wixal-darwin-arm64/Wixal.app/Contents/MacOS/Wixal" npm run test:connections
+```
+
+App source and production dependencies are unpacked from asar so the external Node MCP helper can run from the packaged app. The existing PTY native helper remains unpacked as well. Do not put real credentials into fixtures or screenshots. See [connection setup](connections.md) for live account verification.
+
+`npm run test:providers` runs all added providers with protocol fixtures and real Electron UI/macOS encryption. It verifies provider key isolation, catalogs, native Claude and compatible tool continuation, reviewed file writes, a declined edit, custom endpoint configuration and reload persistence. It does not contact real cloud inference accounts. Run it against a packaged binary with `WIXAL_APP_PATH` as for the connection smoke test.
+
+`npm run test:refinement` uses disposable conversations to exercise archive/restart/read/restore, rename, keyboard menu navigation, cancellation and confirmation of deletion, and the last-chat fallback. It also checks the centred composer, prompt suggestions, textarea growth, compact layout and reduced motion, with screenshots in `artifacts/`. It does not change your real chats or require cloud accounts. Use `WIXAL_APP_PATH` to test the packaged build.

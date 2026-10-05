@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process');
 
 const MAX_OUTPUT = 24000;
 const skipped = new Set(['.git', 'node_modules', '.venv', 'venv', 'release', '.next', 'dist']);
-const sensitive = p => p.split(path.sep).some(x => /^\.env(?:\.|$)/.test(x) || ['.ssh', '.aws', '.gnupg', '.npmrc', '.netrc'].includes(x) || /\.(pem|key|p12|pfx)$/i.test(x));
+const sensitive = p => p.split(path.sep).some(x => /^\.env(?:\.|$)/.test(x) || ['.ssh', '.aws', '.gnupg', '.npmrc', '.netrc', 'credentials.enc', 'wixal-connection.json'].includes(x) || /\.(pem|key|p12|pfx)$/i.test(x));
 
 async function safePath(root, relative, writing = false) {
   if (typeof relative !== 'string' || path.isAbsolute(relative)) throw new Error('Use a path relative to the selected project.');

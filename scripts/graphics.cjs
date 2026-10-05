@@ -1,18 +1,13 @@
-// Wixal's vector identity. The symbol and wordmark are paths, not font glyphs.
+// Editable vector assets; illustration source is preserved in assets/artwork.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const sharp = require('sharp');
 const root = path.resolve(__dirname, '..');
-const palette = { ink: '#17191f', paper: '#f4f0e9', pink: '#ecabc5', muted: '#acaeb9', line: '#343641' };
-const symbolPath = 'M9 19H25L41 66L54 31H68L82 66L98 19H114L92 87Q91 91 86 91H79Q74 91 73 87L61 54L49 87Q47 91 42 91H35Q31 91 29 87Z';
-const foldPath = 'M82 66L98 19H114L92 87Q91 91 86 91H79Q74 91 73 87L68 73Z';
-// The coloured symbol is the W. Only ixal follows it.
-const glyphs = [
-  '<path d="M0 9v29"/><circle cx="0" cy="-7" r="4" fill="currentColor" stroke="none"/>',
-  '<path d="m19 9 26 29m0-29-26 29"/>',
-  '<ellipse cx="73" cy="24" rx="14" ry="15"/><path d="M87 9v29"/>',
-  '<path d="M108-9v40q0 7 8 7"/>'
-];
+const ink = '#191a20', cream = '#f1eee9', pink = '#e9a5bd', muted = '#b3afb9';
+const lettermark = '<path d="m17 27 12 45 17-33 17 33 12-45" fill="none" stroke="#eee9e5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M68 81h17" stroke="#e9a5bd" stroke-width="6" stroke-linecap="round"/>';
+const text = (x, y, value, size = 16, fill = cream, extra = '') => `<text x="${x}" y="${y}" font-family="Helvetica,Arial,sans-serif" font-size="${size}" fill="${fill}" ${extra}>${value}</text>`;
+const mono = (x, y, value, size = 12, fill = muted, extra = '') => `<text x="${x}" y="${y}" font-family="Menlo,monospace" font-size="${size}" fill="${fill}" ${extra}>${value}</text>`;
+const svg = (w, h, body, title) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-labelledby="title"><title id="title">${title}</title>${body}</svg>\n`;
 const icons = {
   folder: '<path d="M3 7V5a1 1 0 0 1 1-1h6l2 3h8a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M3 9h18"/>',
   tools: '<path d="m5 19 9-9M14 10a5 5 0 0 0 6-6l-3 3-3-3 3-3a5 5 0 0 0-6 6L2 16a2 2 0 0 0 3 3Z"/>',
@@ -24,49 +19,21 @@ const icons = {
   image: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="2"/><path d="m3 17 5-5 4 4 4-7 5 8"/>',
   review: '<path d="M12 2 3 6v6c0 5 9 10 9 10s9-5 9-10V6Z"/><path d="m7 12 3 3 7-7"/>'
 };
-const clamp = n => Math.max(0, Math.min(1, n));
-const ease = n => 1 - (1 - clamp(n)) ** 3;
-function symbol(color = palette.paper, accent = palette.pink, progress = 1) {
-  return `<g class="symbol" opacity="${ease(progress * 2)}" transform="translate(0 ${8 * (1 - ease(progress * 2))})"><path d="${symbolPath}" fill="${color}"/><path class="fold" d="${foldPath}" fill="${accent}" opacity="${ease((progress - .2) * 2)}"/></g>`;
-}
-function wordmark(color = palette.paper) {
-  return `<g fill="none" stroke="${color}" color="${color}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">${glyphs.join('')}</g>`;
-}
-function lockup(color = palette.paper, accent = palette.pink, progress = 1) {
-  const reveal = ease((progress - .14) / .7);
-  // A wipe starts at the W's right edge while the lettering slides out gently.
-  // The W remains in front and visible throughout; there is no second w.
-  return `<defs><clipPath id="name-reveal" clipPathUnits="userSpaceOnUse"><rect class="name-window" x="148" y="0" width="${285 * reveal}" height="160"/></clipPath></defs><g clip-path="url(#name-reveal)"><g class="name-motion" transform="translate(${-6 * (1 - reveal)} 0)"><g transform="translate(158 49) scale(2.12)">${wordmark(color)}</g></g></g><g transform="translate(8 32) scale(1.16)">${symbol(color, accent)}</g>`;
-}
-function svg(w, h, body, title) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-labelledby="title"><title id="title">${title}</title>${body}</svg>\n`;
-}
-const text = (x, y, value, size = 16, fill = palette.paper, extra = '') => `<text x="${x}" y="${y}" font-family="Helvetica,Arial,sans-serif" font-size="${size}" fill="${fill}" ${extra}>${value}</text>`;
-const mono = (x, y, value, size = 12, fill = palette.muted, extra = '') => `<text x="${x}" y="${y}" font-family="Menlo,monospace" font-size="${size}" fill="${fill}" ${extra}>${value}</text>`;
-async function save(name, contents) { await fs.mkdir(path.dirname(path.join(root, name)), { recursive: true }); await fs.writeFile(path.join(root, name), contents); }
-async function exportSvg(name, contents) { await save(`${name}.svg`, contents); await sharp(Buffer.from(contents)).png().toFile(path.join(root, `${name}.png`)); }
-async function banner(progress = 1) {
-  const embedded = (await sharp(path.join(root, 'docs/screenshots/workspace.png')).resize(542, 394).png().toBuffer()).toString('base64');
-  return svg(1280, 430, `<rect width="1280" height="430" rx="16" fill="${palette.ink}"/><path d="M48 382h1184" stroke="${palette.line}"/>${mono(62, 57, 'WIXAL FOR MAC', 11, palette.pink, 'letter-spacing="2"')}<g transform="translate(54 92) scale(.95)">${lockup(palette.paper, palette.pink, progress)}</g>${text(62, 271, 'Local AI for your projects.', 27, palette.paper, 'letter-spacing="-.6"')}${text(62, 306, 'Chat, files, and a terminal in one app.', 16, palette.muted)}${mono(62, 409, 'MACOS / APPLE SILICON / EARLY PREVIEW', 10)}<g><rect x="694" y="31" width="544" height="396" rx="9" fill="#252731" stroke="#4a4353"/><clipPath id="app"><rect x="695" y="32" width="542" height="394" rx="8"/></clipPath><image x="695" y="32" width="542" height="394" href="data:image/png;base64,${embedded}" clip-path="url(#app)"/></g>`, 'Wixal: local AI for your projects.');
-}
-async function build() {
-  await save('assets/mark.svg', svg(124, 110, symbol(), 'Wixal folded W symbol'));
-  await save('assets/logo/wordmark.svg', svg(436, 160, lockup(), 'Wixal wordmark with folded W'));
-  await exportSvg('assets/logo/wixal', svg(436, 160, lockup(), 'Wixal logo'));
-  await exportSvg('assets/logo/wixal-dark', svg(436, 160, lockup(palette.ink, '#b76888'), 'Wixal logo for light backgrounds'));
-  await exportSvg('assets/logo/wixal-mono', svg(436, 160, lockup(palette.paper, palette.paper), 'Wixal single colour logo'));
-  await exportSvg('assets/logo/symbol', svg(124, 110, symbol(), 'Wixal logo symbol'));
-  const animatedStyle = `<style>.name-window{animation:name-open 1.4s .28s cubic-bezier(.215,.61,.355,1) both}.name-motion{animation:name-slide 1.4s .28s cubic-bezier(.215,.61,.355,1) both}@keyframes name-open{from{width:0}to{width:285px}}@keyframes name-slide{from{transform:translateX(-6px)}to{transform:translateX(0)}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}</style>`;
-  await save('assets/motion/logo-reveal.svg', svg(436, 160, animatedStyle + lockup(), 'Animated Wixal logo reveal'));
-  await exportSvg('assets/repo-banner', await banner());
-  await exportSvg('assets/social-card', svg(1280, 640, `<rect width="1280" height="640" fill="${palette.ink}"/><path d="M64 566h1152" stroke="${palette.line}"/>${mono(70, 91, 'WIXAL / MACOS', 13, palette.pink, 'letter-spacing="2"')}<g transform="translate(52 178) scale(1.22)">${lockup()}</g>${text(72, 422, 'Local AI for your projects.', 40, palette.paper, 'letter-spacing="-1"')}${text(72, 478, 'Chat, files, and a terminal in one app.', 23, palette.muted)}${mono(72, 607, 'github.com/TheJhyeFactor/Wixal', 14)}<g transform="translate(947 202) scale(1.85)">${symbol('#343641', '#766070')}</g>`, 'Wixal: a workspace for local AI on Mac'));
-  await save('assets/app-icon.svg', svg(1024, 1024, `<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#34303c"/><stop offset="1" stop-color="${palette.ink}"/></linearGradient></defs><rect x="24" y="24" width="976" height="976" rx="220" fill="url(#bg)"/><rect x="43" y="43" width="938" height="938" rx="201" fill="none" stroke="#64566d" stroke-width="3"/><g transform="translate(132 182) scale(6.15)">${symbol()}</g>`, 'Wixal app icon'));
+async function save(name, data) { await fs.mkdir(path.dirname(path.join(root, name)), { recursive: true }); await fs.writeFile(path.join(root, name), data); }
+async function render(name, data) { await save(`${name}.svg`, data); await sharp(Buffer.from(data)).png().toFile(path.join(root, `${name}.png`)); }
+(async () => {
+  await save('assets/mark.svg', svg(100, 100, lettermark, 'Wixal lettermark'));
   for (const [name, body] of Object.entries(icons)) await save(`assets/icons/${name}.svg`, svg(24, 24, `<g fill="none" stroke="#d3b4cc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</g>`, `${name} icon`));
-  const tiles = [['model', 'Choose your model', 'Use your Ollama library.'], ['folder', 'Open your project', 'Browse and search files.'], ['review', 'Review each change', 'Approve edits and commands.'], ['terminal', 'Open the terminal', 'Use the built-in zsh terminal.']];
-  await save('assets/workflow.svg', svg(1280, 180, `<rect width="1280" height="180" rx="12" fill="${palette.ink}"/>${tiles.map(([ic, heading, sub], i) => { const x = 30 + i * 316; return `${i ? `<path d="M${x - 18} 32v116" stroke="${palette.line}"/>` : ''}<g transform="translate(${x} 33)" fill="none" stroke="${palette.pink}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icons[ic]}</g>${text(x, 95, heading, 20, palette.paper)}${text(x, 126, sub, 14, palette.muted)}`; }).join('')}`, 'Choose a model, open a project, review changes, and use the terminal'));
-  // Preserve the illustration as an optional accent inside the app.
-  await sharp(path.join(root, 'assets/artwork/night-shrine.png')).resize(960).webp({ quality: 88 }).toFile(path.join(root, 'assets/artwork/night-shrine.webp'));
-  console.log('Built the single-W Wixal logo, variants, icon, and page graphics.');
-}
-module.exports = { svg, symbol, lockup, banner, save, palette, ease, root };
-if (require.main === module) build().catch(error => { console.error(error); process.exitCode = 1; });
+  const artwork = path.join(root, 'assets/artwork/night-shrine.png');
+  await sharp(artwork).resize(960).webp({ quality: 88 }).toFile(path.join(root, 'assets/artwork/night-shrine.webp'));
+  const embedded = (await sharp(artwork).resize(780).png().toBuffer()).toString('base64');
+  const backdrop = `<rect width="1280" height="500" rx="16" fill="${ink}"/><defs><linearGradient id="fade"><stop stop-color="${ink}"/><stop offset="1" stop-color="${ink}" stop-opacity="0"/></linearGradient><clipPath id="frame"><rect width="1280" height="500" rx="16"/></clipPath></defs><g clip-path="url(#frame)"><image x="540" y="-10" width="780" height="520" href="data:image/png;base64,${embedded}"/><rect x="540" width="180" height="500" fill="url(#fade)"/></g>`;
+  await render('assets/repo-banner', svg(1280, 500, `${backdrop}${mono(62, 72, 'WIXAL', 13, pink, 'letter-spacing="3"')}${text(59, 161, 'Local AI,', 58, cream, 'font-weight="600" letter-spacing="-2"')}${text(59, 226, 'at home on your Mac.', 52, cream, 'font-weight="600" letter-spacing="-2"')}${text(62, 291, 'Ollama, your project files, and a terminal.', 19, muted)}${text(62, 321, 'Together in one workspace.', 19, muted)}<path d="M62 376h56" stroke="${pink}" stroke-width="2"/>${mono(62, 413, 'macOS · Apple Silicon · Early preview', 12)}`, 'Wixal: local AI, at home on your Mac. Ollama, project files, and a terminal together in one workspace.'));
+  await render('assets/social-card', svg(1280, 640, `<rect width="1280" height="640" fill="${ink}"/><image x="555" y="60" width="780" height="520" href="data:image/png;base64,${embedded}"/><defs><linearGradient id="fade"><stop stop-color="${ink}"/><stop offset="1" stop-color="${ink}" stop-opacity="0"/></linearGradient></defs><rect x="555" y="60" width="170" height="520" fill="url(#fade)"/>${mono(65, 90, 'WIXAL', 14, pink, 'letter-spacing="3"')}${text(61, 232, 'Local AI,', 73, cream, 'font-weight="600" letter-spacing="-2"')}${text(61, 314, 'at home on', 73, cream, 'font-weight="600" letter-spacing="-2"')}${text(61, 396, 'your Mac.', 73, cream, 'font-weight="600" letter-spacing="-2"')}${text(65, 465, 'Ollama. Project files. A real terminal.', 19, muted)}${mono(65, 568, 'github.com/TheJhyeFactor/Wixal', 14)}`, 'Wixal GitHub social preview'));
+  await save('assets/app-icon.svg', svg(1024, 1024, `<defs><linearGradient id="icon-bg" x2="1" y2="1"><stop stop-color="#35303e"/><stop offset="1" stop-color="#191a20"/></linearGradient></defs><rect x="24" y="24" width="976" height="976" rx="220" fill="url(#icon-bg)"/><rect x="44" y="44" width="936" height="936" rx="200" fill="none" stroke="#6c5b71" stroke-width="3"/><g transform="translate(110 70) scale(8.2)">${lettermark}</g>`, 'Wixal macOS app icon'));
+  const tiles = [['model', 'Choose your model', 'Use your Ollama library.'], ['folder', 'Open your project', 'Read and search real files.'], ['review', 'Review each change', 'Approve edits and commands.'], ['terminal', 'Keep working', 'Use the built-in zsh terminal.']];
+  await save('assets/workflow.svg', svg(1280, 180, `<rect width="1280" height="180" rx="12" fill="${ink}"/>${tiles.map(([ic, heading, sub], i) => { const x = 30 + i * 316; return `${i ? `<path d="M${x - 18} 32v116" stroke="#3b3741"/>` : ''}<g transform="translate(${x} 33)" fill="none" stroke="${pink}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icons[ic]}</g>${text(x, 95, heading, 20, cream, 'font-weight="500"')}${text(x, 126, sub, 14, muted)}`; }).join('')}`, 'Choose your model, open your project, review each change, and keep working in the terminal'));
+  const orbit = `<style>.orbit{transform-origin:32px 32px;animation:orbit 3s linear infinite}@keyframes orbit{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.orbit{animation:none}}</style><circle cx="32" cy="32" r="22" fill="none" stroke="#49414f" stroke-width="1.5"/><g class="orbit"><path d="M32 10a22 22 0 0 1 22 22" fill="none" stroke="${pink}" stroke-width="2" stroke-linecap="round"/></g><path d="m23 25 7 7-7 7m12 0h7" fill="none" stroke="#ded4dd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  await save('assets/motion/working.svg', svg(64, 64, orbit, 'Local work in progress'));
+  console.log('Built Wixal lettermark, SVG icons, working animation, app icon, banner, social card, and workflow.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

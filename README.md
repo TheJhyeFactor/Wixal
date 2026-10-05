@@ -1,43 +1,32 @@
-![Wixal for Mac](assets/motion/github-hero.gif)
+![Wixal 0.5.1 for Mac](docs/screenshots/workspace.png)
 
 # Wixal
 
-A Mac app for working on projects with local AI. Chat with an Ollama model, browse your files, and use the terminal in one place.
+Local AI for your Mac. Chat with models, work with project files, and keep your notes and terminal in one place.
 
-**[Download for Mac](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.2.1/Wixal-0.2.1-macOS-arm64.dmg)** · [ZIP](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.2.1/Wixal-0.2.1-macOS-arm64.zip) · [Release notes](https://github.com/TheJhyeFactor/Wixal/releases/latest)
+**[Download Wixal for Mac](https://github.com/TheJhyeFactor/Wixal/releases/latest)** · [ZIP download](https://github.com/TheJhyeFactor/Wixal/releases/latest) · [What's new](CHANGELOG.md)
 
-Version 0.2.1 · Apple Silicon · macOS 13+ · Preview
+Version **0.5.1** · Apple Silicon · macOS 13 or newer
 
-## Features
+## Work your way
 
-<table>
-<tr>
-<td width="50%"><strong>Local models</strong><br>Choose from your installed Ollama models.<br><br><img src="docs/media/choose-model.gif" alt="Choosing a model in Wixal"><br><a href="docs/screenshots/models.png">Still image</a></td>
-<td width="50%"><strong>Project files</strong><br>Browse files and add them to a chat.<br><br><img src="docs/media/project-files.gif" alt="Browsing project files in Wixal"><br><a href="docs/screenshots/files.png">Still image</a></td>
-</tr>
-<tr>
-<td><strong>Terminal</strong><br>Run commands without leaving Wixal.<br><br><img src="docs/media/terminal.gif" alt="Using the terminal in Wixal"><br><a href="docs/screenshots/terminal.png">Still image</a></td>
-<td><strong>Project notes</strong><br>Save notes to use in later conversations.<br><br><img src="docs/screenshots/memory.png" alt="Saved project notes in Wixal"></td>
-</tr>
-</table>
+- **Choose a model.** Use Ollama on your Mac or connect OpenAI, ChatGPT, Claude, Gemini, Grok, DeepSeek, Groq, Mistral, OpenRouter, or a compatible endpoint.
+- **Bring in your project.** Browse and search files, attach images, and save notes for later conversations.
+- **Stay in control.** Choose the tools an agent can use. Review file changes and commands before they run.
+- **Keep chats tidy.** Search conversations, archive and restore them, or delete them when you're done.
+- **Pick up the terminal.** Work in an interactive zsh terminal beside your project.
+- **Connect ChatGPT.** Share selected projects with the private Wixal companion, then review queued tasks in the app.
 
-Choose which tools the model can use. Wixal asks for approval before it edits a file or runs a command. The terminal runs commands directly on your Mac.
-
-## Install
+## Get started
 
 1. Download the DMG and drag **Wixal.app** into **Applications**.
-2. Start [Ollama](https://ollama.com) with at least one model installed.
-3. Open Wixal, choose a project with **⌘O**, and select a model with **⌘L**.
+2. Start Ollama with a model installed, or connect an AI provider in **Connections**.
+3. Open a project with **⌘O**, choose a model with **⌘L**, and start a conversation.
 
-Requires an Apple Silicon Mac running macOS 13 or newer. This preview is not Developer ID signed or notarised, so macOS may block the first launch. See the [release notes](https://github.com/TheJhyeFactor/Wixal/releases/latest) for help.
+Cloud providers receive conversation content and any project context you allow for that workspace. Ollama runs locally. Conversations and project notes are saved on your Mac; provider keys are stored in macOS encrypted storage.
 
-## More
+Wixal is an early preview and is not Developer ID signed or notarised. See the [release notes](https://github.com/TheJhyeFactor/Wixal/releases/latest) for installation details.
 
-[User guide](docs/user-guide.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Logos](docs/visuals.md)
+## Learn more
 
-<details>
-<summary>App tour and still images</summary>
-
-[Watch the app tour](docs/media/workspace-tour.gif) · [Workspace screenshot](docs/screenshots/workspace.png) · [Static header](assets/repo-banner.png)
-
-</details>
+[Provider and ChatGPT setup](docs/connections.md) · [App architecture](docs/architecture.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)

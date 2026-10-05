@@ -1,6 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import assert from 'node:assert/strict';
+import { webpSize } from './image-size.mjs';
 
 const root = resolve(import.meta.dirname, '../dist');
 const base = process.env.BASE_PATH || '/';
@@ -26,6 +27,11 @@ for (const [file,html] of documents) {
       assert.ok(targetHtml.includes(`id="${hash}"`), `Missing fragment ${value} in ${file}`);
     }
     checked++;
+  }
+  // Prevent wrong intrinsic dimensions from creating stretched or shifting media.
+  for (const match of html.matchAll(/<img[^>]+src="([^"]+\.webp)"[^>]+width="(\d+)" height="(\d+)"/g)) {
+    const actual = await webpSize(resolve(root, match[1].slice(base.length)));
+    assert.deepEqual({ width: Number(match[2]), height: Number(match[3]) }, actual, `Incorrect image dimensions: ${match[1]}`);
   }
   for (const match of html.matchAll(/aria-controls="([^"]+)"/g)) assert.ok(html.includes(`id="${match[1]}"`), `Missing ARIA target in ${file}`);
 }

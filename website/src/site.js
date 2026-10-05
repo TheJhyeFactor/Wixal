@@ -39,8 +39,8 @@ document.querySelectorAll('[data-gallery]').forEach(gallery => {
     tab.addEventListener('click', () => select(tab));
     tab.addEventListener('keydown', event => {
       let next;
-      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
-      if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % tabs.length;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index + tabs.length - 1) % tabs.length;
       if (event.key === 'Home') next = 0;
       if (event.key === 'End') next = tabs.length - 1;
       if (next !== undefined) { event.preventDefault(); select(tabs[next]); tabs[next].focus(); }
@@ -48,15 +48,34 @@ document.querySelectorAll('[data-gallery]').forEach(gallery => {
   });
 });
 
-document.querySelectorAll('[data-theme]').forEach(button => {
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.querySelectorAll('button[data-theme]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.theme === theme)));
+  document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#14120b' : '#f7f7f4';
+}
+applyTheme(document.documentElement.dataset.theme || 'light');
+document.querySelectorAll('button[data-theme]').forEach(button => {
   button.addEventListener('click', () => {
-    const theme = button.dataset.theme;
-    document.documentElement.dataset.theme = theme;
-    document.querySelectorAll('[data-theme]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.theme === theme)));
-    try { localStorage.setItem('wixal-site-theme', theme); } catch { /* Appearance still works without storage. */ }
+    applyTheme(button.dataset.theme);
+    try { localStorage.setItem('wixal-site-theme', button.dataset.theme); } catch { /* Theme still works without storage. */ }
   });
 });
-try {
-  const saved = localStorage.getItem('wixal-site-theme');
-  if (saved === 'dark' || saved === 'light') document.querySelector(`[data-theme="${saved}"]`)?.click();
-} catch { /* Use the reference's light palette by default. */ }
+window.addEventListener('storage', event => {
+  if (event.key === 'wixal-site-theme') applyTheme(event.newValue === 'dark' ? 'dark' : 'light');
+});
+const previewDialog = document.querySelector('.preview-dialog');
+let previewTrigger;
+document.querySelectorAll('[data-preview]').forEach(button => {
+  button.addEventListener('click', () => {
+    const source = button.closest('figure').querySelector('img');
+    const image = previewDialog.querySelector('img');
+    image.src = source.src;
+    image.alt = source.alt;
+    previewDialog.querySelector('.preview-description').textContent = source.alt;
+    previewTrigger = button;
+    previewDialog.showModal();
+  });
+});
+previewDialog?.querySelector('[data-preview-close]').addEventListener('click', () => previewDialog.close());
+previewDialog?.addEventListener('click', event => { if (event.target === previewDialog) previewDialog.close(); });
+previewDialog?.addEventListener('close', () => previewTrigger?.focus());

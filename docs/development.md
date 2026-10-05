@@ -31,6 +31,16 @@ WIXAL_APP_PATH="$PWD/release/Wixal-darwin-arm64/Wixal.app/Contents/MacOS/Wixal" 
 
 Packaging creates `release/Wixal-darwin-arm64/Wixal.app`. The native node-pty module is unpacked from asar so its spawn helper can run. The app is not Developer ID signed or notarised.
 
+## Build release downloads
+
+Commit the release version and source changes first, then run:
+
+```sh
+npm run release:package
+```
+
+This builds the app, seals it with an ad hoc signature, and creates a DMG, ZIP, SHA-256 checksums, and a source commit manifest under `release/v<VERSION>/`. The DMG includes an Applications shortcut and installation notes. Ad hoc signing does not provide Developer ID trust or notarisation. Test the app extracted from the ZIP and mounted from the DMG before publishing the release.
+
 ## Update the graphics
 
 ```sh

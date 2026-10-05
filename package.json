@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
   "main": "app/main.cjs",
   "private": true,
@@ -13,7 +13,8 @@
     "check": "node --check app/main.cjs && node --check app/agent.cjs && node --check app/models.cjs && node --check app/images.cjs && node --check app/store.cjs && node --check app/tools.cjs && node --check app/preload.cjs && node --check ui/renderer.js",
     "assets": "node scripts/graphics.cjs && node scripts/icon.cjs",
     "media": "node scripts/capture-media.cjs",
-    "motion": "node scripts/motion.cjs"
+    "motion": "node scripts/motion.cjs",
+    "release:package": "npm run package && node scripts/release.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

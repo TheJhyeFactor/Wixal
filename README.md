@@ -6,7 +6,7 @@
 
 Wixal brings Ollama, your project files, and a terminal together in a Mac app. Use it to talk through an idea, find your way around a codebase, or work on a change with a local model. When the model wants to edit a file or run a command, you get to review it first.
 
-**0.2.0 · macOS Apple Silicon · Early preview**
+**0.2.1 · macOS Apple Silicon · Early preview**
 
 [Get started](#get-started) · [See it in action](#see-how-it-feels) · [How it works](docs/architecture.md) · [Contribute](CONTRIBUTING.md) · [What's changed](CHANGELOG.md)
 
@@ -49,7 +49,11 @@ You can also save project preferences, pick up earlier conversations, and attach
 
 ## Get started
 
-You'll need an **Apple Silicon Mac**, [Ollama](https://ollama.com) running locally, and at least one installed model. To run Wixal from source, you'll also need **Node.js 22 or newer** and the Xcode command line tools.
+Download the **[Mac app from the latest release](https://github.com/TheJhyeFactor/Wixal/releases/latest)**. Open the DMG, drag Wixal into Applications, and launch it. The ZIP contains the same app. You don't need Node.js for the packaged download.
+
+You'll need an **Apple Silicon Mac running macOS 13 or newer**, [Ollama](https://ollama.com) running locally, and at least one installed model.
+
+To run Wixal from source, you'll also need **Node.js 22 or newer** and the Xcode command line tools:
 
 ```sh
 git clone https://github.com/TheJhyeFactor/Wixal.git
@@ -65,7 +69,7 @@ Models labelled **Tools** can use the project tools in Agent mode. Models labell
 
 Wixal connects to Ollama at `http://127.0.0.1:11434`. It doesn't download models, send prompts to a cloud provider, or collect analytics. If Ollama isn't running, the app shows you how to connect.
 
-This is an early preview. The app is **not Developer ID signed or notarised**; the instructions above are for running it from source.
+This is an early preview. The app is **not Developer ID signed or notarised**, so macOS may block the first launch. The release notes include installation guidance.
 
 ## What the model can do
 

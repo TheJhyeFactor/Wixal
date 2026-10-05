@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.1
+
+- Added downloadable Apple Silicon Mac DMG and ZIP packages with SHA-256 checksums.
+
 - Joined the folded W directly to ixal, removed the duplicate white w, and added a smooth reveal from the W across the logo, GitHub header, and app assets.
 
 - Added a custom folded W logo, outlined wordmark, light and single colour variants, and a matching Mac app icon.

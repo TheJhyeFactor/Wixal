@@ -1,38 +1,54 @@
-![Wixal](assets/repo-banner.svg)
+![Wixal. Local AI, at home on your Mac.](assets/repo-banner.png)
 
 # Wixal
 
-I’m building Wixal as a local AI workspace for my Mac. Open a project, pick an Ollama model and get into the files. Chat, project tools and a real terminal in one window.
+Wixal brings Ollama, your project files, and a terminal together in a Mac app. Use it to talk through an idea, find your way around a codebase, or work on a change with a local model. When the model wants to edit a file or run a command, you get to review it first.
 
-The interface keeps things simple. Dark colours, a bit of pink, and an original fox identity. The model does the work locally, and file edits and commands come to you for review.
+**0.2.0 · macOS Apple Silicon · Early preview**
 
-**Current build: 0.2.0 · macOS Apple Silicon · early preview**
+[Get started](#get-started) · [See it in action](#take-a-look) · [How it works](docs/architecture.md) · [Contribute](CONTRIBUTING.md) · [What's changed](CHANGELOG.md)
 
-![The Wixal desktop workspace](docs/screenshots/workspace.png)
+## A little room to work
 
-## What works
+The conversation sits beside the things you need: your files, local models, saved project notes, and a proper zsh terminal. You can keep it simple and just chat, or give a model access to the project tools when there's work to do.
 
-- Streaming local chat through Ollama, with saved projects and conversations.
-- A searchable model picker showing tools, image support, parameter count, disk size and reported maximum context.
-- Agent mode for project work, Chat mode for conversation. Choosing a model without confirmed tool support switches to Chat.
-- A tool kit where you can switch file listing, reading, search, editing and commands on or off. Disabled tools are also blocked by the controller.
-- Project file browsing, text previews and an “Add to prompt” action.
-- Photo and screenshot attachments for models with image support. Review thumbnails before sending and reopen images from the conversation.
-- A proper interactive zsh terminal using node-pty and xterm.js.
-- Explicit project memory. Save what matters, forget it when you’re done.
-- Conversation search and renaming, response copying, token and speed stats, and an 8k / 16k / 32k context setting.
-- Keyboard shortcuts, a command palette, cancellation and a review dialog for file changes and commands.
+- **Use the models you already have.** Choose from your Ollama library, with labels for tool use and image support, plus model size and context information.
+- **Get to know a project.** Browse files, preview their contents, search the code, and add a file to your prompt.
+- **Stay involved in changes.** Switch individual tools on or off. Review proposed file edits and commands before they run.
+- **Bring some context along.** Attach a screenshot, save a project preference, and pick up a conversation later. You decide what goes into project memory.
+- **Keep your terminal close.** Run an interactive zsh session without leaving the workspace.
+
+![Choose a model, open your project, review changes, and keep working in the terminal.](assets/workflow.svg)
+
+## Take a look
+
+![The Wixal app with a project open, a local model selected, and the new workspace artwork.](docs/screenshots/workspace.png)
+
+These are screenshots of the running app with a small demo project. The model list comes from the models installed on the test Mac; yours will show your own library.
+
+<details>
+<summary>Watch a short tour of the app</summary>
+
+The tour shows the workspace, model picker, file browser, tool controls, project memory, and a real terminal. It was recorded from the app with temporary demo data. It does not show model inference.
+
+![A recorded tour through Wixal's workspace, models, files, tools, memory, and terminal.](docs/media/workspace-tour.gif)
+
+</details>
 
 <table>
-<tr><td><img src="docs/screenshots/models.png" alt="Installed local models with tools and image capability labels"></td><td><img src="docs/screenshots/toolkit.png" alt="Individual tool controls and review requirements"></td></tr>
-<tr><td>Choose a model that suits the job.</td><td>Choose what the model can do.</td></tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/models.png" alt="The model picker showing the installed Ollama library"><br><strong>Find the right model.</strong><br>See what is installed and what each model supports.</td>
+<td width="50%"><img src="docs/screenshots/files.png" alt="The file browser with a README preview"><br><strong>Start with the files.</strong><br>Read the project before asking for a change.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/toolkit.png" alt="The tool kit with individual tool controls"><br><strong>Choose the tools.</strong><br>Give the model the access it needs for the task.</td>
+<td><img src="docs/screenshots/terminal.png" alt="An interactive zsh terminal in Wixal"><br><strong>Keep working your way.</strong><br>Your shell is there when you need it.</td>
+</tr>
 </table>
 
-These are screenshots of the real app using a small test project. The model list reflects the models installed on the test Mac. Yours will show your own library.
+## Get started
 
-## Get it running
-
-You need an Apple Silicon Mac, [Ollama](https://ollama.com) running locally, and at least one installed model. For development, use Node.js 22 or newer and the Xcode command line tools.
+You'll need an **Apple Silicon Mac**, [Ollama](https://ollama.com) running locally, and at least one installed model. To run Wixal from source, you'll also need **Node.js 22 or newer** and the Xcode command line tools.
 
 ```sh
 git clone https://github.com/TheJhyeFactor/Wixal.git
@@ -42,53 +58,47 @@ npm run rebuild
 npm start
 ```
 
-Open a project with **⌘O**, choose a model using **⌘L**, then send a task. Models with **Tools** can work on project files. Models with **Images** can look at attachments. Capabilities come from Ollama’s model metadata; a capability label is not a guarantee of a model’s output quality.
+Open a project with **⌘O** and choose a model with **⌘L**. Then ask a question or describe what you'd like to work on.
 
-Wixal connects to `http://127.0.0.1:11434`. It doesn’t download models, call a cloud provider or collect analytics. If Ollama is offline, the model picker explains how to get connected.
+Models labelled **Tools** can use the project tools in Agent mode. Models labelled **Images** can receive image attachments. For a conversation without tools, switch to Chat mode. Wixal also switches to Chat when a model doesn't have confirmed tool support.
 
-## The tool kit
+Wixal connects to Ollama at `http://127.0.0.1:11434`. It doesn't download models, send prompts to a cloud provider, or collect analytics. If Ollama isn't running, the app shows you how to connect.
 
-| Tool | What it does | Review |
+This is an early preview. The app is **not Developer ID signed or notarised**; the instructions above are for running it from source.
+
+## What the model can do
+
+| Tool | What happens | Your involvement |
 | --- | --- | --- |
-| List files | Lists project files, skipping dependencies and protected paths | Read only |
-| Read files | Reads text inside the selected project | Read only |
-| Search files | Finds literal text across the project | Read only |
-| Edit and create files | Creates or replaces a text file | Before and after, approve once |
-| Run commands | Runs a non-interactive zsh command from the project | Command, approve once |
+| List files | Lists files in the selected project | Read only |
+| Read files | Reads project text files | Read only |
+| Search files | Finds literal text in the project | Read only |
+| Edit or create a file | Creates or replaces a text file | Review the before and after, then approve |
+| Run a command | Runs a non-interactive zsh command from the project | Review the command, then approve |
 
-File tools check project boundaries, resolve symlinks and reject common credential paths. The shell is different: **approved commands and the interactive terminal run with your Mac user’s access. They are not a filesystem sandbox.**
+File tools check the project boundary, resolve symlinks, and block common credential paths. **Approved shell commands and the interactive terminal run with your Mac user's access. They are not a filesystem sandbox.**
 
-Agent commands have a 60 second timeout. Responses can be stopped, and the agent loop has a 12 step limit. Interactive programs belong in the terminal.
+You can stop a response. Agent commands have a 60 second timeout, and the agent loop is limited to 12 steps. Use the terminal for interactive programs.
 
-![Project file previews in Wixal](docs/screenshots/files.png)
+Conversations, image attachments, project memories, and preferences are saved locally in `~/Library/Application Support/Wixal/workspace.json`. Project memory is added only when you save it. The file uses private permissions and atomic writes, but the contents are not encrypted.
 
-## Images and memory
+Image messages accept up to three PNG, JPEG, or WebP files, each under 12 MB. Wixal applies photo orientation and resizes images to a maximum of 1,600 pixels on the longest edge before sending them to the local model. Capability labels describe model metadata; they don't guarantee the quality of a model's answer.
 
-Attach up to three PNG, JPEG or WebP images per message. Input files must be under 12 MB. Photo orientation is applied, then images are converted to PNG and resized to a maximum of 1,600 pixels on the longest edge before being sent to the local model. The resized copies are saved with the conversation. Image messages follow Ollama’s [vision API](https://docs.ollama.com/capabilities/vision).
-
-Project memories are saved only when you explicitly add them. There are no hidden automatic memory writes. Full conversations, resized images and preferences live in:
-
-```text
-~/Library/Application Support/Wixal/workspace.json
-```
-
-That file has private permissions and is written atomically. It is local JSON storage, not encrypted storage. Don’t put secrets in messages or project memories.
-
-## Shortcuts
+## A few useful shortcuts
 
 | Shortcut | Action |
 | --- | --- |
 | ⌘O | Open a project |
-| ⌘N | New conversation |
-| ⌘K | Command palette |
+| ⌘N | Start a conversation |
+| ⌘K | Find a command |
 | ⌘L | Choose a model |
 | ⌘J | Show or hide the terminal |
-| ⌘⇧F | Project files |
-| ⌘⇧T | Tool kit |
-| ⌘⇧M | Project memory |
-| Enter / Shift+Enter | Send / new line |
+| ⌘⇧F | Browse project files |
+| ⌘⇧T | Open the tool kit |
+| ⌘⇧M | Open project memory |
+| Enter / Shift+Enter | Send / add a new line |
 
-## Build and check
+## Working on Wixal
 
 ```sh
 npm test
@@ -97,31 +107,8 @@ npm run test:app
 npm run package
 ```
 
-`test:app` launches the actual Electron app with temporary state and a test project. It exercises models, files, tool settings, images, memory, the PTY, offline recovery and compact window layout. The full run also asks a real local tool-capable vision model to create a fixture file, reviews that edit, checks memory recall and confirms an image response. The current integration fixture expects installed Qwen and Gemma models.
+The app test exercises the real Electron interface and terminal. Its full run also uses an installed local model to request a file edit, checks the approval flow, and verifies image input and memory recall. See the [development guide](docs/development.md) for test prerequisites and packaged app checks.
 
-Use `WIXAL_SKIP_MODEL_TEST=1 npm run test:app` to check the interface and terminal without inference. It still needs Ollama and the model metadata used by the fixture. Test screenshots are saved in `artifacts/`.
+Browser automation, macOS screen control, MCP connectors, cloud providers, model downloads, and automatic context summarisation aren't implemented yet. Recent complete turns are included within an estimated context budget; older conversations remain saved.
 
-Packaging produces `release/Wixal-darwin-arm64/Wixal.app`. The native node-pty module is unpacked from asar so its spawn helper can run. To test that bundle:
-
-```sh
-WIXAL_APP_PATH="$PWD/release/Wixal-darwin-arm64/Wixal.app/Contents/MacOS/Wixal" npm run test:app
-```
-
-The current app is **not Developer ID signed or notarised**. Packaging a local app does not make it a signed public Mac distribution.
-
-<details>
-<summary>See the agent and terminal in the running app</summary>
-
-The live model test wrote a fixture file after approval, recalled saved project memory and described the attached icon.
-
-![A reviewed file edit and image response](docs/screenshots/agent.png)
-
-![The real zsh terminal inside Wixal](docs/screenshots/terminal.png)
-
-</details>
-
-## Where it’s at
-
-This is an early desktop app. Browser automation, macOS screen control, MCP connectors, cloud providers, model downloads and automatic context summarisation aren’t implemented. Context uses recent complete turns within an estimated character budget; older history stays saved. Switching to a text-only model keeps image attachments in history but leaves their image bytes out of that model’s request.
-
-The renderer uses context isolation, sandboxing, a restricted preload bridge and sanitised Markdown. See [the architecture notes](docs/architecture.md) for the actual boundaries and [CONTRIBUTING](CONTRIBUTING.md) if you want to work on it.
+If you'd like to help, start with [CONTRIBUTING](CONTRIBUTING.md) and the [architecture notes](docs/architecture.md). The [artwork and motion guide](docs/visuals.md) includes the editable SVGs, image sources, and instructions for recording a fresh app tour.

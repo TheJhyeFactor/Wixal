@@ -10,16 +10,16 @@
   <div class="titlebar"><span class="title-label">wixal <span>/</span> <span id="title-project">workspace</span></span><button id="palette-button" class="title-command">Find a command <kbd>⌘ K</kbd></button><span class="title-version">0.2.0</span></div>
   <div class="workspace">
     <aside class="sidebar">
-      <div class="brand"><img src="../assets/mark.svg" alt="Wixal fox"><strong>wixal<span>_</span></strong><small>ウィクサル</small></div>
+      <div class="brand"><img src="../assets/mark.svg" alt=""><strong>wixal<span>_</span></strong><small>ウィクサル</small></div>
       <button id="new-chat" class="new-chat"><span>＋</span> New conversation <kbd>⌘ N</kbd></button>
       <div class="section-label">Projects <button id="open-project" title="Open project folder" aria-label="Open project folder">＋</button></div><div id="projects" class="projects"></div>
       <div class="section-label conversations-heading">Conversations <span id="session-count">0</span></div>
       <input id="session-search" type="search" placeholder="Find a conversation…" aria-label="Find a conversation"><div id="sessions" class="sessions"></div>
       <div class="sidebar-bottom">
-        <button id="files-button" class="nav-button"><span>▱</span> Project files <kbd>⌘ ⇧ F</kbd></button>
-        <button id="toolkit-button" class="nav-button"><span>⌁</span> Tool kit <span id="tools-count" class="count">5</span></button>
-        <button id="memory-button" class="nav-button"><span>◇</span> Project memory <span id="memory-count" class="count">0</span></button>
-        <button id="terminal-button" class="nav-button"><span>›_</span> Terminal <kbd>⌘ J</kbd></button>
+        <button id="files-button" class="nav-button"><img class="ui-icon" src="../assets/icons/folder.svg" alt=""> Project files <kbd>⌘ ⇧ F</kbd></button>
+        <button id="toolkit-button" class="nav-button"><img class="ui-icon" src="../assets/icons/tools.svg" alt=""> Tool kit <span id="tools-count" class="count">5</span></button>
+        <button id="memory-button" class="nav-button"><img class="ui-icon" src="../assets/icons/memory.svg" alt=""> Project memory <span id="memory-count" class="count">0</span></button>
+        <button id="terminal-button" class="nav-button"><img class="ui-icon" src="../assets/icons/terminal.svg" alt=""> Terminal <kbd>⌘ J</kbd></button>
         <div class="connection"><span class="status-dot" id="connection-dot"></span><div><strong id="connection-label">Connecting to Ollama</strong><small>On this Mac · 127.0.0.1</small></div><button id="refresh-models" title="Refresh local models" aria-label="Refresh local models">↻</button></div>
       </div>
     </aside>
@@ -27,20 +27,21 @@
       <header class="workspace-header"><div class="breadcrumb"><span class="folder">▱</span><span id="project-label">Personal workspace</span><span class="divider">/</span><button id="conversation-label" title="Rename conversation">New conversation</button></div><button id="reveal-project" title="Show project in Finder" aria-label="Show project in Finder">↗</button></header>
       <section id="chat-scroll" class="chat-scroll" aria-label="Conversation">
         <div id="welcome" class="welcome">
-          <div class="welcome-intro"><div><div class="eyebrow">YOUR LOCAL WORKSPACE</div><h1>Let’s get into it.</h1><p>Pick a model. Open your project.<br>Tell it what needs doing.</p><button id="welcome-open" class="text-button">Open a project folder <span>↗</span></button></div><img class="welcome-fox" src="../assets/night.svg" alt="Wixal fox beneath a moon and a Japanese gate"></div>
+          <div class="welcome-intro"><div><div class="eyebrow">A SPACE TO THINK AND BUILD</div><h1>What are we working on?</h1><p>Choose a local model and open your project.<br>Ask a question, explore the files, or make a start.</p><button id="welcome-open" class="text-button">Open a project folder <span>↗</span></button></div></div>
+          <div class="welcome-art" aria-hidden="true"><img src="../assets/artwork/night-shrine.webp" alt=""><svg class="art-petals" viewBox="0 0 960 260"><g fill="#e9a5bd"><path class="petal petal-one" d="M675 25q10-8 13-3-3 8-13 3Z"/><path class="petal petal-two" d="M807 65q10-8 13-3-3 8-13 3Z"/><path class="petal petal-three" d="M575 85q10-8 13-3-3 8-13 3Z"/></g></svg></div>
           <div class="workspace-overview"><div><span>Project</span><strong id="welcome-project">No folder open</strong></div><div><span>Model</span><strong id="welcome-model">Choose a model</strong></div><div><span>Tools</span><strong id="welcome-tools">Open a project first</strong></div></div>
           <div class="quick-heading">A place to start <small>These fill the prompt. You send it.</small></div>
           <div class="suggestions">
-            <button data-prompt="Have a look through this project. Read the main docs and files, then give me a plain rundown of how it works and where I should start."><span class="task-icon">▱</span><span><strong>Have a look around</strong><small>Understand the files and how they fit together.</small></span><span class="task-arrow">↗</span></button>
-            <button data-prompt="I want to build a feature in this project. Have a look at the structure first, then ask me what I want it to do before changing anything."><span class="task-icon">＋</span><span><strong>Build something</strong><small>Work out the approach, then make the changes.</small></span><span class="task-arrow">↗</span></button>
-            <button data-prompt="Check this project for a real bug. Read the relevant files, show me what is wrong and why, then propose a focused fix."><span class="task-icon">⌁</span><span><strong>Find what’s broken</strong><small>Check the code and show me the evidence.</small></span><span class="task-arrow">↗</span></button>
+            <button data-prompt="Have a look through this project. Read the main docs and files, then give me a plain rundown of how it works and where I should start."><span class="task-icon"><img class="ui-icon" src="../assets/icons/folder.svg" alt=""></span><span><strong>Explore the project</strong><small>Get to know the files and how they fit together.</small></span><span class="task-arrow">↗</span></button>
+            <button data-prompt="I want to build a feature in this project. Have a look at the structure first, then ask me what I want it to do before changing anything."><span class="task-icon"><img class="ui-icon" src="../assets/icons/build.svg" alt=""></span><span><strong>Build something</strong><small>Work out the approach, then make the changes.</small></span><span class="task-arrow">↗</span></button>
+            <button data-prompt="Check this project for a real bug. Read the relevant files, show me what is wrong and why, then propose a focused fix."><span class="task-icon"><img class="ui-icon" src="../assets/icons/search.svg" alt=""></span><span><strong>Investigate a bug</strong><small>Follow the code and find out what’s going wrong.</small></span><span class="task-arrow">↗</span></button>
           </div>
           <div class="welcome-note">Edits and commands come to you for review. <button id="welcome-toolkit">See the tool kit →</button></div>
         </div>
         <div id="messages" class="messages" aria-live="off"></div>
       </section>
       <section id="terminal-panel" class="terminal-panel hidden"><div class="panel-heading"><span><i>›_</i> Terminal <small id="terminal-root"></small></span><span><small>Host shell</small><button id="close-terminal" title="Hide terminal" aria-label="Hide terminal">×</button></span></div><div id="terminal"></div></section>
-      <div class="composer-wrap"><div id="activity" class="activity" role="status"><span class="activity-dot"></span><span id="activity-label">Ready</span><span id="context-note"></span></div>
+      <div class="composer-wrap"><div id="activity" class="activity" role="status"><span class="activity-dot"></span><img class="working-icon" src="../assets/motion/working.svg" alt=""><span id="activity-label">Ready</span><span id="context-note"></span></div>
         <form id="composer" class="composer"><div id="attachments" class="attachments hidden"></div><label class="sr-only" for="prompt">Message Wixal</label><div class="prompt-row"><textarea id="prompt" rows="2" placeholder="What do you want to work on?" maxlength="16000"></textarea><button id="send" type="submit" title="Send message" aria-label="Send message">↑</button><button id="stop" class="hidden" type="button" title="Stop response" aria-label="Stop response">■</button></div>
           <div class="composer-bottom"><div class="composer-controls"><button id="attach-image" type="button" title="Attach images" aria-label="Attach images">＋</button><button id="model-button" type="button" aria-label="Choose local model"><span class="model-glyph">◈</span><span id="model-label">Choose a model</span><span class="chevron">⌄</span></button><span class="control-divider"></span><button id="mode-button" type="button"><span id="mode-label">Agent</span><span class="chevron">⌄</span></button></div><span class="input-hint">↵ send · ⇧↵ new line</span></div>
         </form><div class="bottom-status"><span id="bottom-model">Connecting to local models</span><span id="response-stats">Stored on this Mac</span></div>

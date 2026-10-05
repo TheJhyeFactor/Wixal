@@ -116,7 +116,7 @@ const root = path.resolve(__dirname, '..');
       assert.match(await page.locator('#messages').textContent(), /moon-orchid-72/);
       await capture('wixal-agent');
       assert.equal(await page.locator('.message-images img').count(), 1);
-      assert.match(await page.locator('#messages').textContent(), /fox|pink|purple|ears|face/i);
+      assert.match(await page.locator('#messages').textContent(), /letter|monogram|pink|dark|white|icon|w\b/i);
       await page.locator('.message-images button').click();
       await page.locator('#image-dialog[open]').waitFor();
       await page.click('[data-close="image-dialog"]');

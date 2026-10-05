@@ -64,13 +64,26 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 #reveal-project { color: #a4a0ac; }
 .chat-scroll { flex: 1; min-height: 0; overflow: auto; }
 .welcome { max-width: 800px; margin: auto; padding: 34px 40px 22px; }
-.welcome-intro { display: flex; align-items: center; justify-content: space-between; min-height: 238px; }
+.welcome-intro { display: flex; align-items: center; justify-content: space-between; min-height: 155px; }
 .eyebrow { color: #ad99a5; font: 9px var(--mono); letter-spacing: 1.6px; }
 h1 { font-size: 37px; font-weight: 500; letter-spacing: -1.6px; line-height: 1.2; margin: 18px 0 15px; }
 .welcome-intro p { color: #a6a6ad; line-height: 1.8; font-size: 13px; margin: 0 0 16px; }
 .text-button { padding: 0; color: #d6b0c0; font-size: 11px; }
 .text-button span { margin-left: 8px; }
-.welcome-fox { width: 236px; height: 214px; object-fit: contain; opacity: .85; }
+.ui-icon { width: 19px; height: 19px; flex-shrink: 0; }
+.task-icon .ui-icon { width: 17px; height: 17px; }
+.welcome-intro h1 { font-size: 34px; letter-spacing: -1.2px; margin: 12px 0; }
+.welcome-art { position: relative; height: 145px; overflow: hidden; border-radius: 9px; border: 1px solid #3c3540; margin: 10px 0 22px; }
+.welcome-art > img { width: 100%; height: 100%; object-fit: cover; object-position: center 65%; display: block; }
+.art-petals { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.petal { opacity: .55; transform-box: fill-box; transform-origin: center; animation: petal-drift 9s ease-in-out 2; }
+.petal-two { animation-delay: 1.5s; }
+.petal-three { animation-delay: 3s; }
+@keyframes petal-drift { 50% { transform: translate(-20px, 32px) rotate(65deg); opacity: .2; } }
+.drawer:not(.hidden) { animation: drawer-in .18s ease-out; }
+dialog[open] { animation: dialog-in .16s ease-out; }
+@keyframes drawer-in { from { transform: translateX(15px); opacity: 0; } }
+@keyframes dialog-in { from { transform: translateY(7px); opacity: 0; } }
 .workspace-overview { display: grid; grid-template-columns: 1fr 1fr 1.15fr; border: 1px solid #37343a; border-radius: 7px; margin: 12px 0 30px; padding: 14px 0; background: #1e1e23; }
 .workspace-overview > div { padding: 0 18px; border-left: 1px solid #37343a; min-width: 0; }
 .workspace-overview > div:first-child { border: 0; }
@@ -79,7 +92,7 @@ h1 { font-size: 37px; font-weight: 500; letter-spacing: -1.6px; line-height: 1.2
 .quick-heading { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; color: #c9c8cb; margin-bottom: 10px; }
 .quick-heading small { color: #81838c; font-size: 10px; }
 .suggestions { border-top: 1px solid var(--line); }
-.suggestions > button { display: flex; align-items: center; width: 100%; gap: 15px; padding: 17px 9px; border-bottom: 1px solid var(--line); text-align: left; transition: background .15s; }
+.suggestions > button { display: flex; align-items: center; width: 100%; gap: 15px; padding: 13px 9px; border-bottom: 1px solid var(--line); text-align: left; transition: background .15s; }
 .suggestions > button:hover { background: #232228; }
 .task-icon { width: 30px; height: 30px; border: 1px solid #49404c; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #d9b4c3; font: 17px var(--mono); }
 .suggestions strong { display: block; font-weight: 500; font-size: 12px; }
@@ -91,6 +104,9 @@ h1 { font-size: 37px; font-weight: 500; letter-spacing: -1.6px; line-height: 1.2
 .activity { display: flex; align-items: center; gap: 7px; height: 25px; padding: 0 3px; color: #9b9ca4; font: 10px var(--mono); }
 .activity.busy .activity-dot { animation: pulse 1s infinite; background: var(--pink); }
 .activity.busy { color: #d6b2c2; }
+.activity .working-icon { display: none; width: 19px; height: 19px; }
+.activity.busy .working-icon { display: block; }
+.activity.busy .activity-dot { display: none; }
 #context-note { margin-left: auto; font-size: 9px; color: #ceba9d; }
 .composer { border: 1px solid #51474f; border-radius: 8px; background: #212126; }
 .composer:focus-within { border-color: #9d798b; }
@@ -234,6 +250,8 @@ dialog > p { color: #aba5b3; font-size: 12px; line-height: 1.8; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-thumb { background: #4b414f; border-radius: 4px; }
 @keyframes pulse { 50% { opacity: .25; } }
-@media(max-width: 1100px) { .sidebar { width: 214px; } .welcome { padding: 25px 30px 20px; } .welcome-fox { width: 192px; height: 190px; } .welcome-intro { min-height: 215px; } h1 { font-size: 32px; } .composer-wrap { padding-left: 25px; padding-right: 25px; } #model-label { max-width: 170px; } .quick-heading small { font-size: 9px; } .workspace-header { padding: 0 25px; } .title-version { display: none; } .messages { padding-left: 30px; padding-right: 30px; } }
-@media(max-height: 780px) { .welcome { padding-top: 18px; } .welcome-intro { min-height: 175px; } .welcome-fox { width: 190px; height: 170px; } h1 { font-size: 32px; margin: 12px 0; } .welcome-intro p { font-size: 12px; margin-bottom: 10px; } .workspace-overview { margin-bottom: 20px; padding: 11px 0; } .suggestions > button { padding: 13px 9px; } .welcome-note { margin-top: 14px; } .brand { padding-bottom: 19px; } .sidebar { padding-top: 20px; } .section-label { margin-top: 19px; } .nav-button { padding: 8px; } .connection { padding-top: 13px; padding-bottom: 13px; } }
+@media(max-width: 1100px) { .sidebar { width: 214px; } .welcome { padding: 25px 30px 20px; } .welcome-intro { min-height: 155px; } h1 { font-size: 32px; } .composer-wrap { padding-left: 25px; padding-right: 25px; } #model-label { max-width: 170px; } .quick-heading small { font-size: 9px; } .workspace-header { padding: 0 25px; } .title-version { display: none; } .messages { padding-left: 30px; padding-right: 30px; } }
+@media(max-height: 780px) { .welcome { padding-top: 18px; } .welcome-intro { min-height: 175px; } h1 { font-size: 32px; margin: 12px 0; } .welcome-intro p { font-size: 12px; margin-bottom: 10px; } .workspace-overview { margin-bottom: 20px; padding: 11px 0; } .suggestions > button { padding: 13px 9px; } .welcome-note { margin-top: 14px; } .brand { padding-bottom: 19px; } .sidebar { padding-top: 20px; } .section-label { margin-top: 19px; } .nav-button { padding: 8px; } .connection { padding-top: 13px; padding-bottom: 13px; } }
 @media(prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+@media(max-height: 780px) { .welcome-art { height: 125px; margin-bottom: 16px; } .welcome-intro { min-height: 155px; } .welcome-intro h1 { font-size: 30px; } }

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Wixal · Artwork and motion</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.65 -apple-system,BlinkMacSystemFont,Arial,sans-serif;color:#f1eee9;background:#16171c}*{box-sizing:border-box}body{margin:0}main{max-width:1160px;padding:50px 28px 80px;margin:auto}h1{font-size:38px;letter-spacing:-1px;margin:10px 0}h2{font-size:22px;font-weight:500;margin:30px 0 18px}p{color:#b3afb9;max-width:760px}a{color:#e9a5bd}.eyebrow{color:#e9a5bd;letter-spacing:2px;font:12px Menlo,monospace}.hero{width:100%;border-radius:14px;display:block;margin:30px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}.card{border:1px solid #3b3441;border-radius:12px;padding:24px;background:#1d1e25}.card>img{width:100%;border-radius:8px}.icon-row{display:flex;gap:28px;align-items:center}.app-icon{width:120px!important}.mark{width:62px!important}.icons{display:grid;grid-template-columns:repeat(5,1fr);gap:24px;margin:24px 0}.icons figure{margin:0;text-align:center}.icons img{width:24px;height:24px}.icons figcaption{font:11px Menlo,monospace;color:#b3afb9;margin-top:9px}.swatches{display:flex;gap:14px;flex-wrap:wrap}.swatch{width:64px;height:42px;border:1px solid #605568;border-radius:7px}.motion{display:flex;align-items:center;gap:22px}.motion svg{width:64px;height:64px}.orbit{transform-origin:32px 32px;animation:orbit 3s linear infinite}.paused .orbit{animation:none}@keyframes orbit{to{transform:rotate(360deg)}}button{font:inherit;color:#eee3eb;background:#322a36;border:1px solid #70586f;border-radius:6px;padding:8px 14px;cursor:pointer}button:focus-visible{outline:2px solid #e9a5bd;outline-offset:4px}.tour{width:100%;display:block;border-radius:10px;margin-top:20px}.workflow{width:100%;display:block;margin:24px 0}small{color:#b3afb9}@media(max-width:720px){.grid{grid-template-columns:1fr}main{padding:28px 18px}.icons{grid-template-columns:repeat(3,1fr)}}@media(prefers-reduced-motion:reduce){.orbit{animation:none}}
+  </style>
+</head>
+<body><main>
+  <div class="eyebrow">WIXAL / ARTWORK AND MOTION</div><h1>A quieter workspace.</h1>
+  <p>The assets used in the Mac app and GitHub page. The illustration sets the mood, while the interface and the work stay in focus.</p>
+  <img class="hero" src="../assets/repo-banner.png" alt="Wixal banner with a moonlit shrine illustration">
+  <div class="grid"><section class="card"><h2>App icon and lettermark</h2><div class="icon-row"><img class="app-icon" src="../assets/icon.png" alt="Wixal app icon"><img class="mark" src="../assets/mark.svg" alt="Wixal lettermark"></div><p>A simple W and terminal cursor, readable at small sizes.</p><div class="swatches"><span class="swatch" style="background:#191a20" title="Charcoal #191a20"></span><span class="swatch" style="background:#f1eee9" title="Warm white #f1eee9"></span><span class="swatch" style="background:#e9a5bd" title="Sakura #e9a5bd"></span><span class="swatch" style="background:#b3afb9" title="Muted text #b3afb9"></span></div></section>
+  <section class="card"><h2>Interface icons</h2><div class="icons" id="icons"></div><p>Consistent 24 pixel SVGs for everyday controls.</p></section></div>
+  <section class="card" style="margin-top:22px"><h2>Working locally</h2><div class="motion" id="motion"><svg viewBox="0 0 64 64" role="img" aria-label="Working indicator"><circle cx="32" cy="32" r="22" fill="none" stroke="#49414f" stroke-width="1.5"/><g class="orbit"><path d="M32 10a22 22 0 0 1 22 22" fill="none" stroke="#e9a5bd" stroke-width="2" stroke-linecap="round"/></g><path d="m23 25 7 7-7 7m12 0h7" fill="none" stroke="#ded4dd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><button id="motion-toggle" aria-pressed="false">Pause animation</button></div><p id="motion-note">The app shows this indicator while a response is active. System reduced motion settings are respected.</p></section>
+  <img class="workflow" src="../assets/workflow.svg" alt="Choose a model, open a project, review changes, and keep working">
+  <h2>The app in use</h2><p>Recorded from the running app with a temporary demo project. No model replies are simulated.</p><button id="tour-toggle" aria-pressed="false">Play app tour</button><img id="tour" class="tour" src="screenshots/workspace.png" alt="Wixal workspace; play the tour to see the models, files, tools, memory, and terminal">
+  <p><a href="visuals.md">Asset sources and recording instructions</a> · <a href="../README.md">Project README</a></p>
+</main><script>
+  const icons=['folder','tools','memory','terminal','search','build','model','image','review'];
+  document.getElementById('icons').innerHTML=icons.map(name=>`<figure><img src="../assets/icons/${name}.svg" alt=""><figcaption>${name}</figcaption></figure>`).join('');
+  const motion=document.getElementById('motion'),button=document.getElementById('motion-toggle');
+  const preference=matchMedia('(prefers-reduced-motion: reduce)');
+  function applyMotion(paused){motion.classList.toggle('paused',paused);button.setAttribute('aria-pressed',String(paused));button.textContent=paused?'Resume animation':'Pause animation';}
+  applyMotion(preference.matches);
+  preference.addEventListener('change',e=>applyMotion(e.matches));
+  button.onclick=()=>applyMotion(!motion.classList.contains('paused'));
+  document.getElementById('tour-toggle').onclick=function(){const playing=this.getAttribute('aria-pressed')==='true';document.getElementById('tour').src=playing?'screenshots/workspace.png':'media/workspace-tour.gif';this.setAttribute('aria-pressed',String(!playing));this.textContent=playing?'Play app tour':'Show still image';};
+</script></body></html>

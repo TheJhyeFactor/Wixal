@@ -51,7 +51,7 @@ document.querySelectorAll('[data-gallery]').forEach(gallery => {
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   document.querySelectorAll('button[data-theme]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.theme === theme)));
-  document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#14120b' : '#f7f7f4';
+  document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#101010' : '#f7f7f4';
 }
 applyTheme(document.documentElement.dataset.theme || 'light');
 document.querySelectorAll('button[data-theme]').forEach(button => {

@@ -79,3 +79,7 @@ Local verification for this refresh:
 - Mobile navigation includes Tools & workflows, closes after selection, and preserves the chosen dark theme. Both header and footer pressed states match the theme, which survives navigation and reload; theme-color matches the background.
 - The third home gallery tab opens the actual web tool cards. Escape dismisses the enlarged image and restores focus; End selects Project memory.
 - No browser errors or warnings were recorded during the interaction pass. Download assets remain the verified uploaded v0.7.0 DMG and ZIP, requiring macOS 14+ and Apple Silicon.
+
+## Neutral dark palette correction
+
+The user rejected the warm brown cast in the Cursor-derived surfaces. Dark appearance now uses achromatic #101010 page backgrounds, #191919 raised surfaces, #232323 hover surfaces, #333333 active controls, #ededed foreground and #a0a0a0 secondary text. All background, surface, border and text tones in the dark theme have equal red, green and blue channels. Orange remains a small link/focus accent. Browser theme-color now matches #101010. This supersedes the earlier dark colour choices; light appearance remains unchanged.

@@ -16,7 +16,7 @@ async function main() {
   let hits = 0;
   const server = http.createServer((_req, res) => { hits++; res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"proof":"real-http-result"}'); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const url = `http://127.0.0.1:${server.address().port}/proof`;
-  const env = { ...process.env, WIXAL_DATA_DIR: path.join(temp, 'state') }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_TEST_PROJECT;
+  const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: path.join(temp, 'state') }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_TEST_PROJECT;
   let app;
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });

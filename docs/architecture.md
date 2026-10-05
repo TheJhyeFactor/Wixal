@@ -1,6 +1,6 @@
 # How Wixal fits together
 
-Wixal is an Electron app with a local HTML/CSS/JavaScript interface. Ollama handles inference on `127.0.0.1:11434`. OpenAI, ChatGPT, xAI, DeepSeek, Anthropic, Gemini, Groq, Mistral and OpenRouter are optional providers; a custom Chat Completions endpoint is also supported. The companion bridge binds only to loopback and exposes shared projects through a separate MCP stdio process.
+Wixal is an Electron app with a local HTML/CSS/JavaScript interface. Wixal Local manages a bundled, pinned Ollama runner on a fresh loopback port with its own model store; external Ollama at `127.0.0.1:11434` remains optional. OpenAI, ChatGPT, xAI, DeepSeek, Anthropic, Gemini, Groq, Mistral and OpenRouter are optional providers; a custom Chat Completions endpoint is also supported. The companion bridge binds only to loopback and exposes shared projects through a separate MCP stdio process.
 
 ```text
 Renderer → restricted preload API → Electron main process
@@ -98,3 +98,7 @@ Network tools are opt-in and run in the main process. Review displays the URL, m
 External tools use the installed MCP SDK's Client and StdioClientTransport. Saved executable/argument configurations do not auto-launch on restart. A user's Connect click starts the process; tool discovery follows catalog pagination with bounds and generates stable hashed tool names to avoid collisions. Connected definitions join the enabled tool catalog across local and cloud inference. Every invocation requires review and supports a 60-second timeout and abort signal. Disconnection and app shutdown close client transports. External server processes have the user's host permissions and may perform actions during startup.
 
 Model downloads stream Ollama's pull endpoint to the renderer through named events. Progress is per layer; the runtime requires a success record, forwards errors, and aborts the HTTP request on Cancel or app shutdown. Context preferences now include 64k and 128k, with local inference clamped to reported model limits. Neither a larger preference nor a downloaded model guarantees enough host RAM.
+
+## Managed local runtime
+
+`app/runtime.cjs` owns payload verification, startup coalescing, loopback port allocation, a filtered child environment, readiness checks, process-group cleanup and independent model imports. `app/models.cjs` and the local agent resolve the active endpoint dynamically. Named IPC handlers expose only supported mode/lifecycle/import operations. Store migration defaults to managed mode without replacing conversation or project data. Generated native payloads are outside ASAR; source pins and build metadata are in `resources/runtime.json`. See [the runtime guide](local-runtime.md) for provenance and limits.

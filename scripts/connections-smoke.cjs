@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..');
 async function main() {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-connections-ui-')), project = path.join(temp, 'Connection demo');
   await fs.mkdir(project); await fs.writeFile(path.join(project, 'README.md'), '# Connection demo\nFixture project only.');
-  const env = { ...process.env, WIXAL_DATA_DIR: path.join(temp, 'data'), WIXAL_TEST_PROJECT: project }; delete env.ELECTRON_RUN_AS_NODE;
+  const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: path.join(temp, 'data'), WIXAL_TEST_PROJECT: project }; delete env.ELECTRON_RUN_AS_NODE;
   let app, transport, client;
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });

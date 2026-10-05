@@ -24,7 +24,7 @@ Open **Workspace → Tool kit**, enable the network tools you want, and ask the 
 
 > Fetch http://127.0.0.1:3000/health and tell me which services are available.
 
-Network tools start disabled. A reviewed request can contact public sites or local services. Requests have a 20-second timeout, a 1 MB response limit and a 24,000-character output limit. They do not follow redirects; the agent must make a separately reviewed request to the redirect destination. API bodies must be JSON, at most 16,000 characters. GET does not accept a body.
+Network tools start enabled, with review required for each request. A reviewed request can contact public sites or local services. Requests have a 20-second timeout, a 1 MB response limit and a 24,000-character output limit. They do not follow redirects; the agent must make a separately reviewed request to the redirect destination. API bodies must be JSON, at most 16,000 characters. GET does not accept a body.
 
 Wixal does not attach provider credentials or arbitrary authentication headers to these tools. Use a trusted local API proxy or an MCP server's secure credential configuration for authenticated services. Web search depends on DuckDuckGo's HTML service; challenges, rate limits and empty results are reported as errors, rather than fabricated search results.
 
@@ -42,7 +42,7 @@ Wixal supports local stdio MCP servers in this release, up to 12 saved servers a
 
 ## Summaries and project recall
 
-Automatic summaries are enabled by default. When older complete turns no longer fit the estimated context budget, Wixal condenses them using your selected model. Summaries run with no tools, update incrementally and are saved with the chat. Local model summaries use Ollama; cloud summaries use your currently selected provider and existing workspace consent.
+Automatic summaries are enabled by default. When older complete turns no longer fit the estimated context budget, Wixal condenses them using your selected model. Summaries run with no tools, update incrementally and are saved with the chat. Local model summaries use Wixal Local or external Ollama; cloud summaries use your currently selected provider and existing workspace consent.
 
 Open **Project memory** to inspect a saved summary, turn automatic summarization off, or clear the summary. Clearing a summary keeps the original messages. It can be rebuilt on a later turn. If summarization fails, Wixal saves clearly labelled relevant excerpts and proceeds with the conversation. Stop cancels summary inference as well as the main response.
 
@@ -52,8 +52,10 @@ Context sizing remains an estimate rather than exact tokenization. Tool results 
 
 ## Download a local model
 
-Open **⌘L**, choose **Ollama**, and enter a model tag under **Download a local model**. Click **Download** to contact Ollama's model registry. The picker shows download status and progress for the current layer. Cancel stops the client request; retrying the tag lets Ollama reuse downloaded layers. The download must finish successfully before Wixal reports completion.
+Open **⌘L**, choose **Wixal Local**, and enter a model tag under **Download a local model**. Click **Download** to contact Ollama's model registry. The picker shows download status and progress for the current layer. Cancel stops the client request; retrying the tag lets Ollama reuse downloaded layers. The download must finish successfully before Wixal reports completion.
 
-Wixal requires Ollama to be installed and running. A larger context window or parameter count can require substantially more RAM; downloading a large model does not guarantee it fits your Mac. Installed model cards show disk size, parameter size, reported context and tool/image support. Cloud providers remain an optional alternative, with separate consent and credentials.
+Wixal Local includes the engine; a separate Ollama installation is optional. See [runtime setup and imports](local-runtime.md). A larger context window or parameter count can require substantially more RAM; downloading a large model does not guarantee it fits your Mac. Installed model cards show disk size, parameter size, reported context and tool/image support. Cloud providers remain an optional alternative, with separate consent and credentials.
 
 [User guide](user-guide.md) · [Architecture](architecture.md) · [Release history](../CHANGELOG.md)
+
+In 0.7.0, built-in tools start enabled, the tool kit has search/categories and Enable all, and `@tool_name` constrains a chat request to explicitly selected tools. See [performance, model management and tool selection](performance.md). Browser and longer command-session tools are described in [the cyber tools guide](cyber-tools.md).

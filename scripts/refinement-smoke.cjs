@@ -11,7 +11,7 @@ async function main() {
   const directory = path.join(temp, 'data'), store = new Store(directory); store.addProject(project);
   const history = store.session(); history.title = 'A saved conversation'; history.messages = [{ role: 'user', content: 'A message to preserve', created: Date.now() }, { role: 'assistant', content: 'An answer to preserve', created: Date.now() }];
   const start = store.newSession(); store.save();
-  const env = { ...process.env, WIXAL_DATA_DIR: directory }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_TEST_PROJECT;
+  const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: directory }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_TEST_PROJECT;
   let app;
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });

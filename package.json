@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
   "main": "app/main.cjs",
   "private": true,
@@ -9,14 +9,22 @@
     "test": "node --test test/*.test.cjs",
     "test:app": "node scripts/smoke.cjs",
     "rebuild": "electron-rebuild -f -w node-pty",
-    "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{app,node_modules}' --asar.unpack=package.json --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(release|test|scripts|artifacts|docs|\\.git)($|/)'",
+    "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{app,node_modules}' --asar.unpack=package.json --extra-resource=runtime/ollama --extend-info=resources/Info.plist --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(runtime|release|test|scripts|artifacts|docs|\\.git)($|/)'",
     "check": "node scripts/check.cjs",
     "assets": "node scripts/graphics.cjs && node scripts/icon.cjs",
     "media": "node scripts/capture-media.cjs",
     "test:connections": "node scripts/connections-smoke.cjs",
     "test:providers": "node scripts/providers-smoke.cjs",
     "test:refinement": "node scripts/refinement-smoke.cjs",
-    "test:features": "node scripts/features-smoke.cjs"
+    "test:features": "node scripts/features-smoke.cjs",
+    "runtime:stage": "node scripts/runtime-stage.cjs",
+    "runtime:build": "node scripts/runtime-build.cjs",
+    "test:runtime": "node scripts/runtime-smoke.cjs",
+    "prepackage": "node scripts/runtime-stage.cjs",
+    "test:performance": "node scripts/performance-smoke.cjs",
+    "test:browser": "env -u ELECTRON_RUN_AS_NODE electron scripts/browser-tools-smoke.cjs",
+    "test:command-tools": "node scripts/command-tools-ui-smoke.cjs",
+    "postpackage": "node scripts/runtime-package.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",

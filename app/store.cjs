@@ -11,7 +11,8 @@ class Store {
       activeSession: null, model: '', mode: 'agent',
     };
     // Fill in new preferences without replacing existing projects or conversations.
-    this.data.enabledTools ??= ['list_files', 'read_file', 'search_files', 'write_file', 'run_command'];
+    const allTools = require('./tools.cjs').definitions.map(t => t.function.name);
+    this.data.enabledTools ??= allTools;
     this.data.contextSize ??= 16384;
     this.data.provider ??= 'ollama';
     this.data.providerModels ??= { ollama: this.data.model, openai: '', chatgpt: '' };
@@ -23,6 +24,13 @@ class Store {
     this.data.ui ??= { sidebarCollapsed: false };
     this.data.autoSummary ??= true;
     this.data.mcpServers ??= [];
+    this.data.localRuntimeMode ??= 'managed';
+    this.data.benchmarks ??= [];
+    this.data.usage ??= this.data.sessions.flatMap(s => s.messages.filter(m => m.metrics).map(m => ({ ...m.metrics, model: m.model || 'Historical model (not recorded)', provider: m.provider || 'ollama', sessionId: s.id, created: m.created || s.created, migrated: true }))).sort((a, b) => a.created - b.created).slice(-2000);
+    if (this.data.toolsDefaultsVersion !== 2) {
+      this.data.enabledTools = [...new Set([...this.data.enabledTools, ...allTools])];
+      this.data.toolsDefaultsVersion = 2;
+    }
   }
   save() {
     fs.writeFileSync(this.file + '.tmp', JSON.stringify(this.data, null, 2), { mode: 0o600 });

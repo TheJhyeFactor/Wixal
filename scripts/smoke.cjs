@@ -12,8 +12,14 @@ const root = path.resolve(__dirname, '..');
   await fs.writeFile(path.join(project, 'README.md'), '# Wixal demo\nA small project for testing the Wixal desktop app.\n');
   await fs.writeFile(path.join(project, '.env'), 'DO_NOT_SHOW=fixture');
   for (const format of ['jpeg', 'webp']) await sharp({ create: { width: 64, height: 64, channels: 3, background: '#e9a5bd' } }).toFormat(format).toFile(path.join(temp, `fixture.${format}`));
-  const env = { ...process.env, WIXAL_DATA_DIR:path.join(temp, 'data'), WIXAL_TEST_PROJECT:project };
+  const env = { ...process.env, WIXAL_RUNTIME_MODE: process.env.WIXAL_SMOKE_MANAGED ? 'managed' : 'external', WIXAL_DATA_DIR:path.join(temp, 'data'), WIXAL_TEST_PROJECT:project };
   delete env.ELECTRON_RUN_AS_NODE;
+  const localLabel = process.env.WIXAL_SMOKE_MANAGED ? 'Wixal Local' : 'Ollama';
+  if (process.env.WIXAL_SMOKE_MANAGED) {
+    const { LocalRuntime } = require('../app/runtime.cjs');
+    const runtime = new LocalRuntime({ directory: path.join(temp, 'data/local-runtime'), payload: path.join(root, 'runtime/ollama') });
+    for (const model of ['gemma3:12b', 'orcarouter/Qwen3.8-27B-Uncensored:iq4_xs']) await runtime.importModel(model);
+  }
   let app;
   try {
     app = await electron.launch({ args:[root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath:process.env.WIXAL_APP_PATH } : {}), timeout:30000 });
@@ -21,7 +27,7 @@ const root = path.resolve(__dirname, '..');
     async function openWorkspace(id) { if (!(await page.locator(id).isVisible())) await page.click('#workspace-menu-toggle'); await page.click(id); }
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') console.log('RENDERER:', message.text()); });
-    await page.locator('#connection-label').filter({ hasText:'Ollama connected' }).waitFor({ timeout:15000, state: 'attached' });
+    await page.locator('#connection-label').filter({ hasText:`${localLabel} connected` }).waitFor({ timeout:15000, state: 'attached' });
     await page.locator('#project-label').filter({ hasText:'Wixal demo' }).waitFor();
     await fs.mkdir(path.join(root, 'artifacts'), { recursive:true });
     async function capture(name) { await page.locator('#toast').waitFor({ state: 'hidden', timeout: 10000 }); await page.screenshot({ path: path.join(root, `artifacts/${name}.png`) }); }
@@ -126,14 +132,14 @@ const root = path.resolve(__dirname, '..');
       console.log('PASS: real local model requested a file write with an image, UI approval saved it, model recalled project memory and described the icon');
     }
     await page.reload();
-    await page.locator('#connection-label').filter({ hasText:'Ollama connected' }).waitFor({ state: 'attached' });
+    await page.locator('#connection-label').filter({ hasText:`${localLabel} connected` }).waitFor({ state: 'attached' });
     assert.equal(await page.locator('#memory-count').textContent(), '1');
     if (!process.env.WIXAL_SKIP_MODEL_TEST) assert.match(await page.locator('#messages').textContent(), /moon-orchid-72/);
     assert.equal(await page.locator('#conversation-label').textContent(), 'Working on Wixal');
     assert.equal((await page.evaluate(() => window.wixal.state())).contextSize, 16384);
     if (!process.env.WIXAL_SKIP_MODEL_TEST) assert.equal(await page.locator('.message-images img').count(), 1);
     await app.evaluate(() => { globalThis.originalWixalFetch = globalThis.fetch; globalThis.fetch = async () => { throw new Error('offline fixture'); }; });
-    await openWorkspace('#refresh-models'); await page.locator('#connection-label').filter({ hasText: 'Ollama offline' }).waitFor({ state: 'attached' });
+    await openWorkspace('#refresh-models'); await page.locator('#connection-label').filter({ hasText: `${localLabel} offline` }).waitFor({ state: 'attached' });
     await page.click('#model-button'); await page.locator('#ollama-help').waitFor();
     await app.evaluate(() => { globalThis.fetch = globalThis.originalWixalFetch; });
     await page.click('#model-refresh'); await page.locator('.model-row').first().waitFor(); await page.click('[data-close="models-dialog"]');

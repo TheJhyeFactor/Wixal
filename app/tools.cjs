@@ -4,6 +4,8 @@ const { spawn } = require('node:child_process');
 const { executeNetwork } = require('./network.cjs');
 const { searchHistory } = require('./context.cjs');
 
+const { executeCommandSession } = require('./command-sessions.cjs');
+const { inspectBrowser } = require('./browser-inspect.cjs');
 const MAX_OUTPUT = 24000;
 const skipped = new Set(['.git', 'node_modules', '.venv', 'venv', 'release', '.next', 'dist']);
 const sensitive = p => p.split(path.sep).some(x => /^\.env(?:\.|$)/.test(x) || ['.ssh', '.aws', '.gnupg', '.npmrc', '.netrc', 'credentials.enc', 'wixal-connection.json'].includes(x) || /\.(pem|key|p12|pfx)$/i.test(x));
@@ -43,6 +45,13 @@ const definition = (name, description, properties, required) => ({ type: 'functi
 }});
 const str = description => ({ type: 'string', description });
 const definitions = [
+  definition('command_start', 'Start an AI-selected shell command on the Mac after review. Supports website, server and network tools installed on the host. Returns a session ID; read output before deciding next steps. Piped stdin, not a PTY.', { command: str('Shell command'), timeout_seconds: { type: 'integer', minimum: 1, maximum: 3600 } }, ['command']),
+  definition('command_read', 'Read real stdout/stderr and status from a command session. Output returns to this chat. Poll running jobs and use next_offset for subsequent chunks.', { session_id: str('Command session ID'), offset: { type: 'integer', minimum: 0 }, wait_ms: { type: 'integer', minimum: 0, maximum: 10000, description: 'Wait before reading a running job, default 1000 milliseconds' } }, ['session_id']),
+  definition('command_write', 'Send reviewed text to a running command stdin. Include newline when needed. Never send passwords or credentials.', { session_id: str('Command session ID'), input: str('Text to send'), close_stdin: { type: 'boolean' } }, ['session_id', 'input']),
+  definition('command_stop', 'Cancel a running command process group.', { session_id: str('Command session ID') }, ['session_id']),
+  definition('command_save_output', 'Save retained command output and execution metadata to a reviewed project file. Parent folder must exist. Reports if older output was discarded.', { session_id: str('Command session ID'), path: str('Relative output file path') }, ['session_id', 'path']),
+  definition('browser_inspect', 'Load a website in an isolated JavaScript-enabled browser and return rendered text, links, form field names, script URLs and console messages to this chat for review. Does not submit forms. Redirects need separate review.', { url: str('HTTP(S) website URL') }, ['url']),
+
   definition('list_files', 'List files in the selected project. Skips dependency folders and credential files.', { directory: str('Relative directory, default .') }, []),
   definition('read_file', 'Read a UTF-8 file inside the project. Use offset to read subsequent chunks of a large file.', { path: str('Relative file path'), offset: { type: 'integer', minimum: 0, description: 'Character offset, default 0' } }, ['path']),
   definition('search_files', 'Find literal text in project files. Case insensitive.', { query: str('Text to find') }, ['query']),
@@ -74,11 +83,20 @@ function runCommand(command, root, signal, onOutput = () => {}) {
   });
 }
 
-async function executeTool(name, args, { root, approve, signal, onOutput, allowedTools, store, fetcher }) {
+async function executeTool(name, args, { root, approve, signal, onOutput, allowedTools, store, fetcher, outputLimit = 100000 }) {
   if (allowedTools && !allowedTools.includes(name)) throw new Error(`${name} is switched off in the tool kit.`);
-  if (!root) throw new Error('Open a project folder to use tools.');
+  if (!root && ['list_files', 'read_file', 'search_files', 'write_file', 'run_command'].includes(name)) throw new Error('Open a project folder to use this tool.');
   if (signal?.aborted) throw new Error('Stopped');
   if (!args || typeof args !== 'object') throw new Error('Invalid tool arguments');
+  if (name === 'browser_inspect') return inspectBrowser(args, { approve, signal });
+  if (name === 'command_save_output') {
+    const chunks = []; let offset = 0, result;
+    do { result = JSON.parse(await executeCommandSession('command_read', { session_id: args.session_id, offset, wait_ms: 0 }, { root, store })); chunks.push(result.output); offset = result.next_offset; } while (result.more);
+    const content = JSON.stringify({ session_id: args.session_id, state: result.state, exitCode: result.exitCode, reason: result.reason, earliest_offset: result.earliest_offset, output: chunks.join('') }, null, 2);
+    // Reuse the existing review, path containment and concurrent-edit checks.
+    return executeTool('write_file', { path: args.path, content }, { root, approve, signal, store, outputLimit: 8000000 });
+  }
+  if (['command_start', 'command_read', 'command_write', 'command_stop'].includes(name)) return executeCommandSession(name, args, { root, approve, signal, store });
   if (['web_search', 'http_request'].includes(name)) return executeNetwork(name, args, { approve, signal, fetcher });
   if (name === 'search_history') { if (!store) throw new Error('Project history is unavailable.'); return JSON.stringify(searchHistory(store, args.query)); }
   if (name === 'save_memory') {
@@ -118,7 +136,7 @@ async function executeTool(name, args, { root, approve, signal, onOutput, allowe
     return output || 'No matches.';
   }
   if (name === 'write_file') {
-    if (typeof args.content !== 'string' || args.content.length > 100000) throw new Error('Content must be text under 100,000 characters.');
+    if (typeof args.content !== 'string' || args.content.length > outputLimit) throw new Error('Content must be text under 100,000 characters.');
     const file = await safePath(root, args.path, true);
     let before = null;
     try { before = await fs.readFile(file, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }

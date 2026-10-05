@@ -1,0 +1,116 @@
+{
+  "checked": "2026-10-06",
+  "models": [
+    {
+      "name": "qwen3:0.6b",
+      "size": 523000000,
+      "contextLength": 40960,
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "source": "https://ollama.com/library/qwen3"
+    },
+    {
+      "name": "qwen3:1.7b",
+      "size": 1400000000,
+      "contextLength": 40960,
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "source": "https://ollama.com/library/qwen3"
+    },
+    {
+      "name": "qwen3:4b",
+      "size": 2500000000,
+      "contextLength": 262144,
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "source": "https://ollama.com/library/qwen3"
+    },
+    {
+      "name": "qwen3:8b",
+      "size": 5200000000,
+      "contextLength": 40960,
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "source": "https://ollama.com/library/qwen3"
+    },
+    {
+      "name": "qwen3:14b",
+      "size": 9300000000,
+      "contextLength": 40960,
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "source": "https://ollama.com/library/qwen3"
+    },
+    {
+      "name": "qwen3:30b",
+      "size": 19000000000,
+      "contextLength": 262144,
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "source": "https://ollama.com/library/qwen3"
+    },
+    {
+      "name": "qwen3:32b",
+      "size": 20000000000,
+      "contextLength": 40960,
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "source": "https://ollama.com/library/qwen3"
+    },
+    {
+      "name": "gemma3:270m",
+      "size": 292000000,
+      "contextLength": 32768,
+      "capabilities": [],
+      "source": "https://ollama.com/library/gemma3"
+    },
+    {
+      "name": "gemma3:1b",
+      "size": 815000000,
+      "contextLength": 32768,
+      "capabilities": [],
+      "source": "https://ollama.com/library/gemma3"
+    },
+    {
+      "name": "gemma3:4b",
+      "size": 3300000000,
+      "contextLength": 131072,
+      "capabilities": [
+        "vision"
+      ],
+      "source": "https://ollama.com/library/gemma3"
+    },
+    {
+      "name": "gemma3:12b",
+      "size": 8100000000,
+      "contextLength": 131072,
+      "capabilities": [
+        "vision"
+      ],
+      "source": "https://ollama.com/library/gemma3"
+    },
+    {
+      "name": "gemma3:27b",
+      "size": 17000000000,
+      "contextLength": 131072,
+      "capabilities": [
+        "vision"
+      ],
+      "source": "https://ollama.com/library/gemma3"
+    }
+  ]
+}

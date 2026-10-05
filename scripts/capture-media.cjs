@@ -12,7 +12,10 @@ const root = path.resolve(__dirname, '..');
   await fs.writeFile(path.join(project, 'README.md'), '# Wixal demo\n\nA small project used to record the Wixal interface.\n\nExplore files, choose a local model, and use the terminal.\n');
   await fs.writeFile(path.join(project, 'hello.js'), "console.log('Hello from Wixal');\n");
   const env = { ...process.env, WIXAL_DATA_DIR: path.join(temp, 'state'), WIXAL_TEST_PROJECT: project };
-  delete env.ELECTRON_RUN_AS_NODE;
+  delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_RUNTIME_MODE;
+  const { LocalRuntime } = require('../app/runtime.cjs');
+  const runtime = new LocalRuntime({ directory: path.join(temp, 'state/local-runtime'), payload: path.join(root, 'runtime/ollama') });
+  await runtime.importModel('gemma3:12b');
   let app;
   try {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
@@ -20,7 +23,7 @@ const root = path.resolve(__dirname, '..');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1680, 1080));
     await page.locator('.title-version').filter({ hasText: require('../package.json').version }).waitFor();
     await page.locator('#project-label').filter({ hasText: 'Wixal demo' }).waitFor();
-    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ state: 'attached' });
+    await page.locator('#connection-label').filter({ hasText: 'Wixal Local connected' }).waitFor({ state: 'attached' });
     if (await page.locator('#sidebar').evaluate(element => element.classList.contains('collapsed'))) {
       await page.locator('#sidebar-toggle').click();
       await page.waitForFunction(() => !document.querySelector('#sidebar').classList.contains('collapsed'));
@@ -46,8 +49,15 @@ const root = path.resolve(__dirname, '..');
     await capture('workspace', 'Open a project and make yourself at home.', 3000);
     await page.click('#model-button');
     await page.locator('.model-row').first().waitFor();
-    await capture('models', 'Choose a model from your local Ollama library.');
+    await page.locator('#models-dialog').evaluate(el => { el.scrollTop = 0; });
+    await capture('models', 'Wixal Local: the engine and model library are managed by the app.');
+    await page.click('[data-benchmark]');
+    const deadline = Date.now() + 180000;
+    while (Date.now() < deadline) { const current = await page.evaluate(() => window.wixal.state()); if (current.benchmarks.length && !current.benchmarkProgress) break; await new Promise(r => setTimeout(r, 200)); }
     await page.click('[data-close="models-dialog"]');
+    await page.evaluate(() => { window.mediaReplyDone = false; window.wixal.onEvent(e => { if (e.type === 'done') window.mediaReplyDone = true; }); });
+    await page.fill('#prompt', 'Explain what a local AI model is in one short sentence.'); await page.click('#send'); await page.waitForFunction(() => window.mediaReplyDone, null, { timeout: 180000 });
+    await page.click('#response-stats'); await capture('performance', 'Measure real model throughput and memory on your Mac.'); await page.click('[data-close="performance-dialog"]');
     await openWorkspaceSection('#files-button');
     await page.locator('[data-file="README.md"]').click();
     await page.locator('#file-content').filter({ hasText: 'A small project' }).waitFor();
@@ -72,6 +82,6 @@ const root = path.resolve(__dirname, '..');
     await capture('terminal', 'Use a real zsh terminal, right beside your conversation.', 3000);
     const media = path.join(root, 'docs/media'); await fs.mkdir(media, { recursive: true });
     await sharp(Buffer.concat(frames), { raw: { width: 990, height: 772 * frames.length, channels: 3, pageHeight: 772 } }).gif({ delay: delays, loop: 1, colours: 128, dither: .4 }).toFile(path.join(media, 'workspace-tour.gif'));
-    console.log('Saved seven real app screenshots and docs/media/workspace-tour.gif.');
+    console.log('Saved eight real app screenshots and docs/media/workspace-tour.gif.');
   } finally { if (app) await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -12,7 +12,8 @@
     "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{node_modules/node-pty,node_modules/@img}' --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(release|test|scripts|artifacts|docs|\\.git)($|/)'",
     "check": "node --check app/main.cjs && node --check app/agent.cjs && node --check app/models.cjs && node --check app/images.cjs && node --check app/store.cjs && node --check app/tools.cjs && node --check app/preload.cjs && node --check ui/renderer.js",
     "assets": "node scripts/graphics.cjs && node scripts/icon.cjs",
-    "media": "node scripts/capture-media.cjs"
+    "media": "node scripts/capture-media.cjs",
+    "motion": "node scripts/motion.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

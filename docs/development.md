@@ -36,6 +36,8 @@ Packaging creates `release/Wixal-darwin-arm64/Wixal.app`. The native node-pty mo
 ```sh
 npm run assets
 npm run media
+npm run assets
+npm run motion
 ```
 
-The first command rebuilds the SVG assets, PNG exports, and macOS icon from the checked-in sources. The second records screenshots and the GIF tour from a real app session with disposable demo data. See [the visual guide](visuals.md) for source files and motion behaviour.
+Build the assets, record fresh app media, then rebuild the header with the new workspace screenshot and export its motion. The recording uses a real app session with disposable demo data. See [the visual guide](visuals.md) for source files and motion behaviour.

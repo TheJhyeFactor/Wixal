@@ -1,4 +1,6 @@
-![Wixal. Local AI, at home on your Mac.](assets/repo-banner.png)
+![Wixal animated logo and Mac workspace.](assets/motion/github-hero.gif)
+
+[View the still header](assets/repo-banner.png) · [Logo and motion files](docs/visuals.md)
 
 # Wixal
 
@@ -8,43 +10,42 @@ Wixal brings Ollama, your project files, and a terminal together in a Mac app. U
 
 [Get started](#get-started) · [See it in action](#take-a-look) · [How it works](docs/architecture.md) · [Contribute](CONTRIBUTING.md) · [What's changed](CHANGELOG.md)
 
-## A little room to work
+## See how it feels
 
-The conversation sits beside the things you need: your files, local models, saved project notes, and a proper zsh terminal. You can keep it simple and just chat, or give a model access to the project tools when there's work to do.
+Choose a model, open a project, and get to work. Your conversation, files, project notes, and terminal stay together.
 
-- **Use the models you already have.** Choose from your Ollama library, with labels for tool use and image support, plus model size and context information.
-- **Get to know a project.** Browse files, preview their contents, search the code, and add a file to your prompt.
-- **Stay involved in changes.** Switch individual tools on or off. Review proposed file edits and commands before they run.
-- **Bring some context along.** Attach a screenshot, save a project preference, and pick up a conversation later. You decide what goes into project memory.
-- **Keep your terminal close.** Run an interactive zsh session without leaving the workspace.
+![A recorded tour of the actual Wixal app, from local models to project tools and the terminal.](docs/media/workspace-tour.gif)
 
-![Choose a model, open your project, review changes, and keep working in the terminal.](assets/workflow.svg)
+[View a still of the workspace](docs/screenshots/workspace.png)
 
-## Take a look
+The recordings use the running app and a small demo project. They show real interface interactions, not simulated model replies. The models shown are installed on the test Mac; you'll see your own Ollama library.
 
-![The Wixal app with a project open, a local model selected, and the new workspace artwork.](docs/screenshots/workspace.png)
-
-These are screenshots of the running app with a small demo project. The model list comes from the models installed on the test Mac; yours will show your own library.
-
-<details>
-<summary>Watch a short tour of the app</summary>
-
-The tour shows the workspace, model picker, file browser, tool controls, project memory, and a real terminal. It was recorded from the app with temporary demo data. It does not show model inference.
-
-![A recorded tour through Wixal's workspace, models, files, tools, memory, and terminal.](docs/media/workspace-tour.gif)
-
-</details>
+## Start with the model. Then get into the files.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/models.png" alt="The model picker showing the installed Ollama library"><br><strong>Find the right model.</strong><br>See what is installed and what each model supports.</td>
-<td width="50%"><img src="docs/screenshots/files.png" alt="The file browser with a README preview"><br><strong>Start with the files.</strong><br>Read the project before asking for a change.</td>
+<td width="50%"><strong>Choose a local model</strong><br>Search your Ollama library and see which models support tools and images.</td>
+<td width="50%"><strong>Bring a file into the conversation</strong><br>Read the project, preview the code, and add what matters to your next message.</td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/toolkit.png" alt="The tool kit with individual tool controls"><br><strong>Choose the tools.</strong><br>Give the model the access it needs for the task.</td>
-<td><img src="docs/screenshots/terminal.png" alt="An interactive zsh terminal in Wixal"><br><strong>Keep working your way.</strong><br>Your shell is there when you need it.</td>
+<td><img src="docs/media/choose-model.gif" alt="Opening the model picker, searching for Qwen, and selecting it"></td>
+<td><img src="docs/media/project-files.gif" alt="Reading README.md, previewing hello.js, and adding the code to the prompt"></td>
+</tr>
+<tr>
+<td><a href="docs/screenshots/models.png">View still image</a></td>
+<td><a href="docs/screenshots/files.png">View still image</a></td>
 </tr>
 </table>
+
+## Keep your terminal close
+
+When you want to run the project yourself, open the built-in zsh terminal. The recording below runs a real JavaScript file and shows its output.
+
+![Opening the real zsh terminal, running hello.js, and returning to the workspace.](docs/media/terminal.gif)
+
+[View a still of the terminal](docs/screenshots/terminal.png)
+
+You can also save project preferences, pick up earlier conversations, and attach images to models that support them. In Agent mode, choose which tools are available and review file edits and commands before they run.
 
 ## Get started
 
@@ -84,7 +85,8 @@ Conversations, image attachments, project memories, and preferences are saved lo
 
 Image messages accept up to three PNG, JPEG, or WebP files, each under 12 MB. Wixal applies photo orientation and resizes images to a maximum of 1,600 pixels on the longest edge before sending them to the local model. Capability labels describe model metadata; they don't guarantee the quality of a model's answer.
 
-## A few useful shortcuts
+<details>
+<summary>Keyboard shortcuts</summary>
 
 | Shortcut | Action |
 | --- | --- |
@@ -97,6 +99,9 @@ Image messages accept up to three PNG, JPEG, or WebP files, each under 12 MB. Wi
 | ⌘⇧T | Open the tool kit |
 | ⌘⇧M | Open project memory |
 | Enter / Shift+Enter | Send / add a new line |
+
+
+</details>
 
 ## Working on Wixal
 
@@ -112,3 +117,11 @@ The app test exercises the real Electron interface and terminal. Its full run al
 Browser automation, macOS screen control, MCP connectors, cloud providers, model downloads, and automatic context summarisation aren't implemented yet. Recent complete turns are included within an estimated context budget; older conversations remain saved.
 
 If you'd like to help, start with [CONTRIBUTING](CONTRIBUTING.md) and the [architecture notes](docs/architecture.md). The [artwork and motion guide](docs/visuals.md) includes the editable SVGs, image sources, and instructions for recording a fresh app tour.
+
+## The Wixal logo
+
+The logo pairs a folded W symbol with a custom lowercase wordmark. The same symbol is used in the Mac app icon.
+
+![The Wixal symbol and wordmark appearing in a short animated reveal.](assets/motion/logo-reveal.gif)
+
+[Download the SVG logo](assets/logo/wixal.svg) · [Transparent PNG](assets/logo/wixal.png) · [Logo for light backgrounds](assets/logo/wixal-dark.svg) · [Full asset guide](docs/visuals.md)

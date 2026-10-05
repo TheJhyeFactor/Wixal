@@ -255,3 +255,5 @@ dialog > p { color: #aba5b3; font-size: 12px; line-height: 1.8; }
 @media(prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 @media(max-height: 780px) { .welcome-art { height: 125px; margin-bottom: 16px; } .welcome-intro { min-height: 155px; } .welcome-intro h1 { font-size: 30px; } }
+
+.brand .brand-logo { width: 126px; height: 34px; object-fit: contain; object-position: left center; }

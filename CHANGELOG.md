@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a custom folded W logo, outlined wordmark, light and single colour variants, and a matching Mac app icon.
+- Redesigned the README around an animated header and four recorded product GIFs.
+- Added logo reveal animations in SVG and GIF, with repeatable motion exports and still image alternatives.
+
 - Refined the GitHub page with clearer wording, a new banner, current app screenshots, and a recorded GIF tour.
 - Replaced the angular fox branding with a simple lettermark and a detailed night illustration.
 - Added matching SVG icons, subtle interface transitions, limited petal motion, and a working indicator with reduced motion support.

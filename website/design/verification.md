@@ -24,3 +24,15 @@ The source-grounded product page expands the four catalogue areas using the same
 Hero allowed-copy check: navigation and headline/subtitle/CTA text retain the concept wording. The download icon, original Wixal screenshot contents, mobile menu, and appearance controls are intentional additions. No invented social proof, prices, certifications, customer logos, or product capabilities were added.
 
 Temporary QA screenshots are saved outside website source in the main workspace's ignored artifacts/website directory. Browser checks use the Codex in-app browser, including a 1505×1045 native concept-size viewport and mobile breakpoint checks. Screenshots are inspected alongside the concepts with view_image. Production deployment verification is recorded in the task handoff.
+
+## Completed verification
+
+- GitHub Actions completed both the app Check workflow and website build/deploy workflow successfully for implementation commit db67466f25e9cf22c258765a846905373dc4906a.
+- All five live page URLs returned HTTP 200 and were inspected in the in-app browser. The deployed content, original screenshots, and /Wixal/ page and asset paths were verified.
+- At 1505×1045, the live hero, catalogue, and closing/footer screenshots were inspected with view_image alongside all three original concepts. Copy, layout, colour, typography, media, spacing, and footer structure were compared. The source-grounded asset differences above remain intentional; no unresolved layout defect was found.
+- At 390×844, all five pages were checked for horizontal page overflow. None was found. The product subnavigation uses a contained horizontal scroll rail on mobile.
+- The mobile menu was corrected to close after a section selection. Selecting Terminal & tools updates the URL fragment and closes the menu.
+- The screenshot gallery was exercised with mouse and keyboard. ArrowRight switches Files to Terminal; Home restores Workspace; the visible screenshots load successfully.
+- Escape dismisses the desktop Products disclosure. Dark appearance switches the background to rgb(20,18,11), survives reload, and can be restored to Light.
+- No browser error or warning was recorded during the published desktop pass. The download buttons target the verified release DMG and ZIP assets.
+- npm run build, npm run check, and git diff --check pass; the check resolves 180 local page, fragment, and asset links across six HTML documents, including the 404 page.

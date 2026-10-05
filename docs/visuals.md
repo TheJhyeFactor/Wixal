@@ -1,8 +1,8 @@
 # Wixal logo and motion
 
-The folded W is the first letter of Wixal. The remaining letters sit beside it as one continuous name. Warm white and sakura pink sit against charcoal, matching the app. The symbol is also the Mac app icon.
+Download the Wixal logo, app icon, and animation files below. Use the primary logo on dark backgrounds and the dark logo on light backgrounds.
 
-Open [the visual preview](brand.html) locally to inspect the logo variants, small icon sizes, and product recordings. Its pause button switches every GIF to a still image, and system reduced motion settings pause motion automatically.
+[Open the local preview](brand.html)
 
 ## Logo files
 
@@ -29,11 +29,9 @@ The symbol and lettering are drawn as vector paths. They don't depend on a font 
 | Project files | [GIF](media/project-files.gif), [file still](screenshots/files.png) |
 | Terminal | [GIF](media/terminal.gif), [terminal still](screenshots/terminal.png) |
 
-The recordings are made from real app interactions with a temporary project. The model clip opens the picker, filters the installed library, and selects a model. The file clip previews real fixture files and adds code to the prompt. The terminal clip runs `node hello.js` in the actual PTY and waits for its output. Captions are added after capture. None of these clips simulate model inference or approval results.
+The clips show model selection, file browsing, and terminal use. Still images are available for each clip. The local preview includes a pause button and follows reduced motion settings.
 
-The header and logo GIFs reveal the letters from the W, hold the complete name, then repeat. The animated SVG plays once and settles. The four product GIFs also loop. The GIF files themselves do not respond to reduced motion settings, so every recording has a still image link beside it. The local preview provides a global pause control. The animated SVG and app transitions respect `prefers-reduced-motion`.
-
-The social card is exported for use in GitHub's separate repository social preview setting. Committing that image does not apply the setting automatically.
+Upload the social card in the repository’s social preview settings to use it on shared GitHub links.
 
 ## Rebuild
 
@@ -50,4 +48,4 @@ Edit [graphics.cjs](../scripts/graphics.cjs) for the vector identity and layouts
 
 ## Illustration provenance
 
-The previously created shrine artwork remains an accent in the app. It was generated with the built-in image generation tool and is illustrative artwork, not a photograph of a real location. Its [source image](../assets/artwork/night-shrine.png) and [generation prompt](artwork-prompt.txt) are preserved. The new logo, wordmark, layouts, and motion are defined directly in repository code.
+The shrine illustration was generated with the built-in image generation tool. Its [source image](../assets/artwork/night-shrine.png) and [prompt](artwork-prompt.txt) are included. The logo and page graphics are SVGs defined in [graphics.cjs](../scripts/graphics.cjs).

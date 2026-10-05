@@ -37,34 +37,34 @@ const root = path.resolve(__dirname, '..');
       await sharp(Buffer.concat(frames), { raw: { width: 990, height: 768 * frames.length, channels: 3, pageHeight: 768 } }).gif({ delay: delays, loop: 0, colours: 128, dither: .25 }).toFile(path.join(media, name));
     }
     function addTour(frame, delay = 1800) { tour.push(frame); tourDelays.push(delay); }
-    const home = await capture('Your project, model, and tools in one workspace.', 'workspace'); addTour(home, 2400);
-    const modelFrames = [home], modelDelays = [900];
+    const home = await capture('Wixal workspace', 'workspace'); addTour(home, 2400);
+    const modelFrames = [], modelDelays = [];
     await page.click('#model-button'); await page.locator('.model-row').first().waitFor();
-    let frame = await capture('Choose a model from your local Ollama library.', 'models'); modelFrames.push(frame); modelDelays.push(1500); addTour(frame);
+    let frame = await capture('Choose a model', 'models'); modelFrames.push(frame); modelDelays.push(1500); addTour(frame);
     const qwen = await page.locator('.model-row').filter({ hasText: 'Qwen' }).first().getAttribute('data-model');
     if (!qwen) throw new Error('Install a Qwen model to record the model-search demo.');
     for (const query of ['q', 'qw', 'qwen']) {
-      await page.fill('#model-search', query); frame = await capture('Search your installed models.'); modelFrames.push(frame); modelDelays.push(query === 'qwen' ? 1500 : 250);
+      await page.fill('#model-search', query); frame = await capture('Search models'); modelFrames.push(frame); modelDelays.push(query === 'qwen' ? 1500 : 250);
     }
     await page.locator('.model-row').filter({ hasText: 'Qwen' }).click();
     await page.locator('#models-dialog').waitFor({ state: 'hidden' });
-    frame = await capture('The model is selected. You can get started.'); modelFrames.push(frame); modelDelays.push(1300);
+    frame = await capture('Model selected'); modelFrames.push(frame); modelDelays.push(1300);
     await saveGif('choose-model.gif', modelFrames, modelDelays);
-    const fileFrames = [frame], fileDelays = [900];
+    const fileFrames = [], fileDelays = [];
     await page.click('#files-button'); await page.locator('[data-file="README.md"]').click();
     await page.locator('#file-content').filter({ hasText: 'A small project' }).waitFor();
-    frame = await capture('Read the project before asking for a change.', 'files'); fileFrames.push(frame); fileDelays.push(1700); addTour(frame);
+    frame = await capture('Browse project files', 'files'); fileFrames.push(frame); fileDelays.push(1700); addTour(frame);
     await page.locator('[data-file="hello.js"]').click(); await page.locator('#file-content').filter({ hasText: 'console.log' }).waitFor();
-    frame = await capture('Preview a file and add it to your next message.'); fileFrames.push(frame); fileDelays.push(1700);
+    frame = await capture('Preview a file'); fileFrames.push(frame); fileDelays.push(1700);
     await page.click('#use-file'); await page.locator('#files-dialog').waitFor({ state: 'hidden' });
-    frame = await capture('The file is in your prompt. Send it when you are ready.'); fileFrames.push(frame); fileDelays.push(1800);
+    frame = await capture('Add a file to your message'); fileFrames.push(frame); fileDelays.push(1800);
     await saveGif('project-files.gif', fileFrames, fileDelays); await page.fill('#prompt', '');
-    await page.click('#toolkit-button'); frame = await capture('Choose which tools the model can use.', 'toolkit'); addTour(frame); await page.click('#close-toolkit');
+    await page.click('#toolkit-button'); frame = await capture('Choose tools', 'toolkit'); addTour(frame); await page.click('#close-toolkit');
     await page.click('#memory-button'); await page.fill('#memory-input', 'Use plain JavaScript in this project.'); await page.locator('#memory-form button').click(); await page.locator('.memory-entry').waitFor();
-    frame = await capture('Save a project preference when you want it remembered.', 'memory'); addTour(frame); await page.click('#close-memory');
-    const terminalFrames = [home], terminalDelays = [900];
+    frame = await capture('Save project notes', 'memory'); addTour(frame); await page.click('#close-memory');
+    const terminalFrames = [], terminalDelays = [];
     await page.click('#terminal-button'); await page.locator('#terminal .xterm').waitFor();
-    frame = await capture('A real zsh terminal, inside the workspace.'); terminalFrames.push(frame); terminalDelays.push(1200);
+    frame = await capture('Open the terminal'); terminalFrames.push(frame); terminalDelays.push(1200);
     await page.evaluate(() => new Promise((resolve, reject) => {
       let output = '';
       const timer = setTimeout(() => { remove(); reject(new Error('Terminal demo did not finish')); }, 10000);
@@ -73,8 +73,8 @@ const root = path.resolve(__dirname, '..');
       });
       window.wixal['terminal-write']("export PS1='wixal % '; clear; node hello.js\r").catch(error => { clearTimeout(timer); remove(); reject(error); });
     }));
-    frame = await capture('Run your project without leaving the conversation.', 'terminal'); terminalFrames.push(frame); terminalDelays.push(2700); addTour(frame, 2600);
-    await page.click('#close-terminal'); frame = await capture('Back to your workspace.'); terminalFrames.push(frame); terminalDelays.push(900);
+    frame = await capture('Run a command', 'terminal'); terminalFrames.push(frame); terminalDelays.push(2700); addTour(frame, 2600);
+    await page.click('#close-terminal');
     await saveGif('terminal.gif', terminalFrames, terminalDelays);
     await saveGif('workspace-tour.gif', tour, tourDelays);
     console.log('Captured six screenshots and four GIFs from the actual Wixal app.');

@@ -1,6 +1,16 @@
 # Developing Wixal
 
-Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac. Install dependencies with `npm ci`, then run `npm run rebuild` to rebuild node-pty for Electron.
+Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac. To run from source:
+
+```sh
+git clone https://github.com/TheJhyeFactor/Wixal.git
+cd Wixal
+npm ci
+npm run rebuild
+npm start
+```
+
+`npm run rebuild` builds node-pty for Electron.
 
 ## Check a change
 

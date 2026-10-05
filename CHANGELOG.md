@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Simplified the GitHub page and release notes, with clearer downloads, shorter feature descriptions, and a separate user guide.
+
 ## 0.2.1
 
 - Added downloadable Apple Silicon Mac DMG and ZIP packages with SHA-256 checksums.

@@ -24,7 +24,7 @@ const showcaseOnly = process.argv.includes('--showcase');
   delete env.ELECTRON_RUN_AS_NODE;
   let app;
   try {
-    app = await electron.launch({args:[appRoot],env});
+    app = await electron.launch({args:[appRoot],env,...(process.env.WIXAL_APP_PATH ? {executablePath:process.env.WIXAL_APP_PATH} : {})});
     const page = await app.firstWindow();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1200,800));
     await page.locator('#project-label').filter({hasText:'Website project'}).waitFor();
@@ -46,7 +46,7 @@ const showcaseOnly = process.argv.includes('--showcase');
       console.log(JSON.stringify({name,width:meta.width,height:meta.height}));
     }
     async function openSection(id) {await page.click('#workspace-menu-toggle');await page.click(id);}
-    await page.locator('#connection-label').filter({hasText:'Ollama connected'}).waitFor({state:'attached'});
+    await page.locator('#connection-label').filter({hasText:'Wixal Local connected'}).waitFor({state:'attached'});
     await openSection('#files-button');
     await page.locator('[data-file="README.md"]').click();
     await page.locator('#file-content').filter({hasText:'Working notes'}).waitFor();

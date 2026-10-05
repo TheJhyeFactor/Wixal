@@ -38,11 +38,11 @@ GitHub Pages must use GitHub Actions as its build source. The published URL is h
 
 ## Content and assets
 
-`scripts/build.mjs` contains the shared templates and page content. `src/styles.css` defines the responsive design system; `src/site.js` handles navigation, screenshot tabs, and appearance. Wixal 0.7.0 workspace, model manager, tool kit and performance captures are saved as WebP. Files, memory, terminal, connections, explicit tool selection, command tools, web tool cards and MCP setup previews are captured from 0.7.0, and the existing folded W mark is used in the header and favicon.
+`scripts/build.mjs` contains the shared templates and page content. `src/styles.css` defines the responsive design system; `src/site.js` handles navigation, screenshot tabs, and appearance. Wixal 0.7.1 workspace, model manager, tool kit and performance captures are saved as WebP. Files, memory, terminal, connections, explicit tool selection, command tools, web tool cards and MCP setup previews are captured from 0.7.1, and the existing folded W mark is used in the header and favicon.
 
 The Cursor homepage and product page informed the neutral palette, quiet navigation, typography, whitespace, product previews, and download buttons. Wixal uses its own content and assets. No Cursor fonts, logo, screenshots, customer endorsements, or product claims are shipped.
 
-Download links target the verified v0.7.0 release. Update the release version and copy in `scripts/build.mjs` when shipping a new release. Provider features follow the current published Wixal docs. The companion illustration is labelled as an illustration, not a screenshot. All site pages and download links work without JavaScript. Mobile navigation, screenshot switching, and appearance controls use JavaScript.
+Download links target the verified v0.7.1 release. Update the release version and copy in `scripts/build.mjs` when shipping a new release. Provider features follow the current published Wixal docs. The companion illustration is labelled as an illustration, not a screenshot. All site pages and download links work without JavaScript. Mobile navigation, screenshot switching, and appearance controls use JavaScript.
 
 Design concepts in `design/` were created with the built-in image generation tool. They are development references and are not part of the published site. Their brief was to retain the Cursor product page's #f7f7f4 / #26251e palette, understated regular grotesk type, open spacing, existing Wixal folded W branding, four source-grounded product areas, and the download/footer continuation. Actual Wixal screenshots intentionally replace generated app mockups. See `design/verification.md` for comparison notes.
 
@@ -60,7 +60,7 @@ The build reads intrinsic WebP dimensions directly and uses them in each image's
 
 Styles, scripts, and screenshots use content-derived asset versions so browsers fetch updated files after a deployment.
 
-The 0.7.0 update uses the actual release app captures in `docs/screenshots`, including reported usage and a completed real benchmark. The local engine, tool defaults, model manager and macOS minimum match this release.
+The 0.7.1 update uses the actual release app captures in `docs/screenshots`, including reported usage and a completed real benchmark. The local engine, tool defaults, model manager and macOS minimum match this release.
 
 The Tools page explains explicit tool selection, reviewed file edits, command sessions, rendered web inspection, search, JSON APIs and external MCP setup. Product memory includes notes, prior-chat search and inspectable summaries. The dark appearance uses neutral #101010 black and #191919 charcoal surfaces, neutral grey text, subtle borders and restrained orange link accents; it also styles the navigation, footer, screenshot frames, gallery, buttons and enlarged viewer. Light appearance retains the original neutral palette.
 
@@ -75,3 +75,5 @@ node website/scripts/capture-features.cjs /absolute/path/to/release-checkout --s
 ```
 
 Use a clean checkout of the release with the desktop dependencies installed. This mode captures actual project-memory controls, a saved sample note and the browser-inspection control. It uses a disposable project/state and does not run a model or a web request. The memory capture frames the drawer through its actual saved-note element; no UI or result is fabricated.
+
+The 0.7.1 refresh uses genuine packaged app captures of the Models page and verified download queue. Download links target v0.7.1. The local provider is Wixal Local; Ollama is credited as the underlying engine.

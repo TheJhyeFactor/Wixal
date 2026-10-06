@@ -14,7 +14,11 @@ export async function collect() {
   const accessToken = process.env.GA_ACCESS_TOKEN;
   if (!accessToken) throw new Error('GA_ACCESS_TOKEN is required');
   const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`, { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ metrics: [{ name: 'activeUsers' }], dateRanges: [{ startDate: '29daysAgo', endDate: 'today' }] }), signal: AbortSignal.timeout(30000) });
-  if (!response.ok) throw new Error(`Analytics report unavailable (${response.status}); previous snapshot retained`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    console.error('Analytics API error:', error.error?.message?.slice(0, 500) || response.status);
+    throw new Error(`Analytics report unavailable (${response.status}); previous snapshot retained`);
+  }
   const report = await response.json();
   const snapshot = { active_users: parseCount(report), period_days: 30, includes_today: true, updated_at: new Date().toISOString(), timezone: report.metadata?.timeZone || 'Australia/Sydney', source: 'Google Analytics 4', status: 'available' };
   const dir = resolve(process.env.USERS_DIR || 'artifacts/website-users');

@@ -2,7 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 export function parseCount(report) {
   if (report.metadata?.subjectToThresholding || report.metadata?.dataLossFromOtherRow) throw new Error('Report is thresholded or incomplete');
-  const value = report.rows?.[0]?.metricValues?.[0]?.value ?? (report.rowCount === 0 ? '0' : undefined);
+  const empty = !report.rows?.length && (report.rowCount === 0 || (report.rowCount == null && report.metricHeaders?.length === 1 && report.metricHeaders[0].name === 'activeUsers'));
+  const value = report.rows?.[0]?.metricValues?.[0]?.value ?? (empty ? '0' : undefined);
   if (!/^\d+$/.test(value ?? '')) throw new Error('Analytics returned no valid active-user total');
   const count = Number(value);
   if (!Number.isSafeInteger(count)) throw new Error('Invalid active-user count');

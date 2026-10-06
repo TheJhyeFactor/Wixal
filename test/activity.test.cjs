@@ -33,3 +33,7 @@ test('overlapping command reads do not repeat stdout and stdin does not finish a
   assert.equal(activity.evidence(turn.actions[0]).output, 'firstsecond');
   assert.equal(activity.evidence(turn.actions[0]).meta, 'Running');
 });
+test('browser and search evidence is readable without losing raw JSON, failure status or pagination',()=>{
+ const messages=[{role:'user',content:'Inspect jhye.dev'},result('browser_open',{url:'https://jhye.dev/',title:'Jhye Dev',status:200,text:'Real homepage text',more:true,next_offset:12000}),result('web_search',{source:'https://html.duckduckgo.com/',results:[{title:'Jhye Dev',url:'https://jhye.dev/',snippet:'Real snippet'}]}),result('browser_read',{status:404,text:'Not found'}),result('browser_close',{state:'closed'})];
+ const [turn]=activity.turns(messages);assert.match(activity.title(turn.actions[0]),/Jhye Dev/);assert.match(activity.evidence(turn.actions[0]).output,/Real homepage text/);assert.match(activity.evidence(turn.actions[0]).output,/12000/);assert.match(activity.evidence(turn.actions[1]).output,/https:\/\/jhye.dev/);assert.equal(turn.actions[2].status,'Failed');assert.equal(turn.actions[3].status,'Closed');assert.equal(turn.actions[0].results[0].message.content,messages[1].content);
+});

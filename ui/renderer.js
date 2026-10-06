@@ -15,11 +15,17 @@ const tools = [
   { id: 'command_stop', name: 'Stop command session', description: 'Cancel a command and its child processes.' },
   { id: 'command_save_output', name: 'Save command evidence', description: 'Save captured output and status to a project file.', review: true },
   { id: 'browser_inspect', name: 'Inspect rendered website', description: 'Read a JavaScript-rendered page, links, forms and console messages.', review: true },
+  { id: 'browser_open', name: 'Open browser session', description: 'Open or navigate an isolated browser. Keep page state for follow-up work.', review: true },
+  { id: 'browser_read', name: 'Read browser page', description: 'Wait for delayed content, read text chunks and get fresh control refs.' },
+  { id: 'browser_action', name: 'Use page controls', description: 'Review clicks, ordinary text input and option selection. No submissions or credentials.', review: true },
+  { id: 'browser_close', name: 'Close browser session', description: 'Release an isolated browser when the task is finished.' },
 
   { id: 'list_files', name: 'List files', description: 'See the files in the selected project.' },
   { id: 'read_file', name: 'Read files', description: 'Read text files to understand the code.' },
   { id: 'search_files', name: 'Search the project', description: 'Find text across project files.' },
   { id: 'write_file', name: 'Edit and create files', description: 'Review the existing and proposed contents before saving.', review: true },
+  { id: 'edit_file', name: 'Replace exact file text', description: 'Review a unique text replacement with concurrent edit checks.', review: true },
+  { id: 'make_directory', name: 'Create project directory', description: 'Review a new directory inside the project. Parent must exist.', review: true },
   { id: 'run_command', name: 'Run commands', description: 'Run a command in the project. Stops after 60 seconds.', review: true },
   { id: 'search_history', name: 'Recall project conversations', description: 'Search saved conversations in this project.' },
   { id: 'save_memory', name: 'Save project memory', description: 'Keep reviewed decisions and preferences for future chats.', review: true },
@@ -396,7 +402,7 @@ function renderMemories() {
   renderMemoryOptions(memories);
   $('memories').querySelectorAll('[data-id]').forEach(button => button.onclick = async () => { try { state = await invoke('memory-delete', button.dataset.id); render(); } catch {} });
 }
-function toolCategory(id) { return ['website_assess', 'website_simulate', 'security_tools', 'network_scan', 'network_read', 'network_stop'].includes(id) ? 'security' : id.startsWith('mcp_') ? 'external' : id.startsWith('command_') || id === 'run_command' ? 'commands' : ['web_search', 'http_request', 'browser_inspect'].includes(id) ? 'web' : ['workspace_info', 'search_history', 'save_memory'].includes(id) ? 'memory' : 'files'; }
+function toolCategory(id) { return ['website_assess', 'website_simulate', 'security_tools', 'network_scan', 'network_read', 'network_stop'].includes(id) ? 'security' : id.startsWith('mcp_') ? 'external' : id.startsWith('command_') || id === 'run_command' ? 'commands' : id.startsWith('browser_') || ['web_search', 'http_request'].includes(id) ? 'web' : ['workspace_info', 'search_history', 'save_memory'].includes(id) ? 'memory' : 'files'; }
 function renderToolkit() {
   const p = project();
   $('toolkit-summary').textContent = !selectedModel()?.capabilities?.includes('tools') ? 'Choose a model marked Tools to use this tool kit. This model supports conversation only.' : p ? `Enabled tools are available in Chat and Agent for ${p.name}. Use @ to request a particular tool.` : 'Enabled web, memory and connected tools are available in Chat and Agent. Open a project for file and command tools.';
@@ -1146,7 +1152,10 @@ document.addEventListener('keydown', event => {
 function showApproval(data) {
   approvalId = data.id;
   const custom = {
+    make_directory: { title: 'Create this directory?', description: 'Creates one directory inside the selected project. Parent must exist.', content: data.path },
     browser_inspect: { title: 'Inspect this website?', description: 'Loads scripts and page resources in a fresh browser session. Returns rendered content to this conversation.', content: data.url },
+    browser_open: { title: 'Open this browser page?', description: 'Uses an isolated session for this chat. Scripts and read-only page resources load; no existing login is shared.', content: data.url },
+    browser_action: { title: 'Use this page control?', description: 'Review the exact control and input before the page receives the action.', content: `${data.url}\n\n${data.action}: ${data.label}\n${data.value === undefined ? '' : 'Value: ' + data.value}` },
     command_start: { title: 'Start command session?', description: `Runs on your Mac in ${data.root}. Timeout: ${data.timeout_seconds} seconds. This host shell can access files outside the project.`, content: data.command },
     command_write: { title: 'Send command input?', description: `Sends stdin to session ${data.session_id}.`, content: data.command },
     web_search: { title: 'Search the web?', description: 'This query will be sent to DuckDuckGo.', content: `${data.query || ''}\n\n${data.url || ''}` },
@@ -1158,9 +1167,9 @@ function showApproval(data) {
     $('approval-title').textContent = custom.title; $('approval-description').textContent = custom.description;
     $('approval-content').innerHTML = `<pre>${escapeHTML(custom.content)}</pre>`;
   } else {
-  $('approval-title').textContent = data.name === 'write_file' ? `Review edit · ${data.path}` : 'Run this command?';
-  $('approval-description').textContent = data.name === 'write_file' ? 'Check the current file and proposed replacement before saving.' : `Runs on your Mac in ${data.root}. This host shell can access files outside the project.`;
-  $('approval-content').innerHTML = data.name === 'write_file' ? `<h3>BEFORE</h3><pre>${escapeHTML(data.before ?? '(new file)')}</pre><h3>AFTER</h3><pre>${escapeHTML(data.after)}</pre>` : `<pre>${escapeHTML(data.command)}</pre>`;
+  $('approval-title').textContent = ['write_file', 'edit_file'].includes(data.name) ? `Review edit · ${data.path}` : 'Run this command?';
+  $('approval-description').textContent = ['write_file', 'edit_file'].includes(data.name) ? 'Check the current file and proposed replacement before saving.' : `Runs on your Mac in ${data.root}. This host shell can access files outside the project.`;
+  $('approval-content').innerHTML = ['write_file', 'edit_file'].includes(data.name) ? `<h3>BEFORE</h3><pre>${escapeHTML(data.before ?? '(new file)')}</pre><h3>AFTER</h3><pre>${escapeHTML(data.after)}</pre>` : `<pre>${escapeHTML(data.command)}</pre>`;
   }
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('approval-dialog').showModal(); $('decline').focus();
 }

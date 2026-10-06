@@ -11,6 +11,7 @@ async function poll(page, predicate) {
 (async () => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-performance-ui-')), project = path.join(temp, 'Benchmark demo');
   await fs.mkdir(project); await fs.writeFile(path.join(project, 'README.md'), 'REAL_TOOL_READ_VERIFIED');
+  const seed = new (require('../app/store.cjs').Store)(path.join(temp, 'state')); seed.data.setup = { completed: true, entryCompleted: true }; seed.data.ui.launchAnimation = false; seed.data.ui.launchSound = false; seed.save();
   const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: path.join(temp, 'state'), WIXAL_TEST_PROJECT: project }; delete env.ELECTRON_RUN_AS_NODE;
   let app;
   try {
@@ -43,7 +44,7 @@ async function poll(page, predicate) {
     assert.equal(await page.inputValue('#prompt'), '@read_file '); await page.type('#prompt', 'read README.md'); await page.click('#send');
     await page.waitForFunction(() => document.querySelector('#messages').textContent.includes('Read result: REAL_TOOL_READ_VERIFIED'));
     assert.ok(!(await page.textContent('#messages')).includes('Skipped the explicit tool.'));
-    const bodies = await app.evaluate(() => globalThis.perfFixture.bodies); assert.deepEqual(bodies[0].tools.map(t => t.function.name), require('../app/tools.cjs').definitions.map(t => t.function.name));
+    const bodies = await app.evaluate(() => globalThis.perfFixture.bodies); assert.ok(bodies[0].tools.some(t => t.function.name === 'read_file')); assert.ok(!bodies[0].tools.some(t => t.function.name === 'network_scan')); assert.ok(bodies[0].tools.some(t => t.function.name === 'workspace_info'));
     await page.click('#response-stats'); assert.match(await page.textContent('#performance-totals'), /80/); assert.match(await page.textContent('#performance-totals'), /128/);
     await page.click('[data-close="performance-dialog"]'); await page.click('#model-button');
     await page.locator('#model-filter-panel > summary').click(); await page.selectOption('#model-size-filter', '4'); assert.equal(await page.locator('.model-row').count(), 1); await page.selectOption('#model-size-filter', '0');

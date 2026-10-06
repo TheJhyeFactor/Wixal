@@ -7,9 +7,12 @@
     if (content.startsWith('User declined')) return 'Declined';
     const result = parse(content);
     if (result?.stopped || result?.state === 'stopped') return 'Stopped';
-    if (result?.state === 'failed' || (typeof result?.exitCode === 'number' && result.exitCode !== 0)) return 'Failed';
+    if (result?.blocked && result?.status < 400) return 'Limited';
+    if (result?.status >= 400 || result?.state === 'failed' || (typeof result?.exitCode === 'number' && result.exitCode !== 0)) return 'Failed';
     if (result?.state === 'running') return 'Running';
     if (result?.state === 'completed' || result?.exitCode === 0) return 'Completed';
+    if (result?.state === 'no_results') return 'No results';
+    if (result?.state === 'closed') return 'Closed';
     return 'Completed';
   }
   function turns(messages) {
@@ -49,11 +52,16 @@
       action.command = result?.command || action.command || action.args?.command;
       action.finished = result?.finished || message.created;
       action.result = result;
+      if (result?.url) action.url = result.url;
+      if (result?.title) action.pageTitle = result.title;
     });
     return output;
   }
   function title(action, fallback) {
     const path = action.args?.path || action.args?.file;
+    if (action.name.startsWith('browser_')) return action.pageTitle ? 'Browser · ' + action.pageTitle : action.url || action.args?.url || fallback || action.name;
+    if (action.name === 'web_search') return 'Search · ' + (action.args?.query || 'web');
+    if (action.name === 'http_request') return (action.args?.method || 'GET') + ' ' + (action.url || action.args?.url || 'website');
     if (action.command) return action.command;
     if (action.name === 'read_file' && path) return 'Read ' + path;
     if (action.name === 'write_file' && path) return 'Edited ' + path;
@@ -83,6 +91,11 @@
       covered = end; return prefix + value;
     }).join('');
     const result = parse(last.content);
+    if (result && action.name === 'web_search' && Array.isArray(result.results)) return { command: result.source || '', output: result.results.length ? result.results.map(item => `${item.title}\n${item.url}\n${item.snippet || ''}`).join('\n\n') : result.output || 'No results.', meta: action.status };
+    if (result && (action.name.startsWith('browser_') || action.name === 'http_request')) {
+      const readable = result.text ?? result.content;
+      return { command: result.url || action.args?.url || '', output: [readable, result.blocked, result.more ? `More content available. Next offset: ${result.next_offset}` : '', result.readiness?.matched === false ? 'Expected page text was not found within the wait limit.' : '', result.state === 'closed' ? 'Browser session closed.' : ''].filter(Boolean).join('\n\n') || last.content, meta: result.status ? `HTTP ${result.status} · ${action.status}` : action.status };
+    }
     const failure = /^(Error:|User declined)/.test(last.content || '') ? '\n' + last.content : '';
     return { command: action.command || action.args?.command || '', output: hasOutput ? (output || '(No output)') + failure : last.content, meta: typeof result?.exitCode === 'number' ? 'Exit ' + result.exitCode : action.status };
   }

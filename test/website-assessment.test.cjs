@@ -58,5 +58,5 @@ test('native website results return grouped evidence, passed controls and remedi
  assert.equal(result.checks.find(c=>c.id==='unauthenticated-access').example.evidence.status,401);assert.equal(result.checks.find(c=>c.id==='https-hsts').count,2);
  assert.deepEqual(result.protectedPaths,['/api/admin']);assert.ok(result.limitations.length);assert.equal(result.reports.json,'proof.json');
  assert.equal(JSON.parse(await fs.readFile(path.join(root,'proof.json'),'utf8')).summary.requests,result.summary.requests);
- const {boundedToolResult}=require('../app/agent.cjs');const excerpt=JSON.parse(boundedToolResult(JSON.stringify(result),500));assert.deepEqual(excerpt.checks,result.checks);assert.deepEqual(excerpt.findings,result.findings);
+ const {boundedToolResult}=require('../app/agent.cjs');const excerpt=JSON.parse(boundedToolResult(JSON.stringify(result),500));assert.ok(JSON.stringify(excerpt).length <= 500);assert.equal(excerpt.context_excerpt,true);assert.deepEqual(excerpt.reports,result.reports);assert.deepEqual(excerpt.summary,result.summary);
 });

@@ -48,7 +48,7 @@ test('mentions keep enabled preparation tools available and respect declined act
   assert.equal(store.data.usage.length, 3); assert.equal(store.data.usage.reduce((n, r) => n + r.inputTokens, 0), 60);
   await assert.rejects(fs.access(path.join(temp, 'declined.txt')));
 });
-test('a tool mention without required arguments can ask a visible question in one request', async t => {
+test('a missing browser target produces a visible clarification without model inference', async t => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-clarify-')); t.after(() => fs.rm(temp, { recursive: true, force: true }));
   const store = new Store(temp); store.data.model = 'fixture'; store.data.mode = 'chat';
   const events = []; let requests = 0;
@@ -59,6 +59,6 @@ test('a tool mention without required arguments can ask a visible question in on
     assert.match(body.messages[0].content, /ask one concise question/);
     return new Response(JSON.stringify({ message: { content: 'Which website URL should I inspect?' }, done: true }));
   } });
-  assert.equal(requests, 1); assert.equal(store.session().messages.at(-1).content, 'Which website URL should I inspect?');
+  assert.equal(requests, 0); assert.equal(store.session().messages.at(-1).content, 'Which website URL should I inspect?');
   assert.equal(events.filter(e => e.type === 'token').map(e => e.text).join(''), 'Which website URL should I inspect?');
 });

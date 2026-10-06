@@ -49,6 +49,10 @@ class Store {
       this.data.enabledTools = [...new Set([...this.data.enabledTools, 'security_tools', 'network_scan', 'network_read', 'network_stop'])];
       this.data.cyberToolsVersion = 1;
     }
+    if (this.data.browserToolsVersion !== 1 && this.data.enabledTools.includes('browser_inspect')) this.data.enabledTools = [...new Set([...this.data.enabledTools, 'browser_open', 'browser_read', 'browser_action', 'browser_close'])];
+    this.data.browserToolsVersion = 1;
+    if (this.data.fileToolsVersion !== 1 && this.data.enabledTools.includes('write_file')) this.data.enabledTools = [...new Set([...this.data.enabledTools, 'edit_file', 'make_directory'])];
+    this.data.fileToolsVersion = 1;
     this.data.benchmarks ??= [];
     this.data.usage ??= this.data.sessions.flatMap(s => s.messages.filter(m => m.metrics).map(m => ({ ...m.metrics, model: m.model || 'Historical model (not recorded)', provider: m.provider || 'ollama', sessionId: s.id, created: m.created || s.created, migrated: true }))).sort((a, b) => a.created - b.created).slice(-2000);
     if (this.data.toolsDefaultsVersion !== 2) {

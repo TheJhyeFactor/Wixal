@@ -38,6 +38,7 @@ function globalMemory() { return credentials?.data.wixalAccount ? accounts.snaps
 function snapshot() { const device = hardware(); return { ...store.snapshot(), globalMemory: globalMemory(), globalMemoryAccount: !!credentials?.data.wixalAccount, appIcon: resolveIcon(store.data.ui), account: accounts.snapshot(), appVersion: app.getVersion(), externalConnections: extensions.snapshot(), modelDownload: downloads?.active?.item || null, modelDownloads: downloads?.snapshot() || [], localRuntime: runtime.snapshot(), hardware: device, benchmarkProgress: benchmarking?.progress || null, modelCatalog: require('../resources/model-catalog.json').models.map(m => ({ ...m, fit: estimate(m, device, store.data.contextSize, runtime.mode === 'managed' ? 1 : 2) })) }; }
 function stop() {
   running?.abort();
+  if (store) require('./browser-tools.cjs').closeConversationBrowsers({ store, root: store.project()?.root });
   for (const resolve of approvals.values()) resolve(false);
   approvals.clear();
 }
@@ -50,7 +51,7 @@ function approve(request) {
     emit({ type: 'approval', id, ...request });
   });
 }
-app.on('before-quit', () => require('./command-sessions.cjs').stopAllCommands());
+app.on('before-quit', () => { require('./command-sessions.cjs').stopAllCommands(); require('./browser-tools.cjs').closeAllBrowsers(); });
 function destroyTerminal() { if (terminal) { terminal.kill(); terminal = null; } }
 function register(name, handler) {
   ipcMain.handle(`wixal:${name}`, async (event, ...args) => {
@@ -330,12 +331,16 @@ function setupIPC() {
     const model = modelCatalog.find(m => m.name === store.data.model) || {};
     const limit = require('./memory.cjs').safeContext(model, store.data.contextSize, hardware());
     const catalog = [...definitions, ...extensions.definitions()];
-    const selected = model.capabilities?.includes('tools') ? require('./mentions.cjs').availableTools(catalog, store.data.enabledTools, store.project()) : [];
+    const available = model.capabilities?.includes('tools') ? require('./mentions.cjs').availableTools(catalog, store.data.enabledTools, store.project()) : [];
+    const requested = require('./mentions.cjs').requestedTools(draft, catalog, store.data.enabledTools, store.project());
+    const selected = require('./tool-catalog.cjs').initialTools(available, draft || store.session()?.messages.findLast(m => m.role === 'user')?.content || '', requested, store.session()?.messages || []);
     const messages = require('./agent.cjs').ollamaMessages(require('./agent.cjs').contextMessages(store.session()?.messages || [], Number.MAX_SAFE_INTEGER, model.capabilities?.includes('vision')).messages, store.data.model, model.capabilities?.includes('tools'));
-    if (draft) messages.push({ role: 'user', content: draft });
     const config = require('./memory.cjs').memorySettings(store.project());
     const profile = store.data.globalMemoryEnabled && (!store.project() || ['both', 'global'].includes(config.mode)) ? globalMemory() : '';
-    return { ...require('./memory.cjs').usage(messages, selected, limit, ' '.repeat(6000) + profile + require('./context.cjs').projectMemory(store, draft)), model: store.data.model, omitted: store.session()?.contextUsage?.omitted || 0 };
+    const system = ' '.repeat(6000) + profile + require('./context.cjs').projectMemory(store, draft);
+    let preview; try { preview = require('./agent.cjs').previewHistory(messages, selected, limit, system); } catch { preview = [{ role: 'system', content: system }, ...messages]; }
+    if (draft) preview.push({ role: 'user', content: draft });
+    return { ...require('./memory.cjs').usage(preview, selected, limit), model: store.data.model, omitted: store.session()?.contextUsage?.omitted || 0 };
   });
   register('memory-update', (id, content) => { idle(); store.updateMemory(id, content); return snapshot(); });
   register('project-memory-settings', value => { idle(); store.setMemorySettings(value); return snapshot(); });

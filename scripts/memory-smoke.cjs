@@ -23,6 +23,7 @@ const fs = require('node:fs/promises'), path = require('node:path'), os = requir
     return json({});
    };
   });
+  await page.evaluate(() => window.wixal.models(true));
   await page.reload(); await page.locator('#prompt:not([disabled])').waitFor(); await page.locator('#launch-screen').waitFor({state:'hidden'});
   await page.click('#model-button'); await page.click('#model-refresh'); await page.locator('[data-model="first:test"]').click();
   await page.click('#header-memory'); await page.selectOption('#project-memory-mode','both'); await page.selectOption('#project-memory-size','8000');

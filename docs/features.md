@@ -1,4 +1,4 @@
-# Wixal 0.7.7: memory, context and project tools
+# Wixal 0.7.8: memory, context and project tools
 
 Wixal can carry out project work through real tools, continue long conversations with saved summaries, and connect to local MCP servers. Open a project, select a tool-capable model and use **Chat** or **Agent**.
 
@@ -8,13 +8,17 @@ Wixal can carry out project work through real tools, continue long conversations
 | --- | --- |
 | Persistent project memory | Chats and notes survive restart; memory selection ranks relevant notes for the current prompt. |
 | Project history search | Enable **Recall project conversations** to let the model search prior active chats in this project. Results include conversation titles and excerpts. Archived chats remain available through the archive browser. |
-| File access | List, search, read and write project text files. Large reads return a continuation offset; writes require review and detect changes during review. |
+| File access | List, search, read, write and make exact unique replacements in project text files; create project directories. Large reads return a continuation offset; writes require review and detect changes during review. |
 | Command execution | Reviewed shell commands stream output and report exit status. Stop terminates the command process group. A command has a 60-second timeout. |
-| Web search | Enable **Search the web** to use DuckDuckGo. Review the query before it leaves your Mac; results include titles and links. |
-| Web pages and APIs | Enable **Web pages and APIs** for reviewed GET, POST, PUT, PATCH or DELETE requests. HTML becomes readable text; JSON remains readable JSON. Review the exact URL, method and body before sending. |
+| Web search | Enable **Search the web** to use DuckDuckGo. Review the query before it leaves your Mac; results include titles, links and available snippets. |
+| Web pages and APIs | Enable **Web pages and APIs** for reviewed GET, HEAD, POST, PUT, PATCH or DELETE requests. HTML becomes readable text; JSON remains readable JSON. Review the exact URL, method and body before sending. |
 | External tools | Connect a local MCP stdio server, then enable individual discovered tools in the tool kit. Each call displays its server, tool name and arguments for review. |
 | Larger models | Choose any installed Ollama model, download a model by tag in the picker, or import and use its weights in the bundled local engine. The context preference supports 4k–32k, further limited by the local model and hardware estimate. |
 | Long conversations | Automatically summarize older turns with the selected model while retaining recent complete turns and all original history on disk. |
+
+## Browser sessions
+
+`browser_open` starts an isolated Chromium session. `browser_read` waits for expected text, pages long content and returns fresh control refs. `browser_action` reviews a click, ordinary text input or option selection; navigation receives a destination review. `browser_close` releases resources. One-shot `browser_inspect` remains available. Browser and HTTP/search evidence is readable in the chat activity drawer. See [tool workflows and limits](tool-workflows.md) for supported actions and boundaries.
 
 ## Web and API tools
 
@@ -24,9 +28,9 @@ Open **Workspace → Tool kit**, enable the network tools you want, and ask the 
 
 > Fetch http://127.0.0.1:3000/health and tell me which services are available.
 
-Network tools start enabled and follow the workspace approval policy. A reviewed request can contact public sites or local services. Requests have a 20-second timeout, a 1 MB response limit and a 24,000-character output limit. They do not follow redirects; the agent must make a separately reviewed request to the redirect destination. API bodies must be JSON, at most 16,000 characters. GET does not accept a body.
+Network tools start enabled and follow the workspace approval policy. A reviewed request can contact public sites or local services. Requests have a 20-second timeout, a 1 MB response limit and a 24,000-character output limit. They do not follow redirects; the agent must make a separately reviewed request to the redirect destination. API bodies must be JSON, at most 16,000 characters. GET and HEAD do not accept a body. GET results include continuation offsets; each later chunk refetches the page and may observe changes.
 
-Wixal does not attach provider credentials or arbitrary authentication headers to these tools. Use a trusted local API proxy or an MCP server's secure credential configuration for authenticated services. Web search depends on DuckDuckGo's HTML service; challenges, rate limits and empty results are reported as errors, rather than fabricated search results.
+Wixal does not attach provider credentials or arbitrary authentication headers to these tools. Use a trusted local API proxy or an MCP server's secure credential configuration for authenticated services. Web search depends on DuckDuckGo's HTML service; challenges and rate limits are reported as errors; empty results are explicitly labelled No results. No search evidence is fabricated.
 
 ## External MCP tools
 
@@ -64,7 +68,7 @@ Wixal Local includes the engine; installed Ollama weights can be imported. See [
 
 [User guide](user-guide.md) · [Architecture](architecture.md) · [Release history](../CHANGELOG.md)
 
-In 0.7.0, built-in tools start enabled, the tool kit has search/categories and Enable all, and `@tool_name` requests a particular tool while preserving enabled follow-up tools. Enabled tools are available to tool-capable models in Chat and Agent; missing required arguments can be clarified in chat. See [performance, model management and tool selection](performance.md). Browser and longer command-session tools are described in [the cyber tools guide](cyber-tools.md).
+In 0.7.0, built-in tools start enabled, the tool kit has search/categories and Enable all, and `@tool_name` requests a particular tool while preserving enabled follow-up tools. Enabled tools are available to tool-capable models in Chat and Agent; task-relevant schemas are loaded first, with workspace_info category discovery for other enabled tools; missing required arguments can be clarified in chat. See [performance, model management and tool selection](performance.md). Browser and longer command-session tools are described in [the cyber tools guide](cyber-tools.md).
 
 ## Workspace context and approval policy
 

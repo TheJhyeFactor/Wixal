@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.7/Wixal-0.7.7-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.7/Wixal-0.7.7-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.7">Release notes</a>
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.8/Wixal-0.7.8-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.8/Wixal-0.7.8-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.8">Release notes</a>
   <br>
-  <sub>Version 0.7.3 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
+  <sub>Version 0.7.8 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
 </p>
 
 <p align="center">
@@ -51,9 +51,11 @@ Open a folder and start a conversation. Your files, saved notes, and terminal ar
 
 </details>
 
-## Current release: 0.7.7
+## Current release: 0.7.8
 
-The 0.7.7 release adds project memory scopes and budgets, a small optional account profile, context usage estimates, new-chat summary handoff and reliable local model switching. It includes workspace/tool context, workspace-scoped Approved all, website assessment fixtures and Nmap assessment profiles. [Memory and limits](docs/memory.md) · [Assessment profiles](docs/cyber-tools.md).
+The 0.7.8 release adds isolated browser sessions with reviewed navigation, clicks and ordinary form controls; delayed-content waits; readable search snippets; paginated HTTP and file-search results; exact file edits and directory creation. Tool schemas are loaded by task so enabled tools leave more room for the conversation. Declined actions and three identical tool failures end tool execution for that turn. [Tool workflows and limits](docs/tool-workflows.md).
+
+The preceding 0.7.7 release added project memory scopes and budgets, a small optional account profile, context usage estimates, new-chat summary handoff and reliable local model switching. It includes workspace/tool context, workspace-scoped Approved all, website assessment fixtures and Nmap assessment profiles. [Memory and limits](docs/memory.md) · [Assessment profiles](docs/cyber-tools.md).
 
 ## Memory that stays under your control
 
@@ -78,7 +80,7 @@ The 0.7.7 release adds project memory scopes and budgets, a small optional accou
 
 Streaming updates the pending reply without rebuilding saved messages on each frame. This reduces renderer work; model inference speed depends on the model and your Mac.
 
-[0.7.7 release notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.7) · [Models and performance guide](docs/performance.md) · [How Wixal Local works](docs/local-runtime.md)
+[0.7.7 release notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.8) · [Models and performance guide](docs/performance.md) · [How Wixal Local works](docs/local-runtime.md)
 
 Wixal Local is built on pinned open-source Ollama 0.35.1, with its original credits and notices preserved. Models already installed in Ollama can be imported; all inference runs through Wixal’s included engine. [Upstream credits](THIRD_PARTY_NOTICES.md)
 
@@ -123,11 +125,11 @@ The optional companion can still share selected projects and queue tasks for Wix
 
 ## Get started
 
-1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.7/Wixal-0.7.7-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
+1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.8/Wixal-0.7.8-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
 2. **Connect a model.** Open **Models** in the sidebar and download a model tag or click **Import & use** on an installed Ollama model.
 3. **Open your project.** Press **⌘O** to choose a folder and **⌘L** to choose a model. Then start a conversation.
 
-This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.7#install).
+This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.8#install).
 
 ## Guides & development
 

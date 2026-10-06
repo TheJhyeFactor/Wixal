@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.8 — 6 October 2026
+
+- Added isolated Chromium browser sessions with reviewed navigation, fresh control refs, ordinary clicks/text/select actions, delayed-content waits, pagination and cleanup.
+- Added distinct empty/blocked search outcomes, deduplicated source URLs and snippets, paginated HTTP GET evidence, HEAD support and explicit response limits.
+- Load task-relevant tool schemas with category and specific-tool discovery while preserving the enabled-tool permission boundary.
+- End tool execution for the turn after a declined action or three identical failures; request a visible evidence-based conclusion.
+- Added exact unique file edits and directory creation with review and concurrent-change checks; file search now covers supported 1 MB text files and later matches.
+- Added readable browser/search/HTTP activity and bounded valid JSON model excerpts with whole refs/URLs and session metadata.
+- Added argument validation, real MCP process regressions and actual Chromium CI coverage; live browser, search and model tests use jhye.dev.
+
 ## 0.7.7 — 6 October 2026
 
 - Added a 1,200-character explicit global preference profile, local for guests and owner-only Firebase syncing for verified accounts.

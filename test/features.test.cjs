@@ -74,13 +74,13 @@ test('web search yields usable source URLs and reports service failures', async 
   const context = { approve: async request => { assert.equal(request.name, 'web_search'); assert.equal(request.query, 'hello world'); return true; }, fetcher: async url => { assert.match(url, /hello%20world/); return new Response('<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fsource">Example &amp; result</a>', { headers: { 'content-type': 'text/html' } }); } };
   const result = JSON.parse(await executeNetwork('web_search', { query: 'hello world' }, context));
   assert.deepEqual(result.results[0], { title: 'Example & result', url: 'https://example.com/source' });
-  await assert.rejects(executeNetwork('web_search', { query: 'hello world' }, { ...context, fetcher: async () => new Response('bot challenge') }), /no readable results/);
+  await assert.rejects(executeNetwork('web_search', { query: 'hello world' }, { ...context, fetcher: async () => new Response('bot challenge') }), /unsupported page|blocked/);
 });
 test('file offsets expose subsequent chunks without losing original data', async t => {
   const options = await setup(t); await fs.writeFile(path.join(options.root, 'large.txt'), 'a'.repeat(24000) + 'final chunk');
   assert.match(await executeTool('read_file', { path: 'large.txt' }, options), /next offset: 24000/);
   assert.equal(await executeTool('read_file', { path: 'large.txt', offset: 24000 }, options), 'final chunk');
-  await assert.rejects(executeTool('read_file', { path: 'large.txt', offset: -1 }, options), /Offset/);
+  await assert.rejects(executeTool('read_file', { path: 'large.txt', offset: -1 }, options), /offset|Offset/);
 });
 test('model downloads parse progress, require completion and propagate failures', async () => {
   const progress = [];

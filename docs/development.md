@@ -111,3 +111,12 @@ Set `WIXAL_TEST_SCAN_ONLY=1 WIXAL_TOOL_MODELS=gpt-oss:20b npm run test:chat-tool
 ## Memory checks
 
 `npm run test:memory` exercises the real Electron memory controls and IPC with disposable workspace data and deterministic model responses. It checks saved scopes/budgets, note edits, guest profile persistence, model switching, visible handoff, cancellation, fresh-chat creation and context warnings. Screenshots are saved to `/tmp/wixal-*.png`. Use `WIXAL_APP_PATH` to exercise the packaged app. Core regression coverage is in `test/memory-context.test.cjs`. Live Firebase and actual model checks are separate from fixtures.
+
+
+## Tool regression and live website checks in 0.7.8
+
+`npm run test:browser-regression` drives actual Electron Chromium against disposable fixtures for delayed content, stale refs, changed controls during review, text input, select, pagination, HTTP errors, redirects, isolation, resource limits, cancellation and cleanup. CI runs this independently of inference. `npm run test:jhye-live` uses the nominated live site, **https://jhye.dev/**, for browser homepage/link navigation, HTTP text, DuckDuckGo source evidence and a two-page GET baseline assessment with saved reports. It never submits forms or writes to the website. Live search can fail honestly if its upstream service blocks or changes responses.
+
+`npm run test:chat-tools-live` additionally uses an actual tool-capable installed model to open jhye.dev, click its Work link using returned refs, conclude from the actual page, close the browser and answer from live search results. This complements controller tests rather than treating model protocol fixtures as evidence of real inference. `WIXAL_APP_PATH` selects a packaged executable.
+
+The unit suite includes focused-schema discovery without re-enabling disabled tools, parseable bounded JSON evidence, exact file edits/concurrent changes, large-file search, tool migrations, decline/retry limits and a real MCP stdio server with paginated, duplicate, oversized and repeated-cursor catalogs, errors, artifact labels and cancellation.

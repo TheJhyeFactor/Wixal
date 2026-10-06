@@ -1,5 +1,5 @@
 function requiresProject(name) {
-  return name.startsWith('website_') || name.startsWith('network_') || name.startsWith('command_') || ['list_files', 'read_file', 'search_files', 'write_file', 'run_command'].includes(name);
+  return name.startsWith('website_') || name.startsWith('network_') || name.startsWith('command_') || ['list_files', 'read_file', 'search_files', 'write_file', 'edit_file', 'make_directory', 'run_command'].includes(name);
 }
 function availableTools(catalog, enabled, project) {
   return catalog.filter(tool => enabled.includes(tool.function.name) && (project || !requiresProject(tool.function.name)));

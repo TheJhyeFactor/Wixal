@@ -21,11 +21,11 @@ const { Store } = require('../app/store.cjs');
     assert.match(await page.locator('#activity-dock').innerText(), /Visible command evidence/);
     assert.equal(await page.locator('#activity-dock').evaluate(element => element.open), true);
     await page.click('#workspace-menu-toggle'); await page.click('#toolkit-button');
-    for (const name of ['command_start', 'command_read', 'command_write', 'command_stop', 'command_save_output', 'browser_inspect']) {
+    for (const name of ['command_start', 'command_read', 'command_write', 'command_stop', 'command_save_output', 'browser_inspect', 'browser_open', 'browser_read', 'browser_action', 'browser_close', 'edit_file', 'make_directory']) {
       const toggle = page.locator(`[data-tool="${name}"]`); await toggle.waitFor(); await toggle.uncheck(); await page.waitForFunction(async name => !(await window.wixal.state()).enabledTools.includes(name), name);
       await toggle.check(); await page.waitForFunction(async name => (await window.wixal.state()).enabledTools.includes(name), name);
     }
     assert.deepEqual(errors, []);
-    console.log('COMMAND_TOOLS_UI_OK: output visible in chat; six tools can be disabled/enabled and settings persist');
+    console.log('COMMAND_TOOLS_UI_OK: output visible in chat; twelve tools can be disabled/enabled and settings persist');
   } finally { await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

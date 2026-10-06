@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
   "main": "app/main.cjs",
   "private": true,
@@ -40,7 +40,9 @@
     "test:website": "node --test test/website-assessment.test.cjs",
     "test:website-ui": "node scripts/website-ui-smoke.cjs",
     "test:accounts": "node scripts/accounts-smoke.cjs",
-    "test:memory": "node scripts/memory-smoke.cjs"
+    "test:memory": "node scripts/memory-smoke.cjs",
+    "test:browser-regression": "env -u ELECTRON_RUN_AS_NODE electron scripts/browser-tools-regression.cjs",
+    "test:jhye-live": "env -u ELECTRON_RUN_AS_NODE electron scripts/jhye-tools-live-smoke.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",

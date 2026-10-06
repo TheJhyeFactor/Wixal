@@ -13,6 +13,9 @@ const root = path.resolve(__dirname, '..');
   const server = http.createServer((_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end('<title>Wixal tool proof</title><body><script>document.body.append("WIXAL_RENDERED_PAGE_7924")</script></body>'); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}/proof`;
+  const seed = new (require('../app/store.cjs').Store)(path.join(temp, 'state'));
+  seed.data.setup = { completed: true, entryCompleted: true };
+  seed.data.ui.launchAnimation = false; seed.data.ui.launchSound = false; seed.save();
   const env = { ...process.env, WIXAL_DATA_DIR: path.join(temp, 'state'), WIXAL_TEST_PROJECT: project }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_RUNTIME_MODE;
   let app;
   try {
@@ -56,20 +59,42 @@ const root = path.resolve(__dirname, '..');
       if (process.env.WIXAL_TEST_SCAN_ONLY !== '1') {
       result = await run('Read proof.txt and tell me its exact contents.', content => content.trim() === 'cat proof.txt');
       assert.ok(result.messages.some(m => m.role === 'tool' && (m.tool_name === 'read_file' && m.content === 'WIXAL_REAL_FILE_7924' || m.tool_name === 'run_command' && JSON.parse(m.content).output === 'WIXAL_REAL_FILE_7924' && JSON.parse(m.content).exitCode === 0)));
-      assert.match(result.messages.at(-1).content, /WIXAL_REAL_FILE_7924/);
+      assert.match(result.messages.at(-1).content, /WIXAL_REAL_FILE_7924/, JSON.stringify(result.messages));
       console.log(`PASS ${model}: ordinary Chat reads a real file without @`);
       result = await run('@browser_inspect use this');
       assert.ok(result.messages.at(-1).role === 'assistant' && /url|website|address|link/i.test(result.messages.at(-1).content));
       assert.equal(result.approvals, 0);
       console.log(`PASS ${model}: missing URL produces a visible clarification`);
-      result = await run(`@browser_inspect inspect ${url} and report the rendered proof text.`, content => content.trim() === url);
-      assert.ok(result.messages.some(m => m.tool_name === 'browser_inspect' && m.content.includes('WIXAL_RENDERED_PAGE_7924')));
+      result = await run(`@browser_inspect inspect ${url} and report the rendered proof text. Use default limits and no wait_for expectation.`, content => content.trim() === url);
+      assert.ok(result.messages.some(m => m.tool_name === 'browser_inspect' && m.content.includes('WIXAL_RENDERED_PAGE_7924')), JSON.stringify(result.messages.slice(-4)));
       assert.match(result.messages.at(-1).content, /WIXAL_RENDERED_PAGE_7924/); assert.equal(result.approvals, 1);
       console.log(`PASS ${model}: reviewed browser call returns real JavaScript-rendered output`);
       result = await run('@command_start run exactly printf WIXAL_COMMAND_7924 then use command_read until it completes. Report its output and exit status.', content => content.trim() === 'printf WIXAL_COMMAND_7924');
       assert.ok(result.messages.some(m => m.tool_name === 'command_read' && JSON.parse(m.content).output === 'WIXAL_COMMAND_7924' && JSON.parse(m.content).exitCode === 0));
       assert.match(result.messages.at(-1).content, /WIXAL_COMMAND_7924/); assert.equal(result.approvals, 1);
       console.log(`PASS ${model}: @command_start retains command_read and sees real stdout/exit status`);
+      await page.evaluate(() => window.wixal['session-new']()); await page.reload();
+      await page.evaluate(() => { window.toolRunEvents = []; window.wixal.onEvent(e => { if (['error', 'done', 'run-started', 'approval'].includes(e.type)) window.toolRunEvents.push(e); }); });
+      result = await run('@browser_open Open https://jhye.dev/ with browser_open. Find the Work link in its returned fresh refs, click it using browser_action, read the actual selected work text, close the session with browser_close and name two projects supported by the returned page.', content => /^https:\/\/jhye\.dev\/(?:work\/)?$/.test(content.trim()) || /^https:\/\/jhye\.dev\/work\/\n\nclick: All work\b/.test(content));
+      const opened = result.messages.filter(m => ['browser_open','browser_action','browser_read'].includes(m.tool_name)).map(m => { try { return JSON.parse(m.content); } catch { return null; } }).filter(Boolean);
+      assert.ok(opened.some(p => p.url === 'https://jhye.dev/'));
+      const work = opened.find(p => p.url === 'https://jhye.dev/work/'); assert.ok(work && work.status === 200 && work.text.length > 100);
+      assert.ok(result.messages.some(m => m.tool_name === 'browser_close' && JSON.parse(m.content).state === 'closed'));
+      const workText = opened.filter(p => p.url === 'https://jhye.dev/work/').map(p => p.text).join('\n');
+      const projectNames = ['garak scan planner', 'Apertide', 'Sentinel Local', 'The Finest Group', 'Hunter Valley Prestige Wine Tours'];
+      assert.ok(projectNames.filter(name => workText.toLowerCase().includes(name.toLowerCase()) && result.messages.at(-1).content.toLowerCase().includes(name.toLowerCase())).length >= 2, 'The answer must name at least two actual projects from the returned page. '+JSON.stringify(result.messages.slice(-5)));
+      if (!process.env.WIXAL_APP_PATH) {
+        const activities = page.locator('.turn-activity'); await activities.last().locator('summary').first().click();
+        const action = activities.last().locator('[data-inspect-action]').nth(Math.min(1, (await activities.last().locator('[data-inspect-action]').count()) - 1)); if (await action.count()) await action.click();
+        await page.waitForTimeout(250);
+        const preview = await page.evaluate(() => window.wixal['context-preview']('')); assert.ok(preview.used <= preview.inputLimit, 'The idle context meter must reflect bounded inference evidence, not raw saved results.');
+        await page.screenshot({ path: '/tmp/wixal-jhye-tools.png', animations: 'disabled' });
+      }
+      console.log(`PASS ${model}: actual jhye.dev homepage, fresh-ref link interaction, Work evidence and browser cleanup reach a visible answer`);
+      result = await run('@web_search Search for jhye.dev. Report two exact titles and URLs from the returned results. Do not browse other sources.', content => content.includes('jhye.dev'));
+      const search = result.messages.find(m => m.tool_name === 'web_search');assert.ok(search);const evidence = JSON.parse(search.content);assert.ok(evidence.results.some(r => r.url.startsWith('https://jhye.dev/')));assert.match(result.messages.at(-1).content,/https:\/\/jhye\.dev/);
+      console.log(`PASS ${model}: live search results about jhye.dev reach the visible model answer`);
+
       }
       if (process.env.WIXAL_TEST_SCAN_ONLY === '1') {
         await page.evaluate(() => window.wixal['approval-mode']('all')); await page.reload();
@@ -85,6 +110,6 @@ const root = path.resolve(__dirname, '..');
       }
     }
     assert.deepEqual(errors, []);
-    console.log(`CHAT_TOOLS_LIVE_OK: ${models.length} real models; ${process.env.WIXAL_TEST_SCAN_ONLY === '1' ? 'real loopback scan and evidence report in Approved all' : 'file read, missing-URL clarification, rendered browser evidence and reviewed command continuation in Chat'}`);
+    console.log(`CHAT_TOOLS_LIVE_OK: ${models.length} real models; ${process.env.WIXAL_TEST_SCAN_ONLY === '1' ? 'real loopback scan and evidence report in Approved all' : 'file read, clarification, rendered fixture, command continuation, live jhye.dev navigation and search in Chat'}`);
   } finally { if (app) await app.close(); await new Promise(resolve => server.close(resolve)); await fs.rm(temp, { recursive: true, force: true }); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

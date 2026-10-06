@@ -7,13 +7,14 @@ function boundedToolResult(content, limit) {
   const keys = ['session_id','snapshot_id','url','state','status','exitCode','reason','offset','next_offset','more','total_chars','total_characters','truncated','readiness','reports','summary','contentType','query','source','earliest_offset','blocked'];
   for (const key of keys) if (value[key] !== undefined && JSON.stringify({ ...result, [key]: value[key] }).length <= limit - 30) result[key] = value[key];
   const texts = ['output','text','content'];
-  const arrayKeys = ['results','controls','links','findings','checks','cases','forms','console','scripts'];
+  const arrayKeys = ['results','controls','headings','links','findings','checks','cases','forms','console','scripts'];
   const arrayCeiling = JSON.stringify(result).length + Math.max(0, (limit - JSON.stringify(result).length) * .3);
   // Reserve a bounded part for whole evidence items so browser refs and search sources survive.
   for (const key of arrayKeys) if (Array.isArray(value[key]) && !(key === 'links' && value.controls)) {
+    const keyCeiling = key === 'controls' && value.headings?.length ? Math.min(arrayCeiling, JSON.stringify(result).length + (limit - JSON.stringify(result).length) * .2) : arrayCeiling;
     result[key] = [];
     for (const item of value[key]) {
-      if (JSON.stringify({ ...result, [key]: [...result[key], item] }).length > arrayCeiling) break;
+      if (JSON.stringify({ ...result, [key]: [...result[key], item] }).length > keyCeiling) break;
       result[key].push(item);
     }
     if (result[key].length < value[key].length) result[key + '_omitted'] = value[key].length - result[key].length;

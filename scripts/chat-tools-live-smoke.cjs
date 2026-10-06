@@ -80,7 +80,7 @@ const root = path.resolve(__dirname, '..');
       assert.ok(opened.some(p => p.url === 'https://jhye.dev/'));
       const work = opened.find(p => p.url === 'https://jhye.dev/work/'); assert.ok(work && work.status === 200 && work.text.length > 100);
       assert.ok(result.messages.some(m => m.tool_name === 'browser_close' && JSON.parse(m.content).state === 'closed'));
-      const workText = opened.filter(p => p.url === 'https://jhye.dev/work/').map(p => p.text).join('\n');
+      const workText = opened.filter(p => p.url === 'https://jhye.dev/work/').map(p => [p.text, ...(p.headings || []).map(h => h.text)].join('\n')).join('\n');
       const projectNames = ['garak scan planner', 'Apertide', 'Sentinel Local', 'The Finest Group', 'Hunter Valley Prestige Wine Tours'];
       assert.ok(projectNames.filter(name => workText.toLowerCase().includes(name.toLowerCase()) && result.messages.at(-1).content.toLowerCase().includes(name.toLowerCase())).length >= 2, 'The answer must name at least two actual projects from the returned page. '+JSON.stringify(result.messages.slice(-5)));
       if (!process.env.WIXAL_APP_PATH) {

@@ -15,7 +15,7 @@ app.whenReady().then(async()=>{
   console.log('PASS live jhye.dev rendered homepage:',JSON.stringify({title:page.title,status:page.status,characters:page.total_characters,links:page.links.map(l=>({text:l.text,url:l.url})).slice(0,12)}));
   let destination=page.controls.find(c=>c.kind==='a' && /^https:\/\/jhye\.dev\/(work|about|contact)\/?/.test(c.url) && !new URL(c.url).hash);
   assert.ok(destination,'The real site must provide a same-origin content link.');
-  page=await call('browser_action',{session_id:id,ref:destination.ref,action:'click',wait_ms:2000});assert.equal(page.status,200);assert.equal(page.url,destination.url);assert.ok(page.text.length>100);
+  page=await call('browser_action',{session_id:id,ref:destination.ref,action:'click',wait_ms:2000});assert.equal(page.status,200);assert.equal(page.url,destination.url);assert.ok(page.text.length>100);assert.ok(page.headings.some(h=>h.text==='Apertide'));
   console.log('PASS live reviewed link navigation:',JSON.stringify({title:page.title,url:page.url,characters:page.total_characters}));
   page=await call('browser_read',{session_id:id,wait_ms:0});assert.ok(page.controls.every(c=>c.ref.startsWith(page.snapshot_id+':')));await call('browser_close',{session_id:id});
   const http=await call('http_request',{url:'https://jhye.dev/'});assert.equal(http.status,200);assert.match(http.content,/Jhye|software|developer/i);assert.equal(http.url,'https://jhye.dev/');console.log('PASS live HTTP homepage:',http.status,http.total_chars);

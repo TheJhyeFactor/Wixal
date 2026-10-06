@@ -6,7 +6,7 @@ Wixal runs enabled tools through the app controller, returns their actual eviden
 
 Try: “Open https://jhye.dev/, follow Work, and tell me which projects are on that page.”
 
-1. `browser_open` reviews the destination and opens an isolated Chromium session. It returns a session ID, rendered text, links and control refs.
+1. `browser_open` reviews the destination and opens an isolated Chromium session. It returns a session ID, rendered text, visible heading outline, links and control refs.
 2. `browser_read` refreshes those refs and can wait for expected text or read another text chunk. Use `filter` to find controls by label.
 3. `browser_action` reviews clicking a button/link, filling ordinary text or selecting a listed option. A link opens its destination through the navigation review. Every snapshot replaces old refs. Controls that change during review must be read again.
 4. `browser_close` releases the session. If you explicitly ask to close the browser and the model omits its last close call, Wixal executes and records that cleanup before the final answer. Stop closes this conversation's browser sessions; quitting closes all of them. Sessions are ephemeral and do not survive restart.

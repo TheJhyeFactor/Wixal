@@ -15,7 +15,6 @@ async function downloads() {
   } catch { downloadElements.forEach(el => { el.textContent = 'Unavailable'; }); }
 }
 async function users() {
-  const note = document.querySelector('[data-users-update]');
   try {
     const response = await fetch('https://raw.githubusercontent.com/TheJhyeFactor/Wixal/wixal-metrics/website-users.json', { signal: AbortSignal.timeout(15000), cache: 'no-cache' });
     if (!response.ok) throw new Error('Not connected');
@@ -23,10 +22,8 @@ async function users() {
     if (data.status !== 'available' || data.period_days !== 30 || !Number.isSafeInteger(data.active_users) || data.active_users < 0 || !Number.isFinite(Date.parse(data.updated_at))) throw new Error('Invalid data');
     if (Date.now() - Date.parse(data.updated_at) > 48 * 60 * 60 * 1000 || Date.parse(data.updated_at) - Date.now() > 5 * 60 * 1000) throw new Error('Outdated snapshot');
     usersElements.forEach(el => { el.textContent = format(data.active_users); });
-    if (note) note.textContent = 'Visitor count updated ' + new Date(data.updated_at).toLocaleString() + '. Google Analytics processing can delay recent visits.';
   } catch {
     usersElements.forEach(el => { el.textContent = 'Not available'; });
-    if (note) note.textContent = 'Visitor total is awaiting an up-to-date Google Analytics report.';
   }
 }
 await Promise.allSettled([document.querySelector('[data-stats-rows]') ? Promise.resolve() : downloads(), users()]);

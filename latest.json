@@ -1,0 +1,110 @@
+{
+  "collected_at": "2026-10-06T04:20:22.115Z",
+  "repository": "TheJhyeFactor/Wixal",
+  "total_release_file_downloads": 8,
+  "assets": [
+    {
+      "release": "v0.7.3",
+      "prerelease": false,
+      "asset_id": 614105730,
+      "file": "Wixal-0.7.3-macOS-arm64.dmg",
+      "downloads": 1
+    },
+    {
+      "release": "v0.7.3",
+      "prerelease": false,
+      "asset_id": 614105727,
+      "file": "Wixal-0.7.3-macOS-arm64.zip",
+      "downloads": 1
+    },
+    {
+      "release": "v0.7.2",
+      "prerelease": false,
+      "asset_id": 614062964,
+      "file": "Wixal-0.7.2-macOS-arm64.dmg",
+      "downloads": 0
+    },
+    {
+      "release": "v0.7.2",
+      "prerelease": false,
+      "asset_id": 614062963,
+      "file": "Wixal-0.7.2-macOS-arm64.zip",
+      "downloads": 0
+    },
+    {
+      "release": "v0.7.1",
+      "prerelease": false,
+      "asset_id": 613871919,
+      "file": "Wixal-0.7.1-macOS-arm64.dmg",
+      "downloads": 1
+    },
+    {
+      "release": "v0.7.1",
+      "prerelease": false,
+      "asset_id": 613871921,
+      "file": "Wixal-0.7.1-macOS-arm64.zip",
+      "downloads": 1
+    },
+    {
+      "release": "v0.7.0",
+      "prerelease": false,
+      "asset_id": 613148528,
+      "file": "Wixal-0.7.0-macOS-arm64.dmg",
+      "downloads": 1
+    },
+    {
+      "release": "v0.7.0",
+      "prerelease": false,
+      "asset_id": 613148530,
+      "file": "Wixal-0.7.0-macOS-arm64.zip",
+      "downloads": 1
+    },
+    {
+      "release": "v0.6.0",
+      "prerelease": false,
+      "asset_id": 612992446,
+      "file": "Wixal-0.6.0-macOS-arm64.dmg",
+      "downloads": 0
+    },
+    {
+      "release": "v0.6.0",
+      "prerelease": false,
+      "asset_id": 612992440,
+      "file": "Wixal-0.6.0-macOS-arm64.zip",
+      "downloads": 0
+    },
+    {
+      "release": "v0.5.1",
+      "prerelease": false,
+      "asset_id": 612357368,
+      "file": "Wixal-0.5.1-macOS-arm64.dmg",
+      "downloads": 0
+    },
+    {
+      "release": "v0.5.1",
+      "prerelease": false,
+      "asset_id": 612357372,
+      "file": "Wixal-0.5.1-macOS-arm64.zip",
+      "downloads": 0
+    },
+    {
+      "release": "v0.2.1",
+      "prerelease": false,
+      "asset_id": 612242924,
+      "file": "Wixal-0.2.1-macOS-arm64.dmg",
+      "downloads": 1
+    },
+    {
+      "release": "v0.2.1",
+      "prerelease": false,
+      "asset_id": 612242920,
+      "file": "Wixal-0.2.1-macOS-arm64.zip",
+      "downloads": 1
+    }
+  ],
+  "traffic": {
+    "views": null,
+    "clones": null,
+    "status": "unavailable: configure METRICS_TRAFFIC_TOKEN with repository Administration read access"
+  }
+}

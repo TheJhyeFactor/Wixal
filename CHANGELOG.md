@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.2 — 6 October 2026
+
+- Redesigned the main workspace with project/model readiness, practical starting prompts, a focused composer and direct Files, Tools, Memory and Terminal controls.
+- Added explicit Chat/Agent selection with descriptions and keyboard navigation.
+- Saved text drafts locally across chat changes and app restarts; kept temporary attachments scoped to the current conversation.
+- Added individual code-block copying and jump-to-latest navigation.
+- Updated only the pending text node during streaming, preserving saved message nodes and earlier reading position.
+- Made selecting a chat return directly from the Models page and derived the title-bar version from the running app.
+- Refreshed packaged-app screenshots, tours and concise product information while staying on the 0.7.x release line.
+
 ## 0.7.1 — 6 October 2026
 
 - Reorganized the model chooser around Installed and Downloads tabs, with provider, current model, context and local-engine settings in a separate setup panel.

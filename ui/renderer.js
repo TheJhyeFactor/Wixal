@@ -21,6 +21,8 @@ const tools = [
 ];
 const availableTools = () => [...tools, ...(state?.externalConnections || []).flatMap(server => server.tools.map(tool => ({ ...tool, description: tool.description, review: true })))];
 let menuSessionId, renameSessionId, deleteSessionId, welcomeSessionId;
+const draftCache = new Map();
+let draftSessionId, draftTimer, restoringDraft = false;
 let modelsPageOpen = false, libraryInfo = null, libraryRequest = 0;
 let downloadStateKey = '';
 let modelView = 'installed';
@@ -45,23 +47,25 @@ async function refresh() { state = await api.state(); render(); }
 function render() {
   providerLabels.ollama = 'Wixal Local';
   const p = project(), s = session(), model = selectedModel();
+  if (draftSessionId !== state.activeSession) restoreDraft();
   applyAppearance(); renderSettings();
   applySidebarLayout();
+  document.querySelector('.title-version').textContent = state.appVersion;
   $('title-project').textContent = p?.name || 'workspace';
   $('project-label').textContent = p?.name || 'Personal workspace';
   $('conversation-label').textContent = s?.title || 'New conversation';
   $('conversation-label').disabled = !s || busy;
-  $('reveal-project').disabled = !p;
+  $('reveal-project').disabled = !p; $('project-label').title = p ? `Change project · ${p.root}` : 'Choose a project folder';
   renderSessions();
   $('mode-label').textContent = state.mode === 'agent' ? 'Agent' : 'Chat';
-  $('mode-button').title = state.mode === 'agent' ? 'Agent uses the enabled project tools. Click to switch to chat.' : 'Chat has no project tools. Click to switch to agent.';
+  $('mode-button').title = state.mode === 'agent' ? 'Agent · uses your enabled tools. Choose conversation mode.' : 'Chat · talk with your model. Choose conversation mode.';
   $('model-label').textContent = connected ? selectedModel()?.displayName || shortModel(state.model) || 'Choose a model' : `${providerLabels[state.provider]} · connect`;
   $('model-button').title = state.model || 'Choose a model';
   $('mode-button').disabled = busy; $('model-button').disabled = busy; $('attach-image').disabled = busy;
   $('model-refresh').disabled = busy; $('refresh-models').disabled = busy;
   $('welcome-open').textContent = p ? 'Browse project files ↗' : 'Open a project folder ↗';
   $('tools-count').textContent = state.enabledTools.length;
-  $('bottom-model').textContent = connected ? `${state.mode === 'agent' && p ? 'Agent' : 'Chat'} · ${model?.name || 'Choose a model'}` : `${providerLabels[state.provider]} · open the model picker to connect`;
+  $('bottom-model').textContent = `${providerLabels[state.provider]} · ${connected ? state.provider === 'ollama' ? 'On this Mac' : 'Connected' : 'Not connected'}`;
   const recent = s?.messages.findLast(message => message.metrics?.tokens);
   $('response-stats').textContent = recent ? `${recent.metrics.tokens} tokens · ${recent.metrics.tokensPerSecond} tok/s` : 'Usage & performance ↗';
   const cloud = state.provider !== 'ollama', allowed = p ? state.cloudProjects.includes(p.id) : state.cloudPersonal;
@@ -74,7 +78,27 @@ function render() {
   $('prompt').disabled = busy || archived; $('send').disabled = archived; $('attach-image').disabled = busy || archived;
   $('activity-label').textContent = archived ? 'Restore to continue chatting' : busy ? state.provider === 'ollama' ? 'Working locally…' : 'Working…' : 'Ready';
   renderArchives();
-  renderMessages(); renderMemories(); renderToolkit(); renderPerformance(); renderModelList(); renderAttachments(); renderTasks();
+  renderWorkspaceContext(); renderMessages(); renderMemories(); renderToolkit(); renderPerformance(); renderModelList(); renderAttachments(); renderTasks();
+}
+function renderWorkspaceContext() {
+  const p = project(), model = selectedModel(), ready = connected && !!model;
+  $('welcome-scope').textContent = p ? 'Project workspace' : 'Personal workspace';
+  $('welcome-title').textContent = p ? `Work on ${p.name}.` : 'What are you working on?';
+  $('welcome-description').textContent = p ? 'Explore the files, plan a change, or work through a problem.' : 'Open a project to work with files, or start a personal conversation.';
+  $('welcome-context-label').textContent = p?.name || 'Choose a folder';
+  $('welcome-context').title = p ? `Browse files in ${p.root}` : 'Choose a project folder';
+  $('welcome-provider').textContent = providerLabels[state.provider];
+  $('welcome-model-label').textContent = ready ? model.displayName || shortModel(model.name) : connected ? 'Choose a model' : 'Connect a model';
+  for (const id of ['welcome-model-dot', 'bottom-connection-dot']) $(id).classList.toggle('offline', !ready);
+  $('model-readiness-notice').classList.toggle('hidden', ready || busy || !!session()?.archivedAt);
+  $('model-readiness-text').textContent = connected ? 'Choose a model before sending your first message.' : `${providerLabels[state.provider]} needs a connection before you can send.`;
+  $('model-readiness-action').textContent = state.provider === 'ollama' && connected && !models.length ? 'Browse downloads →' : 'Choose model →';
+  $('prompt').placeholder = p ? `Ask about ${p.name} or describe a task…` : 'Ask a question or describe a task…';
+  for (const id of ['project-label', 'welcome-context', 'welcome-model', 'model-readiness-action', 'composer-files', 'composer-tools', 'header-files']) $(id).disabled = busy || !!session()?.archivedAt;
+  for (const name of ['tools', 'memory', 'terminal']) {
+    const open = name === 'terminal' ? terminalOpen : !$(`${name === 'tools' ? 'toolkit' : name}-drawer`).classList.contains('hidden');
+    $(`header-${name}`).setAttribute('aria-expanded', String(open));
+  }
 }
 const expandedProjects = new Set();
 let sidebarProjectId;
@@ -122,7 +146,7 @@ async function ensureProject(id) {
   return state.activeProject === id;
 }
 async function selectConversation(id) {
-  try { state = await invoke('session-select', id); clearDraft(); render(); } catch {}
+  try { await saveDraft(); closeModelPage(); state = await invoke('session-select', id); clearDraft(); render(); } catch {}
 }
 function showRename(id) {
   renameSessionId = id;
@@ -136,7 +160,7 @@ function showDelete(id) {
 }
 async function changeConversation(action, id) {
   try {
-    const active = state.activeSession;
+    const active = state.activeSession; await saveDraft();
     state = await invoke(`session-${action}`, id);
     if (state.activeSession !== active) clearDraft();
     render();
@@ -167,7 +191,7 @@ function renderStartLayout() {
   }
 }
 function sizePrompt() {
-  const prompt = $('prompt'); prompt.style.height = 'auto'; prompt.style.height = `${Math.min(180, Math.max(56, prompt.scrollHeight))}px`;
+  rememberDraft(); const prompt = $('prompt'); prompt.style.height = 'auto'; prompt.style.height = `${Math.min(180, Math.max(56, prompt.scrollHeight))}px`;
 }
 function markdown(text) { return DOMPurify.sanitize(marked.parse(text || '', { breaks: true }), { FORBID_TAGS: ['img', 'iframe', 'style', 'input', 'button', 'form'], FORBID_ATTR: ['style'] }); }
 function resultStatus(message) {
@@ -194,6 +218,12 @@ function renderMessages() {
     const metrics = message.metrics?.tokens ? `<div class="message-metrics">${message.metrics.tokens} tokens · ${message.metrics.tokensPerSecond} tok/s · ${Math.round(message.metrics.seconds)}s</div>` : '';
     return `<article class="message ${isUser ? 'user' : 'assistant'}"><div class="message-header">${isUser ? '<span>▸</span> You' : '<img src="../assets/mark.svg" alt=""> Wixal'}<span class="muted">${new Date(message.created || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><button class="copy-message" data-copy="${index}">Copy</button></div><div class="message-body">${isUser ? escapeHTML(message.content) : markdown(message.content)}</div>${images}${metrics}</article>`;
   }).join('');
+  $('messages').querySelectorAll('.message-body pre:has(code)').forEach(pre => {
+    const toolbar = document.createElement('div'); toolbar.className = 'code-toolbar';
+    const language = document.createElement('span'); language.textContent = pre.querySelector('code').className.replace(/^language-/, '') || 'Code';
+    const button = document.createElement('button'); button.type = 'button'; button.dataset.copyCode = ''; button.textContent = 'Copy code';
+    toolbar.append(language, button); pre.prepend(toolbar);
+  });
   if (streamText) {
     const article = document.createElement('article'); article.className = 'message assistant';
     article.innerHTML = '<div class="message-header"><img src="../assets/mark.svg" alt=""> Wixal <span class="muted">Writing</span></div><div class="message-body pending-content"></div>';
@@ -202,9 +232,34 @@ function renderMessages() {
   renderStartLayout();
   if (!messages.length && !streamText) container.scrollTop = 0;
   else if (nearBottom) container.scrollTop = container.scrollHeight;
+  updateLatestButton();
 }
+function updateLatestButton() {
+  const container = $('chat-scroll'), rect = container.getBoundingClientRect(), main = document.querySelector('main').getBoundingClientRect();
+  $('jump-latest').classList.toggle('hidden', modelsPageOpen || !session()?.messages.length || container.scrollHeight - container.scrollTop - container.clientHeight < 180);
+  $('jump-latest').style.bottom = `${Math.max(12, main.bottom - rect.bottom + 12)}px`;
+}
+function renderStreamingMessage() {
+  if (!streamText || !busy) return;
+  const container = $('chat-scroll'), nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+  let pending = $('messages').querySelector('.pending-content');
+  if (!pending) {
+    $('messages').classList.remove('hidden');
+    const article = document.createElement('article'); article.className = 'message assistant';
+    article.innerHTML = '<div class="message-header"><img src="../assets/mark.svg" alt=""> Wixal <span class="muted">Writing</span></div><div class="message-body pending-content"></div>';
+    $('messages').append(article); pending = article.querySelector('.pending-content'); renderStartLayout();
+  }
+  pending.textContent = streamText;
+  if (nearBottom) container.scrollTop = container.scrollHeight;
+  updateLatestButton();
+}
+$('chat-scroll').addEventListener('scroll', updateLatestButton, { passive: true });
+$('jump-latest').onclick = () => { $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight; updateLatestButton(); };
+
 $('messages').addEventListener('click', async event => {
   if (event.target.closest('a')) { event.preventDefault(); const link = event.target.closest('a'); try { await invoke('copy-text', link.href); toast('Link copied.'); } catch {} }
+  const code = event.target.closest('[data-copy-code]');
+  if (code) { try { await invoke('copy-text', code.closest('pre').querySelector('code').textContent); code.textContent = 'Copied'; setTimeout(() => { if (code.isConnected) code.textContent = 'Copy code'; }, 1800); } catch {} }
   const copy = event.target.closest('[data-copy]');
   if (copy) { try { await invoke('copy-text', session().messages[Number(copy.dataset.copy)].content); toast('Copied.'); } catch {} }
   const image = event.target.closest('[data-image]');
@@ -507,7 +562,7 @@ function renderTasks() {
   $('task-list').innerHTML = state.tasks.length ? state.tasks.toReversed().map(task => `<article class="task-card"><div class="section-top"><strong>${escapeHTML(task.title)}</strong><span class="task-state">${escapeHTML(task.status.replace('_', ' '))}</span></div><p class="muted">${escapeHTML(state.projects.find(p => p.id === task.projectId)?.name || 'Project')} · from ${escapeHTML(task.source)}</p><details><summary>Read task brief</summary><pre>${escapeHTML(task.prompt)}</pre></details>${task.error ? `<p class="task-error">${escapeHTML(task.error)}</p>` : ''}${task.result ? `<details><summary>Completed response</summary><div>${markdown(task.result)}</div></details>` : ''}<div class="connection-actions">${['queued', 'failed', 'interrupted', 'cancelled'].includes(task.status) ? `<button data-task-start="${task.id}" class="primary" ${busy ? 'disabled' : ''}>${task.status === 'queued' ? 'Start in Wixal' : 'Retry in new conversation'}</button>` : ''}${task.status === 'queued' ? `<button data-task-cancel="${task.id}" class="secondary" ${busy ? 'disabled' : ''}>Dismiss</button>` : ''}${task.sessionId ? `<button data-task-open="${task.id}" class="text-button" ${busy ? 'disabled' : ''}>Open conversation ↗</button>` : ''}</div></article>`).join('') : '<div class="empty-project">No tasks yet. Connect the Wixal companion and ask ChatGPT to send a task.</div>';
   $('task-list').querySelectorAll('[data-task-start]').forEach(button => button.onclick = async () => {
     if (!connected || !selectedModel()) { $('tasks-dialog').close(); toast('Choose a connected model before starting a task.'); showModels(); return; }
-    try { state = await invoke('task-start', button.dataset.taskStart); clearDraft(); resetTerminal(); render(); $('tasks-dialog').close(); } catch {}
+    try { await saveDraft(); state = await invoke('task-start', button.dataset.taskStart); clearDraft(); resetTerminal(); render(); $('tasks-dialog').close(); } catch {}
   });
   $('task-list').querySelectorAll('[data-task-cancel]').forEach(button => button.onclick = async () => { try { state = await invoke('task-cancel', button.dataset.taskCancel); render(); } catch {} });
   $('task-list').querySelectorAll('[data-task-open]').forEach(button => button.onclick = async () => {
@@ -544,7 +599,36 @@ document.querySelectorAll('[data-link]').forEach(button => button.onclick = () =
 $('provider-select').onchange = async event => {
   try { state = await invoke('settings', { provider: event.target.value }); models = []; connected = false; render(); await loadModels(); await loadLibraryInfo(); } catch { renderModelList(); }
 };
-function clearDraft() { streamText = ''; attachments = []; $('prompt').value = ''; sizePrompt(); renderMentions(); $('context-note').textContent = ''; renderAttachments(); }
+function rememberDraft() {
+  if (restoringDraft || !draftSessionId || session()?.archivedAt) return;
+  draftCache.set(draftSessionId, { text: $('prompt').value });
+  clearTimeout(draftTimer); $('draft-status').textContent = $('prompt').value ? 'Saving draft…' : '';
+  const id = draftSessionId, text = $('prompt').value;
+  draftTimer = setTimeout(() => persistDraft(id, text), 500);
+}
+async function persistDraft(id, text) {
+  if (!state.sessions.some(item => item.id === id && !item.archivedAt)) return;
+  try {
+    await api['session-draft'](id, text);
+    if (draftSessionId === id && $('prompt').value === text) $('draft-status').textContent = text ? 'Draft saved on this Mac' : '';
+  } catch { if (draftSessionId === id) $('draft-status').textContent = 'Draft could not be saved'; }
+}
+async function saveDraft() {
+  if (!draftSessionId || session()?.archivedAt) return;
+  clearTimeout(draftTimer); draftCache.set(draftSessionId, { text: $('prompt').value });
+  await persistDraft(draftSessionId, $('prompt').value);
+}
+function restoreDraft() {
+  restoringDraft = true; draftSessionId = state.activeSession;
+  const cached = draftCache.get(draftSessionId), current = session();
+  $('prompt').value = current?.archivedAt ? '' : cached?.text ?? current?.draft ?? '';
+  attachments = [];
+  $('draft-status').textContent = $('prompt').value ? 'Draft saved on this Mac' : '';
+  sizePrompt(); renderMentions(); renderAttachments(); restoringDraft = false;
+  for (const id of draftCache.keys()) if (!state.sessions.some(item => item.id === id)) draftCache.delete(id);
+}
+function clearDraft() { streamText = ''; restoreDraft(); $('context-note').textContent = ''; }
+
 let folderBrowser, folderBrowseRequest = 0, folderLoading = false;
 function folderError(error) {
   const message = String(error.message).replace(/^Error invoking remote method '[^']+': Error: /, '');
@@ -595,17 +679,17 @@ $('folder-new-form').onsubmit = async event => {
 $('folder-open').onclick = async () => {
   if (folderLoading || !folderBrowser) return;
   $('folder-open').disabled = true;
-  try { state = await api['project-open'](folderBrowser.path); clearDraft(); resetTerminal(); render(); $('project-dialog').close(); $('prompt').focus(); }
+  try { await saveDraft(); state = await api['project-open'](folderBrowser.path); clearDraft(); resetTerminal(); render(); $('project-dialog').close(); $('prompt').focus(); }
   catch (error) { folderError(error); }
   finally { $('folder-open').disabled = false; }
 };
-async function switchProject(id) { closeModelPage(); try { state = await invoke('project-select', id); clearDraft(); resetTerminal(); render(); } catch {} }
-async function newSession() { closeModelPage(); try { state = await invoke('session-new'); clearDraft(); $('session-search').value = ''; render(); $('prompt').focus(); } catch {} }
+async function switchProject(id) { closeModelPage(); try { await saveDraft(); state = await invoke('project-select', id); clearDraft(); resetTerminal(); render(); } catch {} }
+async function newSession() { closeModelPage(); try { await saveDraft(); state = await invoke('session-new'); clearDraft(); $('session-search').value = ''; render(); $('prompt').focus(); } catch {} }
 function resetTerminal() { terminalOpen = false; terminal?.reset(); $('terminal-panel').classList.add('hidden'); }
 async function toggleTerminal() {
-  if (terminalOpen) { $('terminal-panel').classList.add('hidden'); terminalOpen = false; renderStartLayout(); return; }
+  if (terminalOpen) { $('terminal-panel').classList.add('hidden'); terminalOpen = false; renderStartLayout(); renderWorkspaceContext(); return; }
   if (!project()) { toast('Open a project folder to start its terminal.'); return; }
-  $('terminal-panel').classList.remove('hidden'); terminalOpen = true; renderStartLayout();
+  $('terminal-panel').classList.remove('hidden'); terminalOpen = true; renderStartLayout(); renderWorkspaceContext();
   if (!terminal) {
     terminal = new Terminal({ fontFamily: 'Menlo, monospace', fontSize: 11, cursorBlink: true, scrollback: 3000,
       theme: { background: '#111215', foreground: '#ddd4df', cursor: '#e9a5bd', selectionBackground: '#513c51', black: '#1b1920', red: '#df96a5', green: '#a4c5ac', yellow: '#dbc394', blue: '#a4b0df', magenta: '#ce9cde', cyan: '#93c9cb', white: '#e7dceb', brightBlack: '#877d8b' },
@@ -621,20 +705,21 @@ function toggleDrawer(name) {
   const drawer = $(`${name}-drawer`), open = drawer.classList.contains('hidden');
   ['memory', 'toolkit'].forEach(other => { $(`${other}-drawer`).classList.add('hidden'); $(`${other}-button`).setAttribute('aria-expanded', 'false'); });
   if (open) { drawer.classList.remove('hidden'); $(`${name}-button`).setAttribute('aria-expanded', 'true'); if (name === 'memory') $('memory-input').focus(); else $('close-toolkit').focus(); }
-  else $(`${name}-button`).focus();
+  else $(`header-${name === 'toolkit' ? 'tools' : name}`).focus();
+  renderWorkspaceContext();
 }
 function showModels() { if (modelsPageOpen) closeModelPage(); setModelView('installed'); if (!$('models-dialog').open) $('models-dialog').showModal(); $('model-search').focus(); }
 function showModelPage(view = 'installed') {
   $('models-dialog').close();
   document.querySelectorAll('.drawer:not(.hidden)').forEach(drawer => drawer.classList.add('hidden'));
   $('models-page-manager').append(document.querySelector('#models-dialog .model-manager'));
-  modelsPageOpen = true; $('models-page').classList.remove('hidden'); $('models-page-button').setAttribute('aria-current', 'page');
+  modelsPageOpen = true; updateLatestButton(); $('models-page').classList.remove('hidden'); $('models-page-button').setAttribute('aria-current', 'page');
   setModelView(view); $('model-search').focus(); loadLibraryInfo();
 }
 function closeModelPage() {
   if (!modelsPageOpen) return;
   $('models-dialog').append(document.querySelector('#models-page .model-manager'));
-  modelsPageOpen = false; $('models-page').classList.add('hidden'); $('models-page-button').removeAttribute('aria-current'); $('model-library-metrics').classList.add('hidden'); $('prompt').focus();
+  modelsPageOpen = false; $('models-page').classList.add('hidden'); $('models-page-button').removeAttribute('aria-current'); $('model-library-metrics').classList.add('hidden'); renderWorkspaceContext(); updateLatestButton(); $('prompt').focus();
 }
 $('models-page-button').onclick = () => { if (!modelsPageOpen) showModelPage(); };
 $('models-page-back').onclick = closeModelPage;
@@ -747,6 +832,17 @@ $('sidebar-toggle').onclick = () => toggleSidebar(); $('show-sidebar').onclick =
 $('workspace-menu-toggle').onclick = toggleWorkspaceMenu;
 $('workspace-menu').addEventListener('toggle', event => $('workspace-menu-toggle').setAttribute('aria-expanded', String(event.newState === 'open')));
 $('workspace-menu').addEventListener('click', event => { if (event.target.closest('button')) $('workspace-menu').hidePopover(); });
+$('project-label').onclick = openProject;
+$('welcome-context').onclick = () => project() ? showFiles() : openProject();
+$('welcome-model').onclick = showModels;
+$('bottom-connection').onclick = showModels;
+$('model-readiness-action').onclick = () => state.provider === 'ollama' && connected && !models.length ? showModelPage('downloads') : showModels();
+$('header-files').onclick = () => project() ? showFiles() : openProject();
+$('composer-files').onclick = $('header-files').onclick;
+$('header-tools').onclick = () => toggleDrawer('toolkit');
+$('header-memory').onclick = () => toggleDrawer('memory');
+$('header-terminal').onclick = toggleTerminal;
+$('composer-tools').onclick = () => { $('prompt').value += `${$('prompt').value && !/\s$/.test($('prompt').value) ? ' ' : ''}@`; sizePrompt(); mentionIndex = 0; renderMentions(); $('prompt').focus(); };
 $('new-chat').onclick = newSession; $('open-project').onclick = openProject; $('refresh-models').onclick = () => loadModels(true); $('model-refresh').onclick = async () => { await loadModels(true); await loadLibraryInfo(); };
 $('terminal-button').onclick = toggleTerminal; $('close-terminal').onclick = toggleTerminal;
 $('memory-button').onclick = actions.memory; $('close-memory').onclick = actions.memory;
@@ -819,19 +915,40 @@ $('session-menu').onkeydown = event => {
 document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => $(button.dataset.close).close());
 $('palette').querySelectorAll('button').forEach(button => button.onclick = () => { $('palette').close(); actions[button.dataset.action](); });
 $('memory-form').onsubmit = async event => { event.preventDefault(); try { state = await invoke('memory-add', $('memory-input').value); $('memory-input').value = ''; render(); } catch {} };
-$('mode-button').onclick = async () => {
-  if (state.mode === 'chat' && !selectedModel()?.capabilities?.includes('tools')) { toast('Choose a model marked Tools for Agent mode.'); showModels(); return; }
-  try { state = await invoke('settings', { mode: state.mode === 'agent' ? 'chat' : 'agent' }); render(); } catch {}
+function positionModeMenu() {
+  const menu = $('mode-menu'); if (!menu.matches(':popover-open')) return;
+  const rect = $('mode-button').getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, rect.top - menu.offsetHeight - 10)}px`;
+}
+$('mode-button').onclick = () => {
+  const menu = $('mode-menu');
+  menu.querySelectorAll('[data-mode-choice]').forEach(button => button.setAttribute('aria-checked', String(button.dataset.modeChoice === state.mode)));
+  menu.togglePopover(); positionModeMenu();
+  if (menu.matches(':popover-open')) menu.querySelector(`[data-mode-choice="${state.mode}"]`).focus();
 };
+$('mode-menu').addEventListener('toggle', event => $('mode-button').setAttribute('aria-expanded', String(event.newState === 'open')));
+$('mode-menu').querySelectorAll('[data-mode-choice]').forEach(button => button.onclick = async () => {
+  const mode = button.dataset.modeChoice; $('mode-menu').hidePopover();
+  if (mode === 'agent' && !selectedModel()?.capabilities?.includes('tools')) { toast('Choose a model marked Tools for Agent mode.'); showModels(); return; }
+  try { state = await invoke('settings', { mode }); render(); $('mode-button').focus(); } catch {}
+});
+$('mode-menu').addEventListener('keydown', event => {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault(); const choices = [...$('mode-menu').querySelectorAll('button')], index = choices.indexOf(document.activeElement);
+  choices[event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : choices.length - 1)) % choices.length].focus();
+});
+window.addEventListener('resize', () => { positionModeMenu(); updateLatestButton(); });
 $('composer').onsubmit = async event => {
   event.preventDefault(); const prompt = $('prompt').value.trim(); if (!prompt || busy || session()?.archivedAt) return;
   if (!connected || !selectedModel()) { toast(`Connect ${providerLabels[state.provider]} and choose a model first.`); showModels(); return; }
   if (state.mode === 'agent' && project() && !selectedModel().capabilities?.includes('tools')) { toast('This model needs Chat mode, or choose a model marked Tools.'); showModels(); return; }
   if (attachments.length && !selectedModel().capabilities?.includes('vision')) { toast('The attached images need a model marked Images.'); showModels(); return; }
   streamText = ''; setBusy(true);
-  try { await invoke('chat', prompt, attachments.map(image => image.id)); $('prompt').value = ''; renderMentions(); attachments = []; sizePrompt(); renderAttachments(); $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight; }
+  try { await invoke('chat', prompt, attachments.map(image => image.id)); $('prompt').value = ''; renderMentions(); attachments = []; sizePrompt(); await saveDraft(); renderAttachments(); $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight; }
   catch { setBusy(false); }
 };
+$('prompt').addEventListener('blur', saveDraft);
 $('prompt').oninput = () => { sizePrompt(); mentionIndex = 0; renderMentions(); };
 $('prompt').addEventListener('keydown', event => { if (!mentionCandidates.length) return; if (['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); mentionIndex = (mentionIndex + (event.key === 'ArrowDown' ? 1 : mentionCandidates.length - 1)) % mentionCandidates.length; renderMentions(); } else if (['Enter', 'Tab'].includes(event.key)) { event.preventDefault(); event.stopImmediatePropagation(); insertMention(mentionCandidates[mentionIndex].id); } else if (event.key === 'Escape') { $('tool-mentions').classList.add('hidden'); mentionCandidates = []; } }, true);
 $('prompt').onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } };
@@ -869,7 +986,7 @@ async function respondApproval(allowed) { const id = approvalId; approvalId = nu
 $('approve').onclick = () => respondApproval(true); $('decline').onclick = () => respondApproval(false);
 $('approval-dialog').addEventListener('cancel', event => { event.preventDefault(); respondApproval(false); });
 api.onEvent(async event => {
-  if (event.type === 'runtime' && state) { state.localRuntime = event.value; renderRuntime(); renderDownload(); if (event.value.status === 'error' && state.provider === 'ollama') { connected = false; $('connection-label').textContent = 'Wixal Local offline'; $('connection-dot').classList.add('offline'); } }
+  if (event.type === 'runtime' && state) { state.localRuntime = event.value; renderRuntime(); renderDownload(); if (event.value.status === 'error' && state.provider === 'ollama') { connected = false; $('connection-label').textContent = 'Wixal Local offline'; $('connection-dot').classList.add('offline'); renderWorkspaceContext(); } }
   if (event.type === 'run-started') { streamText = ''; setBusy(true); }
   if (event.type === 'benchmark') { state.benchmarkProgress = event.value; renderBenchmarkProgress(); }
   if (event.type === 'benchmark-done') { toast(`Benchmark saved for ${event.name}.`); await refresh(); }
@@ -878,7 +995,7 @@ api.onEvent(async event => {
   if (event.type === 'tasks') await refresh();
   if (event.type === 'connections') { connections = await api.connections(); renderConnections(); if (event.message) toast(event.message); if (event.firstPlanUse) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('plan-notice-dialog').showModal(); } if (state.provider !== 'ollama') await loadModels(); }
   if (event.type === 'state') { streamText = ''; await refresh(); }
-  if (event.type === 'token') { streamText += event.text; if (!streamFrame) streamFrame = requestAnimationFrame(() => { streamFrame = null; renderMessages(); }); }
+  if (event.type === 'token') { streamText += event.text; if (!streamFrame) streamFrame = requestAnimationFrame(() => { streamFrame = null; renderStreamingMessage(); }); }
   if (event.type === 'phase') $('activity-label').textContent = event.value;
   if (event.type === 'extensions-changed') await refresh();
   if (event.type === 'model-downloads' && state) {
@@ -890,7 +1007,7 @@ api.onEvent(async event => {
 
   if (event.type === 'context') $('context-note').textContent = event.omitted > 0 ? event.summarized ? `${event.summarized} older messages summarized` : `${event.omitted} older messages outside context` : '';
   if (event.type === 'error') { toast(event.message); if (state.provider === 'chatgpt' && /usage limit/i.test(event.message)) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('usage-limit-dialog').showModal(); } }
-  if (event.type === 'done') { streamText = ''; setBusy(false); if ($('approval-dialog').open) $('approval-dialog').close(); await refresh(); $('prompt').focus(); }
+  if (event.type === 'done') { if (streamFrame) cancelAnimationFrame(streamFrame); streamFrame = null; streamText = ''; setBusy(false); if ($('approval-dialog').open) $('approval-dialog').close(); await refresh(); $('prompt').focus(); }
   if (event.type === 'approval') showApproval(event);
   if (event.type === 'terminal') terminal?.write(event.text);
   if (event.type === 'terminal-exit') terminal?.write(`\r\n[Shell exited: ${event.exitCode}. Hide and reopen to restart.]\r\n`);

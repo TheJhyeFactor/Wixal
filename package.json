@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
   "main": "app/main.cjs",
   "private": true,
@@ -30,7 +30,8 @@
     "test:project-picker": "node scripts/project-picker-smoke.cjs",
     "test:models": "node scripts/model-picker-smoke.cjs",
     "test:model-library": "node scripts/model-library-smoke.cjs",
-    "test:model-download-live": "node scripts/model-download-live-smoke.cjs"
+    "test:model-download-live": "node scripts/model-download-live-smoke.cjs",
+    "test:workspace": "node scripts/workspace-ui-smoke.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",

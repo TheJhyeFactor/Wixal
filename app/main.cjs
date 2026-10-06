@@ -28,7 +28,7 @@ const images = new Map();
 const index = path.join(__dirname, '../ui/index.html');
 const emit = data => { if (window && !window.isDestroyed()) window.webContents.send('wixal:event', data); };
 function idle() { if (benchmarking) throw new Error('Stop the benchmark before changing models or starting a chat.'); if (running) throw new Error('Stop the current response before changing projects or conversations.'); }
-function snapshot() { const device = hardware(); return { ...store.snapshot(), externalConnections: extensions.snapshot(), modelDownload: downloads?.active?.item || null, modelDownloads: downloads?.snapshot() || [], localRuntime: runtime.snapshot(), hardware: device, benchmarkProgress: benchmarking?.progress || null, modelCatalog: require('../resources/model-catalog.json').models.map(m => ({ ...m, fit: estimate(m, device, store.data.contextSize, runtime.mode === 'managed' ? 1 : 2) })) }; }
+function snapshot() { const device = hardware(); return { ...store.snapshot(), appVersion: app.getVersion(), externalConnections: extensions.snapshot(), modelDownload: downloads?.active?.item || null, modelDownloads: downloads?.snapshot() || [], localRuntime: runtime.snapshot(), hardware: device, benchmarkProgress: benchmarking?.progress || null, modelCatalog: require('../resources/model-catalog.json').models.map(m => ({ ...m, fit: estimate(m, device, store.data.contextSize, runtime.mode === 'managed' ? 1 : 2) })) }; }
 function stop() {
   running?.abort();
   for (const resolve of approvals.values()) resolve(false);
@@ -105,6 +105,13 @@ function launchRun(prompt, attached, details, task = null) {
 }
 function setupIPC() {
   register('state', () => snapshot());
+  register('session-draft', (id, text) => {
+    const target = store.data.sessions.find(item => item.id === id);
+    if (!target || target.archivedAt) throw new Error('Choose an active conversation to save a draft.');
+    if (typeof text !== 'string' || text.length > 16000) throw new Error('Drafts can contain up to 16,000 characters.');
+    if ((target.draft || '') !== text) { target.draft = text; store.save(); }
+    return true;
+  });
   register('model-library', async () => {
     let disk = null, loaded = null;
     const folder = runtime.mode === 'managed' ? runtime.models : path.join(os.homedir(), '.ollama/models');

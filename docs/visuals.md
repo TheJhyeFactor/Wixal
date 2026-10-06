@@ -21,7 +21,7 @@ The README uses the existing GIF for playback on GitHub. A picture source suppli
 
 ## App screenshots and tour
 
-The [screenshots](screenshots) and [app tour](media/workspace-tour.gif) show Wixal 0.6.0 running with a disposable demo project. The tour covers model selection, project files, tool controls, external MCP setup, notes, and the terminal. Captions are added after recording; the tour does not stage model replies or approval results.
+The [screenshots](screenshots) and [app tour](media/workspace-tour.gif) show Wixal 0.7.2 running with a disposable demo project. The tour covers model selection, project files, tool controls, external MCP setup, notes, and the terminal. Captions are added after recording; the tour does not stage model replies or approval results.
 
 To record updated screenshots and a tour:
 

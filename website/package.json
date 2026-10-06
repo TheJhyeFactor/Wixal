@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs && node scripts/serve.mjs",
-    "check": "node --check scripts/build.mjs && node --check scripts/serve.mjs && node --check src/site.js && node --check src/analytics.js && node --check src/stats.js && node scripts/check.mjs && node scripts/test-analytics.mjs"
+    "check": "node --check scripts/build.mjs && node --check scripts/serve.mjs && node --check src/site.js && node --check src/analytics.js && node --check src/stats.js && node --check src/totals.js && node --check scripts/collect-users.mjs && node scripts/check.mjs && node scripts/test-analytics.mjs && node scripts/test-users.mjs"
   },
   "engines": { "node": ">=22" }
 }

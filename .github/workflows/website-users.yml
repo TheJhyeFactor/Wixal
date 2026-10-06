@@ -1,0 +1,45 @@
+name: Wixal website user total
+on:
+  schedule:
+    - cron: '43 19 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: wixal-download-metrics
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Authenticate with short-lived Wixal reader access
+        id: google
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/237727196024/locations/global/workloadIdentityPools/wixal-metrics/providers/github
+          service_account: wixal-analytics-reader@project-b9a2760b-ad7a-4959-a54.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/analytics.readonly
+          access_token_lifetime: 300s
+          create_credentials_file: false
+      - name: Collect only the 30-day aggregate
+        env:
+          GA_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          USERS_DIR: ${{ runner.temp }}/website-users
+        run: node website/scripts/collect-users.mjs
+      - name: Publish aggregate to metrics branch
+        run: |
+          git fetch origin wixal-metrics
+          git worktree add "$RUNNER_TEMP/users-archive" origin/wixal-metrics
+          cp "$RUNNER_TEMP/website-users/website-users.json" "$RUNNER_TEMP/users-archive/website-users.json"
+          cd "$RUNNER_TEMP/users-archive"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add website-users.json
+          git commit -m "Update 30-day active website user total"
+          git push origin HEAD:refs/heads/wixal-metrics

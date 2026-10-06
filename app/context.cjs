@@ -17,11 +17,19 @@ function relevant(items, query, budget = 8000) {
   return selected;
 }
 function projectMemory(store, prompt, budget = 8000) {
-  return relevant(store.data.memories.filter(m => m.projectId === store.data.activeProject).flatMap(m => chunks(m.content).map(c => ({ ...c, id: m.id }))), prompt, budget)
-    .map(item => item.text).join('\n');
+  const config = require('./memory.cjs').memorySettings(store.project());
+  if (['off', 'global'].includes(config.mode)) return '';
+  const cap = Math.min(budget, config.size === 8000 ? 1000 : config.size === 24000 ? 2400 : 4000);
+  const notes = relevant(store.data.memories.filter(m => m.projectId === store.data.activeProject).flatMap(m => chunks(m.content).map(c => ({ ...c, id: m.id }))), prompt, Math.floor(cap * .65)).map(item => item.text).join('\n');
+  const history = store.data.sessions.filter(s => s.projectId === store.data.activeProject && s.id !== store.data.activeSession && !s.archivedAt)
+    .flatMap(s => s.messages.filter(m => ['user', 'assistant'].includes(m.role) && m.content).flatMap(m => chunks(m.content).map(c => ({ ...c, title: s.title }))));
+  const recalls = relevant(history, prompt, Math.max(0, cap - notes.length - 100)).filter(item => item.score > 0).slice(0, 4)
+    .map(item => `[Earlier project chat: ${item.title}] ${item.text}`).join('\n');
+  return [notes, recalls].filter(Boolean).join('\n').slice(0, cap);
 }
 function searchHistory(store, query) {
   if (typeof query !== 'string' || !query.trim() || query.length > 500) throw new Error('History query must contain 1–500 characters.');
+  if (['off', 'global'].includes(require('./memory.cjs').memorySettings(store.project()).mode)) return [];
   const items = store.data.sessions.filter(s => s.projectId === store.data.activeProject && !s.archivedAt)
     .flatMap(s => s.messages.filter(m => ['user', 'assistant'].includes(m.role) && m.content).flatMap(m => chunks(m.content).map(c => ({ ...c, sessionId: s.id, title: s.title, role: m.role, created: m.created }))));
   return relevant(items, query, 18000).filter(item => item.score > 0).slice(0, 10).map(({ index, score, ...item }) => item);

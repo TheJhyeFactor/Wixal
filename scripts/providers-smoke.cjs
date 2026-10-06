@@ -13,7 +13,7 @@ async function main() {
     app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
     const page = await app.firstWindow(), errors = []; page.on('pageerror', e => errors.push(e.message));
     async function openWorkspace(id) { if (!(await page.locator(id).isVisible())) await page.click('#workspace-menu-toggle'); await page.click(id); }
-    await page.locator('#connection-label').filter({ hasText: 'Ollama connected' }).waitFor({ timeout: 20000, state: 'attached' });
+    await page.locator('#connection-label').filter({ hasText: 'Wixal Local connected' }).waitFor({ timeout: 20000, state: 'attached' });
     await app.evaluate(({ app }, fixturePath) => {
       const fixtures = process.mainModule.require(fixturePath);
       const { providers } = process.mainModule.require(app.getAppPath() + '/app/providers.cjs');

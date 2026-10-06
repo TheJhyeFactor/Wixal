@@ -1,6 +1,6 @@
 # How Wixal fits together
 
-Wixal is an Electron app with a local HTML/CSS/JavaScript interface. Wixal Local manages a bundled, pinned Ollama runner on a fresh loopback port with its own model store; external Ollama at `127.0.0.1:11434` remains optional. OpenAI, ChatGPT, xAI, DeepSeek, Anthropic, Gemini, Groq, Mistral and OpenRouter are optional providers; a custom Chat Completions endpoint is also supported. The companion bridge binds only to loopback and exposes shared projects through a separate MCP stdio process.
+Wixal is an Electron app with a local HTML/CSS/JavaScript interface. Wixal Local manages a bundled, pinned Ollama runner on a fresh loopback port with its own model store. All production inference uses this engine; installed Ollama weights are imported, and cloud/external model selection is rejected by IPC and the controller. An external loopback engine is allowed only with explicit isolated test state for protocol fixtures. The optional companion exposes explicitly shared projects through a separate MCP stdio process.
 
 ```text
 Renderer → restricted preload API → Electron main process
@@ -27,6 +27,8 @@ Renderer → restricted preload API → Electron main process
 | `app/companion-stdio.cjs` | MCP server forwarding to the paired local bridge |
 | `app/agent.cjs` | Context selection, saved summaries, streaming and the tool loop |
 | `app/tools.cjs` | Project paths, file operations, tool permission checks and shell execution |
+| `app/memory.cjs` | Scope/budget validation, context ceilings and token estimates |
+| `app/accounts.cjs` | Firebase accounts, optional presets and bounded global profile |
 | `app/context.cjs` | Incremental summaries, relevant memory selection and scoped history retrieval |
 | `app/network.cjs` | Reviewed search/HTTP requests, bounded response text and redirect rejection |
 | `app/extensions.cjs` | Local MCP client lifecycle, tool discovery, reviewed calls and cleanup |
@@ -41,7 +43,7 @@ The main process checks the current model and validates image attachment IDs. Ag
 
 The agent adds the user message, loads explicit project memories and selects recent complete turns. It sends the allowed tool definitions to the selected provider, streams the response, then stores the completed assistant message and generation stats.
 
-When a model calls a tool, the controller checks that it is enabled. Reads return bounded results. Writes and commands wait for review. The result goes back into the conversation and the loop continues. Cancellation reaches both inference and command process groups. There is a 12 step limit.
+When a model calls a tool, the controller checks that it is enabled. Reads return bounded results. Writes and commands use the live workspace policy: Review each action or Approved all. The result goes back into the conversation and the loop continues. Cancellation reaches both inference and command process groups. There is a 32 step limit.
 
 ## Files and the host shell
 
@@ -59,13 +61,13 @@ Images remain visible in saved conversations when a text-only model is selected.
 
 State is written to a temporary JSON file with mode `0600` and renamed over the current file. Existing installations receive new preference defaults without replacing their history. This is not encrypted storage.
 
-Model context is bounded using an estimate, not a tokenizer. Whole recent turns are retained, including tool exchanges. The newest turn is always kept; large tool result text is shortened only in inference requests. A very large prompt or opaque provider record can still exceed that estimate. Runtime context is clamped to the model’s reported maximum. Older complete turns are automatically condensed by the selected model in bounded chunks and saved per conversation. Summary requests have no tools; failed inference falls back to labelled relevant excerpts. A prefix hash prevents stale or redundant compaction. Explicit notes are ranked by prompt relevance; overlapping text chunks support project-scoped history search. Retrieval uses word matching rather than embeddings.
+Model context is bounded using an estimate, not a tokenizer. Whole recent turns are retained, including tool exchanges. The newest turn is checked against the estimated request budget; large tool results are shortened only for inference. An oversized new prompt returns an actionable error before being saved. Runtime context has a model/RAM-aware ceiling of 32k, with output space reserved. Project notes and earlier active chats share a bounded retrieval budget. Project-only excludes global profiles and other projects. New-chat handoff inserts a visible summary and retains the source. Assistant records identify their generating model; foreign tool calls and results become portable text evidence. See [memory details](memory.md). Older complete turns are automatically condensed by the selected model in bounded chunks and saved per conversation. Summary requests have no tools; failed inference falls back to labelled relevant excerpts. A prefix hash prevents stale or redundant compaction. Explicit notes are ranked by prompt relevance; overlapping text chunks support project-scoped history search. Retrieval uses word matching rather than embeddings.
 
 ## Renderer boundaries
 
 Node integration is off; context isolation and Electron sandboxing are on. IPC checks the calling web contents and frame URL. Navigation and new windows are denied. Markdown is sanitised, remote media is blocked and file/shell access uses only the named preload methods.
 
-## Cloud credentials and consent
+## Historical cloud credentials and consent
 
 The renderer never receives stored API keys, access tokens, refresh tokens or ID tokens. Credentials are encrypted with Electron safeStorage and written atomically with owner-only permissions. No plaintext fallback is used. A credential-loading failure preserves the existing file and leaves local models available.
 
@@ -95,10 +97,14 @@ Sessions retain their project scope and messages when archived (`archivedAt`). P
 
 Network tools are opt-in and run in the main process. Review displays the URL, method, body or search terms before a request. Requests have a 20-second timeout, a 1 MB response cap, no automatically attached stored credentials and no automatic redirects. Search uses DuckDuckGo HTML results; HTML page responses become text. A blocked search service is an error, not a completed result.
 
-External tools use the installed MCP SDK's Client and StdioClientTransport. Saved executable/argument configurations do not auto-launch on restart. A user's Connect click starts the process; tool discovery follows catalog pagination with bounds and generates stable hashed tool names to avoid collisions. Connected definitions join the enabled tool catalog across local and cloud inference. Every invocation requires review and supports a 60-second timeout and abort signal. Disconnection and app shutdown close client transports. External server processes have the user's host permissions and may perform actions during startup.
+External tools use the installed MCP SDK's Client and StdioClientTransport. Saved executable/argument configurations do not auto-launch on restart. A user's Connect click starts the process; tool discovery follows catalog pagination with bounds and generates stable hashed tool names to avoid collisions. Connected definitions join the enabled tool catalog in local inference. Every invocation follows the workspace approval policy and supports a 60-second timeout and abort signal. Disconnection and app shutdown close client transports. External server processes have the user's host permissions and may perform actions during startup.
 
 Model downloads stream Ollama's pull endpoint to the renderer through named events. Progress is per layer; the runtime requires a success record, forwards errors, and aborts the HTTP request on Cancel or app shutdown. Context preferences now include 64k and 128k, with local inference clamped to reported model limits. Neither a larger preference nor a downloaded model guarantees enough host RAM.
 
 ## Managed local runtime
 
 `app/runtime.cjs` owns payload verification, startup coalescing, loopback port allocation, a filtered child environment, readiness checks, process-group cleanup and independent model imports. `app/models.cjs` and the local agent resolve the active endpoint dynamically. Named IPC handlers expose only supported mode/lifecycle/import operations. Store migration defaults to managed mode without replacing conversation or project data. Generated native payloads are outside ASAR; source pins and build metadata are in `resources/runtime.json`. See [the runtime guide](local-runtime.md) for provenance and limits.
+
+## Current local controller additions
+
+`model-options.cjs` chooses supported thinking values and conservative model-selection context limits. `workspace-context.cjs` builds live workspace/capability/tool/policy context for every inference step and `workspace_info`. `approvals.cjs` centralises workspace-scoped all-mode decisions and their local records. `security-tools.cjs` validates explicit targets and ports, then launches fixed Nmap profiles as argument arrays through owned command sessions. Scan results retain command, timestamps, target/profile and bounded raw evidence. Model text never changes approval policy.

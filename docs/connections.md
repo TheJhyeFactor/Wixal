@@ -1,3 +1,11 @@
+# Connections in the local-only app
+
+All model inference now uses Wixal’s bundled local engine. Provider sign-in, API keys and cloud model selection are hidden and rejected for inference. Historical connection records are retained locally. Use the [local model guide](local-runtime.md) to import Ollama weights or download model tags.
+
+The optional companion remains available for explicitly shared projects and queued tasks. It sends shared information to the connected service when you enable it; model tasks started in Wixal run locally and follow the workspace approval policy.
+
+The following provider setup notes describe earlier releases and do not enable cloud inference in this build.
+
 # Connect Wixal to an AI provider
 
 Wixal starts with Ollama, which runs models on your Mac. You can also connect an API account, sign in to an eligible ChatGPT account, or use a compatible endpoint.

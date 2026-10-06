@@ -2,6 +2,13 @@
 const $ = id => document.getElementById(id);
 const api = window.wixal;
 const tools = [
+  { id: 'website_simulate', name: 'Website attack simulations', description: 'Run attacks on vulnerable and hardened local fixtures; save reproducible evidence.', review: true },
+  { id: 'website_assess', name: 'Website assessment', description: 'Bounded headers, access checks and benign probes. Saves JSON and Markdown evidence.', review: true },
+  { id: 'security_tools', name: 'Security tool discovery', description: 'Check Nmap availability and supported network assessment profiles.' },
+  { id: 'network_scan', name: 'Network and service scan', description: 'Scan an authorised IP, site or local subnet with a named Nmap profile.', review: true },
+  { id: 'network_read', name: 'Read scan evidence', description: 'Read scan stdout, service details, script observations and completion status.' },
+  { id: 'network_stop', name: 'Stop network scan', description: 'Cancel a running network scan and its child processes.' },
+  { id: 'workspace_info', name: 'Workspace and tool access', description: 'Current project, local model, enabled tools and review rules. Connected automatically.' },
   { id: 'command_start', name: 'Start command session', description: 'Run an AI-selected host command for up to an hour. Read its results in this chat.', review: true },
   { id: 'command_read', name: 'Review command output', description: 'Read output chunks, errors and completion status from a command session.' },
   { id: 'command_write', name: 'Send command input', description: 'Send reviewed stdin text to a running command.', review: true },
@@ -20,6 +27,7 @@ const tools = [
   { id: 'http_request', name: 'Web pages and APIs', description: 'Review the URL, HTTP method and JSON body before any network request.', review: true },
 ];
 const availableTools = () => [...tools, ...(state?.externalConnections || []).flatMap(server => server.tools.map(tool => ({ ...tool, description: tool.description, review: true })))];
+let memoryEditId, contextPreviewTimer, contextPreviewRevision = 0;
 let menuSessionId, renameSessionId, deleteSessionId, welcomeSessionId;
 const draftCache = new Map();
 let draftSessionId, draftTimer, restoringDraft = false;
@@ -47,8 +55,8 @@ async function refresh() { state = await api.state(); render(); }
 function render() {
   providerLabels.ollama = 'Wixal Local';
   const p = project(), s = session(), model = selectedModel();
-  if (draftSessionId !== state.activeSession) restoreDraft();
-  applyAppearance(); renderSettings();
+  if (draftSessionId !== state.activeSession) { cancelMemoryEdit(); restoreDraft(); }
+  applyAppearance(); renderSettings(); renderAccount(); renderSetup();
   applySidebarLayout();
   document.querySelector('.title-version').textContent = state.appVersion;
   $('title-project').textContent = p?.name || 'workspace';
@@ -57,8 +65,11 @@ function render() {
   $('conversation-label').disabled = !s || busy;
   $('reveal-project').disabled = !p; $('project-label').title = p ? `Change project · ${p.root}` : 'Choose a project folder';
   renderSessions();
+  $('approval-mode').value = state.approvalMode || 'review';
+  $('approval-mode').classList.toggle('is-approved-all', state.approvalMode === 'all');
+  $('approval-mode').title = state.approvalMode === 'all' ? 'Enabled tools run without approval dialogs in this workspace. Switch to Review each action to revoke.' : 'Review edits, commands and external actions before they run.';
   $('mode-label').textContent = state.mode === 'agent' ? 'Agent' : 'Chat';
-  $('mode-button').title = state.mode === 'agent' ? 'Agent · uses your enabled tools. Choose conversation mode.' : 'Chat · talk with your model. Choose conversation mode.';
+  $('mode-button').title = state.mode === 'agent' ? 'Agent · uses your enabled tools. Choose conversation mode.' : 'Chat · talk with your model and use enabled tools on request. Choose conversation mode.';
   $('model-label').textContent = connected ? selectedModel()?.displayName || shortModel(state.model) || 'Choose a model' : `${providerLabels[state.provider]} · connect`;
   $('model-button').title = state.model || 'Choose a model';
   $('mode-button').disabled = busy; $('model-button').disabled = busy; $('attach-image').disabled = busy;
@@ -78,7 +89,7 @@ function render() {
   $('prompt').disabled = busy || archived; $('send').disabled = archived; $('attach-image').disabled = busy || archived;
   $('activity-label').textContent = archived ? 'Restore to continue chatting' : busy ? state.provider === 'ollama' ? 'Working locally…' : 'Working…' : 'Ready';
   renderArchives();
-  renderWorkspaceContext(); renderMessages(); renderMemories(); renderToolkit(); renderPerformance(); renderModelList(); renderAttachments(); renderTasks();
+  renderWorkspaceContext(); renderMessages(); renderMemories(); renderToolkit(); renderPerformance(); renderModelList(); renderAttachments(); renderTasks(); scheduleContextPreview();
 }
 function renderWorkspaceContext() {
   const p = project(), model = selectedModel(), ready = connected && !!model;
@@ -197,7 +208,7 @@ function markdown(text) { return DOMPurify.sanitize(marked.parse(text || '', { b
 function resultStatus(message) {
   if (message.content.startsWith('Error:')) return 'Failed';
   if (message.content.startsWith('User declined')) return 'Declined';
-  if (['command_start', 'command_read', 'command_stop'].includes(message.tool_name)) {
+  if (['command_start', 'command_read', 'command_stop', 'network_scan', 'network_read', 'network_stop'].includes(message.tool_name)) {
     try { const result = JSON.parse(message.content); return result.state === 'running' ? 'Running' : result.state === 'stopped' ? 'Stopped' : result.state === 'failed' ? 'Failed' : result.exitCode === 0 ? 'Done' : `Exit ${result.exitCode ?? '?'}`; } catch {}
   }
   if (message.tool_name === 'run_command') {
@@ -205,18 +216,103 @@ function resultStatus(message) {
   }
   return 'Done';
 }
+function toolEvidence(message) {
+  if (message.tool_name !== 'network_read') return `<pre class="tool-content">${escapeHTML(message.content)}</pre>`;
+  try {
+    const result = JSON.parse(message.content);
+    const xml = new DOMParser().parseFromString(result.output || '', 'application/xml');
+    const ports = [...xml.querySelectorAll('host ports port')].slice(0, 256);
+    const rows = ports.map(port => {
+      const service = port.querySelector('service');
+      return `<tr><td>${escapeHTML(`${port.getAttribute('portid')}/${port.getAttribute('protocol')}`)}</td><td>${escapeHTML(port.querySelector('state')?.getAttribute('state') || '')}</td><td>${escapeHTML([service?.getAttribute('name'), service?.getAttribute('product'), service?.getAttribute('version')].filter(Boolean).join(' '))}</td></tr>`;
+    }).join('');
+    return `<p class="scan-result-meta">${escapeHTML(result.assessment?.target || '')} · ${escapeHTML(result.assessment?.profile || '')} · ${escapeHTML(result.state)}${result.exitCode !== null ? ` · exit ${escapeHTML(result.exitCode)}` : ''}</p>${rows ? `<table class="scan-result-table"><thead><tr><th>Port</th><th>State</th><th>Service evidence</th></tr></thead><tbody>${rows}</tbody></table>` : ''}<details><summary>Raw scanner evidence and command</summary><pre class="tool-content">${escapeHTML(result.command || '')}\n\n${escapeHTML(result.output || '(Waiting for scanner output)')}</pre></details>`;
+  } catch { return `<pre class="tool-content">${escapeHTML(message.content)}</pre>`; }
+}
+let activityTurns = [], inspectedAction = null, activitySessionId, runPhase = '', runFailure = '', liveTool = '', liveCommandOutput = '';
+const activityExpanded = new Map();
+function activityKey(turn, action) { return `${state.activeSession}:${turn.key}:${action.key}`; }
+function activityRunning(turn) { return busy && turn === activityTurns.at(-1); }
+function activityName(action) { return availableTools().find(tool => tool.id === action.name)?.name || action.name; }
+function displayedActionStatus(turn, action) {
+  if (action.status !== 'Pending') return action.status;
+  if (!activityRunning(turn)) return turn.user?.runStatus === 'stopped' ? 'Stopped' : 'No result';
+  if (approvalId) return 'Awaiting review';
+  return turn.actions.find(item => item.name === liveTool && item.status === 'Pending') === action ? 'Running' : 'Pending';
+}
+function activityStatus(turn) {
+  if (activityRunning(turn)) return 'Working';
+  if (turn.user?.runStatus === 'stopped') return 'Stopped';
+  if (turn.user?.runStatus === 'failed') return 'Failed';
+  if (turn.actions.some(action => action.status === 'Pending')) return 'Incomplete';
+  if (turn.actions.some(action => action.status === 'Running')) return 'Tools still running';
+  if (turn.actions.some(action => ['Failed', 'Declined', 'Stopped'].includes(action.status))) return 'Finished with issues';
+  return 'Completed';
+}
+function activityTimeline(turn) {
+  if (!turn.actions.length) return '';
+  const key = `${state.activeSession}:${turn.key}`, running = activityRunning(turn), status = activityStatus(turn);
+  const open = activityExpanded.get(key) ?? running;
+  const rows = turn.actions.map(action => {
+    const selected = inspectedAction === activityKey(turn, action);
+    const status = displayedActionStatus(turn, action);
+    const title = WixalActivity.title(action, activityName(action));
+    return `<li class="activity-milestone ${['Pending', 'Running', 'Awaiting review'].includes(status) ? 'pending' : ['Failed', 'Declined', 'Stopped', 'No result'].includes(status) ? 'issue' : ''}"><span class="milestone-dot" aria-hidden="true"></span><button type="button" data-inspect-action="${escapeHTML(activityKey(turn, action))}" title="${escapeHTML(title)}" aria-pressed="${selected}">${escapeHTML(title)}</button><span class="milestone-status">${status}</span></li>`;
+  }).join('');
+  const updates = turn.updates.length ? `<details class="activity-updates" data-activity-detail="${escapeHTML(key + ':updates')}" ${activityExpanded.get(key + ':updates') ? 'open' : ''}><summary>Approach & updates</summary>${turn.updates.map(({ message }) => `<div class="message-body">${markdown(message.content)}</div>`).join('')}</details>` : '';
+  return `<details class="turn-activity ${running ? 'is-running' : ''}" data-activity-turn="${escapeHTML(key)}" ${open ? 'open' : ''}><summary><span class="history-dot" aria-hidden="true"></span><span>${status === 'Working' ? 'Working on your request' : 'Work history'}</span><span class="history-count">${turn.actions.length} ${turn.actions.length === 1 ? 'step' : 'steps'} · ${turn.calls} tool ${turn.calls === 1 ? 'call' : 'calls'}</span><span class="history-state">${status}</span></summary><ol class="quiet-timeline">${rows}</ol>${updates}</details>`;
+}
+function renderActivityDock() {
+  if (!state) return;
+  if (activitySessionId !== state.activeSession) { inspectedAction = null; $('activity-dock').open = false; activitySessionId = state.activeSession; }
+  const latest = activityTurns.at(-1);
+  let turn = latest, action;
+  for (const candidate of activityTurns) {
+    const match = candidate.actions.find(item => activityKey(candidate, item) === inspectedAction);
+    if (match) { turn = candidate; action = match; break; }
+  }
+  action ||= turn?.actions.at(-1);
+  const visible = !!action || busy || !!latest?.user?.runStatus && latest.user.runStatus !== 'completed';
+  $('activity-dock').classList.toggle('hidden', !visible);
+  $('activity').classList.toggle('has-dock', visible);
+  if (!visible) return;
+  const running = activityRunning(turn), status = turn ? activityStatus(turn) : 'Working';
+  const selectedOlder = turn !== latest;
+  $('activity-dock').classList.toggle('is-running', busy && !selectedOlder);
+  $('activity-dock').classList.toggle('has-issue', ['Failed', 'Stopped', 'Incomplete', 'Finished with issues'].includes(status));
+  $('dock-status').textContent = selectedOlder ? 'Earlier request · work history' : running ? runPhase || 'Working on your request…' : status === 'Completed' ? 'Finished working on your request' : status === 'Working' ? 'Working…' : status;
+  $('dock-count').textContent = turn?.calls ? `${turn.calls} tool ${turn.calls === 1 ? 'call' : 'calls'}` : '';
+  const body = $('dock-body'), rawOpen = body.querySelector('.dock-raw')?.open;
+  if (!action) {
+    body.innerHTML = `<p class="dock-empty">${escapeHTML(latest?.user?.runError || runFailure || 'Activity will appear here as Wixal uses tools.')}</p>`;
+    return;
+  }
+  const evidence = WixalActivity.evidence(action);
+  if (running && action.name === liveTool && !action.results.length && liveCommandOutput) evidence.output = liveCommandOutput;
+  const result = action.results.at(-1)?.message;
+  const scan = result?.tool_name === 'network_read' ? toolEvidence(result) : `<pre class="tool-content">${escapeHTML(evidence.output)}</pre>`;
+  body.innerHTML = `<div class="dock-selection"><strong>${escapeHTML(activityName(action))}</strong><span>${escapeHTML(displayedActionStatus(turn, action))}</span></div>${evidence.command ? `<pre class="dock-command"><code>${escapeHTML(evidence.command)}</code></pre>` : ''}${scan}<div class="dock-result-meta"><span>${escapeHTML(action.status === 'Pending' ? displayedActionStatus(turn, action) : evidence.meta)}</span><span>${escapeHTML(project()?.name || 'Personal workspace')}</span><button type="button" data-copy-activity>Copy output</button></div><details class="dock-raw" ${rawOpen ? 'open' : ''}><summary>Raw events${action.results.length > 1 ? ` · ${action.results.length} results` : ''}</summary>${action.args ? `<pre class="tool-content">${escapeHTML(JSON.stringify(action.args, null, 2))}</pre>` : ''}${action.results.map(({ message }) => `<pre class="tool-content">${escapeHTML(message.content)}</pre>`).join('')}</details>`;
+  body.querySelector('[data-copy-activity]').onclick = () => invoke('copy-text', evidence.output).then(() => toast('Output copied.')).catch(() => {});
+}
 function renderMessages() {
   const messages = session()?.messages || [], container = $('chat-scroll');
   const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
   $('welcome').classList.toggle('hidden', !!messages.length || !!streamText);
   $('messages').classList.toggle('hidden', !messages.length && !streamText);
+  activityTurns = WixalActivity.turns(messages);
+  const histories = new Map();
+  activityTurns.forEach(turn => {
+    const first = turn.messages.find(({ message }) => message.role === 'tool' || message.tool_calls?.length);
+    if (first) histories.set(first.index, activityTimeline(turn));
+  });
   $('messages').innerHTML = messages.map((message, index) => {
-    if (message.role === 'tool') { const status = resultStatus(message); return `<details class="tool-message" ${['command_read', 'browser_inspect'].includes(message.tool_name) ? 'open' : ''}><summary>⌁ ${escapeHTML(availableTools().find(tool => tool.id === message.tool_name)?.name || message.tool_name)}<span class="tool-status ${['Done', 'Running'].includes(status) ? '' : 'failed'}">${status}</span></summary><pre class="tool-content">${escapeHTML(message.content)}</pre></details>`; }
+    const history = histories.get(index) || '';
+    if (message.role === 'tool' || message.role === 'assistant' && message.tool_calls?.length) return history;
     const isUser = message.role === 'user';
-    if (!isUser && !message.content && message.tool_calls) return `<div class="tool-message"><span class="muted">Requested ${message.tool_calls.map(call => escapeHTML(availableTools().find(tool => tool.id === call.function?.name)?.name || call.function?.name || 'tool')).join(', ')}</span></div>`;
+    if (!isUser && !message.content?.trim()) return history;
     const images = message.images?.length ? `<div class="message-images">${message.images.map((image, imageIndex) => `<button data-message="${index}" data-image="${imageIndex}" title="${escapeHTML(message.imageNames?.[imageIndex] || 'View image')}"><img src="data:image/png;base64,${image}" alt="${escapeHTML(message.imageNames?.[imageIndex] || 'Attached image')}"></button>`).join('')}</div>` : '';
     const metrics = message.metrics?.tokens ? `<div class="message-metrics">${message.metrics.tokens} tokens · ${message.metrics.tokensPerSecond} tok/s · ${Math.round(message.metrics.seconds)}s</div>` : '';
-    return `<article class="message ${isUser ? 'user' : 'assistant'}"><div class="message-header">${isUser ? '<span>▸</span> You' : '<img src="../assets/mark.svg" alt=""> Wixal'}<span class="muted">${new Date(message.created || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><button class="copy-message" data-copy="${index}">Copy</button></div><div class="message-body">${isUser ? escapeHTML(message.content) : markdown(message.content)}</div>${images}${metrics}</article>`;
+    return history + `<article class="message ${isUser ? 'user' : 'assistant'}"><div class="message-header">${isUser ? '<span>▸</span> You' : '<img src="../assets/mark.svg" alt=""> Wixal'}<span class="muted">${new Date(message.created || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><button class="copy-message" data-copy="${index}">Copy</button></div><div class="message-body">${isUser ? escapeHTML(message.content) : markdown(message.content)}</div>${images}${metrics}</article>`;
   }).join('');
   $('messages').querySelectorAll('.message-body pre:has(code)').forEach(pre => {
     const toolbar = document.createElement('div'); toolbar.className = 'code-toolbar';
@@ -230,6 +326,7 @@ function renderMessages() {
     article.querySelector('.message-body').textContent = streamText; $('messages').append(article);
   }
   renderStartLayout();
+  renderActivityDock();
   if (!messages.length && !streamText) container.scrollTop = 0;
   else if (nearBottom) container.scrollTop = container.scrollHeight;
   updateLatestButton();
@@ -255,8 +352,25 @@ function renderStreamingMessage() {
 }
 $('chat-scroll').addEventListener('scroll', updateLatestButton, { passive: true });
 $('jump-latest').onclick = () => { $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight; updateLatestButton(); };
+$('activity-dock').querySelector('summary').addEventListener('click', () => {
+  const container = $('chat-scroll'), nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+  requestAnimationFrame(() => { if (nearBottom) container.scrollTop = container.scrollHeight; updateLatestButton(); });
+});
+$('activity-dock').addEventListener('toggle', updateLatestButton);
 
 $('messages').addEventListener('click', async event => {
+  const historySummary = event.target.closest('.turn-activity > summary');
+  if (historySummary) { const details = historySummary.parentElement; activityExpanded.set(details.dataset.activityTurn, !details.open); }
+  const updateSummary = event.target.closest('.activity-updates > summary');
+  if (updateSummary) { const details = updateSummary.parentElement; activityExpanded.set(details.dataset.activityDetail, !details.open); }
+  const milestone = event.target.closest('[data-inspect-action]');
+  if (milestone) {
+    const container = $('chat-scroll'), nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    inspectedAction = milestone.dataset.inspectAction; renderActivityDock(); $('activity-dock').open = true;
+    $('messages').querySelectorAll('[data-inspect-action]').forEach(button => button.setAttribute('aria-pressed', String(button === milestone)));
+    $('activity-dock').querySelector('summary').focus({ preventScroll: true });
+    if (nearBottom) container.scrollTop = container.scrollHeight; updateLatestButton();
+  }
   if (event.target.closest('a')) { event.preventDefault(); const link = event.target.closest('a'); try { await invoke('copy-text', link.href); toast('Link copied.'); } catch {} }
   const code = event.target.closest('[data-copy-code]');
   if (code) { try { await invoke('copy-text', code.closest('pre').querySelector('code').textContent); code.textContent = 'Copied'; setTimeout(() => { if (code.isConnected) code.textContent = 'Copy code'; }, 1800); } catch {} }
@@ -270,7 +384,7 @@ function renderMemories() {
   $('memory-count').textContent = memories.length;
   $('memory-project-title').textContent = project() ? `${project().name} memory` : 'Personal memory';
   $('memory-description').textContent = project() ? 'Save preferences and decisions for this project. Wixal includes these in future project messages.' : 'Save preferences for your personal chats. These stay separate from project memory.';
-  $('memories').innerHTML = memories.length ? memories.map(memory => `<div class="memory-entry"><p>${escapeHTML(memory.content)}</p><footer>${new Date(memory.created).toLocaleDateString()}<button data-id="${memory.id}" title="Delete memory" ${busy ? 'disabled' : ''}>Forget</button></footer></div>`).join('') : '<p class="empty-project">Nothing saved yet. Add a preference or project decision below.</p>';
+  $('memories').innerHTML = memories.length ? memories.map(memory => `<div class="memory-entry"><p>${escapeHTML(memory.content)}</p><footer>${new Date(memory.created).toLocaleDateString()}<button data-edit="${memory.id}" ${busy ? 'disabled' : ''}>Edit</button><button data-id="${memory.id}" title="Delete memory" ${busy ? 'disabled' : ''}>Forget</button></footer></div>`).join('') : '<p class="empty-project">Nothing saved yet. Add a preference or project decision below.</p>';
   $('memory-form').querySelector('button').disabled = busy;
   $('auto-summary').checked = state.autoSummary !== false; $('auto-summary').disabled = busy;
   const summary = session()?.summary;
@@ -278,14 +392,20 @@ function renderMemories() {
   $('summary-content').textContent = summary?.content || '';
   $('summary-meta').textContent = summary ? `${summary.count} older messages · ${summary.method === 'excerpts' ? 'Fallback excerpts' : 'Model summary'} · ${new Date(summary.updated).toLocaleString()}. Full history remains saved.` : '';
   $('summary-clear').disabled = busy;
-  $('memories').querySelectorAll('button').forEach(button => button.onclick = async () => { try { state = await invoke('memory-delete', button.dataset.id); render(); } catch {} });
+  $('memories').querySelectorAll('[data-edit]').forEach(button => button.onclick = () => { memoryEditId = button.dataset.edit; $('memory-input').value = memories.find(m => m.id === memoryEditId).content; $('memory-save').textContent = 'Save changes'; $('memory-edit-cancel').classList.remove('hidden'); $('memory-input').focus(); });
+  renderMemoryOptions(memories);
+  $('memories').querySelectorAll('[data-id]').forEach(button => button.onclick = async () => { try { state = await invoke('memory-delete', button.dataset.id); render(); } catch {} });
 }
-function toolCategory(id) { return id.startsWith('mcp_') ? 'external' : id.startsWith('command_') || id === 'run_command' ? 'commands' : ['web_search', 'http_request', 'browser_inspect'].includes(id) ? 'web' : ['search_history', 'save_memory'].includes(id) ? 'memory' : 'files'; }
+function toolCategory(id) { return ['website_assess', 'website_simulate', 'security_tools', 'network_scan', 'network_read', 'network_stop'].includes(id) ? 'security' : id.startsWith('mcp_') ? 'external' : id.startsWith('command_') || id === 'run_command' ? 'commands' : ['web_search', 'http_request', 'browser_inspect'].includes(id) ? 'web' : ['workspace_info', 'search_history', 'save_memory'].includes(id) ? 'memory' : 'files'; }
 function renderToolkit() {
   const p = project();
-  $('toolkit-summary').textContent = state.mode === 'chat' ? 'You’re in Chat mode. Use @tool_name to call a tool from Chat, or switch to Agent for automatic selection. File tools need a project.' : p ? `Tools for ${p.name}. Tools are enabled by default. Type @ in chat to select one explicitly.` : 'Open a project folder to use these tools in Agent mode.';
+  $('toolkit-summary').textContent = !selectedModel()?.capabilities?.includes('tools') ? 'Choose a model marked Tools to use this tool kit. This model supports conversation only.' : p ? `Enabled tools are available in Chat and Agent for ${p.name}. Use @ to request a particular tool.` : 'Enabled web, memory and connected tools are available in Chat and Agent. Open a project for file and command tools.';
+  $('welcome-toolkit').textContent = state.approvalMode === 'all' ? 'Enabled tools are approved for this workspace ↗' : 'Edits and commands come to you for review ↗';
+  $('website-simulate').disabled = busy || !p || !selectedModel()?.capabilities?.includes('tools') || !state.enabledTools.includes('website_simulate');
+  $('website-run').disabled = busy || !p || !selectedModel()?.capabilities?.includes('tools') || !state.enabledTools.includes('website_assess');
+  $('scan-run').disabled = busy || !p || !selectedModel()?.capabilities?.includes('tools') || !state.enabledTools.includes('network_scan');
   const catalog = availableTools(), query = $('tool-search').value.toLowerCase();
-  $('tool-list').innerHTML = catalog.filter(tool => ($('tool-category').value === 'all' || toolCategory(tool.id) === $('tool-category').value) && `${tool.name} ${tool.id} ${tool.description}`.toLowerCase().includes(query)).sort((a, b) => ['files', 'commands', 'web', 'memory', 'external'].indexOf(toolCategory(a.id)) - ['files', 'commands', 'web', 'memory', 'external'].indexOf(toolCategory(b.id))).map(tool => `<label class="tool-toggle"><input type="checkbox" data-tool="${escapeHTML(tool.id)}" ${state.enabledTools.includes(tool.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}><span><strong>${escapeHTML(tool.name)}</strong><code>@${escapeHTML(tool.id)}</code><small>${escapeHTML(tool.description)}</small>${tool.review ? '<em>REVIEW EACH TIME</em>' : ''}</span></label>`).join('');
+  $('tool-list').innerHTML = catalog.filter(tool => ($('tool-category').value === 'all' || toolCategory(tool.id) === $('tool-category').value) && `${tool.name} ${tool.id} ${tool.description}`.toLowerCase().includes(query)).sort((a, b) => ['files', 'commands', 'security', 'web', 'memory', 'external'].indexOf(toolCategory(a.id)) - ['files', 'commands', 'security', 'web', 'memory', 'external'].indexOf(toolCategory(b.id))).map(tool => `<label class="tool-toggle"><input type="checkbox" data-tool="${escapeHTML(tool.id)}" ${state.enabledTools.includes(tool.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}><span><strong>${escapeHTML(tool.name)}</strong><code>@${escapeHTML(tool.id)}</code><small>${escapeHTML(tool.description)}</small>${tool.review ? `<em>${state.approvalMode === 'all' ? 'APPROVED FOR THIS WORKSPACE' : 'REVIEW EACH ACTION'}</em>` : ''}</span></label>`).join('');
   $('tool-list').querySelectorAll('input').forEach(input => input.onchange = async () => {
     const enabledTools = [...new Set([...state.enabledTools.filter(name => name !== input.dataset.tool), ...(input.checked ? [input.dataset.tool] : [])])];
     enabledTools.push(...state.enabledTools.filter(name => !catalog.some(tool => tool.id === name)));
@@ -326,8 +446,8 @@ function renderModelList() {
   const type = $('model-type-filter').value, fit = $('model-fit-filter').value;
   const sizeLimit = Number($('model-size-filter').value) * 1e9;
   const filtered = models.filter(model => (!local || !sizeLimit || model.size <= sizeLimit) && `${model.name} ${model.displayName || ''}`.toLowerCase().includes(query) && (type === 'all' || model.capabilities?.includes(type)) && (!local || fit === 'all' || (fit === 'estimated' ? model.fit?.fits : fit === 'tested' ? !!modelBenchmark(model) : (modelBenchmark(model)?.tokensPerSecond || 0) >= 20)));
-  filtered.sort((a, b) => $('model-sort').value === 'size' ? a.size - b.size : $('model-sort').value === 'speed' ? (modelBenchmark(b)?.tokensPerSecond || 0) - (modelBenchmark(a)?.tokensPerSecond || 0) : a.name.localeCompare(b.name));
-  const benchmarkBusy = !!state.benchmarkProgress;
+  filtered.sort((a, b) => Number(!!a.importable) - Number(!!b.importable) || ($('model-sort').value === 'size' ? a.size - b.size : $('model-sort').value === 'speed' ? (modelBenchmark(b)?.tokensPerSecond || 0) - (modelBenchmark(a)?.tokensPerSecond || 0) : a.name.localeCompare(b.name)));
+  const benchmarkBusy = !!state.benchmarkProgress || !!state.localRuntime?.importing;
   $('model-hardware').classList.toggle('hidden', !local);
   $('hardware-name').textContent = `${state.hardware.cpu} · ${(state.hardware.totalMemory / 1024 ** 3).toFixed(0)} GB RAM`;
   $('hardware-hint').textContent = 'Fit estimates reserve 25% for macOS and use your context setting. Benchmark to measure speed.';
@@ -338,7 +458,7 @@ function renderModelList() {
   $('model-filter-count').textContent = activeFilters ? String(activeFilters) : '';
   $('model-filter-panel').open ||= activeFilters > 0;
   $('model-downloads-tab').classList.toggle('hidden', !local);
-  $('model-installed-tab').firstChild.textContent = local ? 'Installed ' : 'Available ';
+  $('model-installed-tab').firstChild.textContent = 'Your models ';
   $('model-installed-count').textContent = String(models.length);
   for (const view of ['installed', 'downloads']) {
     $(`model-${view}-tab`).setAttribute('aria-selected', String(view === modelView));
@@ -347,8 +467,8 @@ function renderModelList() {
   }
   $('model-search').placeholder = downloads ? 'Search downloads…' : local ? 'Search installed models…' : 'Search available models…';
   renderBenchmarkProgress(); renderCatalog();
-  if (connections?.providers) { for (const item of connections.providers) providerLabels[item.id] = item.id === 'ollama' ? 'Wixal Local' : item.label; $('provider-select').innerHTML = connections.providers.map(item => `<option value="${escapeHTML(item.id)}">${escapeHTML(providerLabels[item.id])}${item.id === 'ollama' ? ' · local' : item.id === 'chatgpt' ? ' · connected account' : ''}</option>`).join(''); }
-  $('provider-select').value = state?.provider || 'ollama'; $('provider-select').disabled = busy || benchmarkBusy || (state.modelDownloads || []).some(item => ['queued', 'downloading'].includes(item.state));
+
+  $('provider-select').innerHTML = '<option value="ollama">Wixal local engine</option>'; $('provider-select').value = 'ollama'; $('provider-select').disabled = busy || benchmarkBusy || (state.modelDownloads || []).some(item => ['queued', 'downloading'].includes(item.state));
   $('model-provider-heading').textContent = local ? `${providerLabels.ollama.toUpperCase()} · ON THIS MAC` : `${providerLabels[state?.provider]} · CLOUD`;
   const current = selectedModel();
   $('model-current-name').textContent = current?.displayName || shortModel(state.model) || 'No model selected';
@@ -356,28 +476,30 @@ function renderModelList() {
   $('model-results-info').textContent = `${filtered.length} ${local ? 'installed' : 'available'} model${filtered.length === 1 ? '' : 's'}${filtered.length !== models.length ? ` of ${models.length}` : ''} · select a model to use it`;
   $('model-list').innerHTML = filtered.length ? filtered.map(model => {
     const selected = state.model === model.name, benchmark = modelBenchmark(model);
-    return `<div class="model-entry ${selected ? 'is-selected' : ''}"><button class="model-row ${selected ? 'selected' : ''}" data-model="${escapeHTML(model.name)}" aria-pressed="${selected}" ${busy || benchmarkBusy ? 'disabled' : ''}><div class="model-row-info"><div class="model-name-line"><strong>${escapeHTML(model.displayName || shortModel(model.name))}</strong>${selected ? '<span class="model-selected-badge">✓ Current</span>' : '<span class="model-select-hint">Use model →</span>'}</div><span class="model-id">${escapeHTML(model.name)}</span><div class="capabilities"><span class="capability">Chat</span>${model.capabilities?.includes('tools') ? '<span class="capability tools">Tools</span>' : ''}${model.capabilities?.includes('vision') ? '<span class="capability vision">Images</span>' : ''}${model.capabilities?.includes('thinking') ? '<span class="capability">Thinking</span>' : ''}${!model.capabilities ? '<span class="capability">Capabilities unavailable</span>' : ''}<span class="model-context">${escapeHTML(model.details?.parameter_size || '')}${model.contextLength ? ` · ${Math.round(model.contextLength / 1024)}k max context` : ''}</span></div></div><span class="model-size">${local ? `${(model.size / 1e9).toFixed(1)} GB<small>on disk</small>` : '<small>Cloud</small>'}</span></button>${local ? `<div class="model-actions"><span class="${model.fit?.fits || benchmark ? '' : 'model-fit-warning'}">${benchmark ? `${benchmark.tokensPerSecond} tok/s · tested at ${Math.round(benchmark.context / 1024)}k` : model.fit ? model.fit.fits ? `Estimated fit · ${(model.fit.required / 1024 ** 3).toFixed(1)} GiB` : `May exceed RAM · ${(model.fit.required / 1024 ** 3).toFixed(1)} GiB estimate` : 'Memory estimate unavailable'}</span><button data-benchmark="${escapeHTML(model.name)}" ${busy || benchmarkBusy || state.modelDownload ? 'disabled' : ''}>Benchmark</button><details class="model-manage"><summary aria-label="Manage ${escapeHTML(model.name)}">•••</summary><button data-model-delete="${escapeHTML(model.name)}" ${busy || benchmarkBusy || state.modelDownload ? 'disabled' : ''}>Delete model…</button></details></div>` : ''}</div>`;
-  }).join('') : `<div class="model-empty"><strong>${query || activeFilters ? 'No matching models' : local ? connected ? 'Your library is empty' : 'Local engine offline' : 'Connect your provider'}</strong><p>${query || activeFilters ? 'Try another search or reset the filters.' : local ? connected ? 'Open Downloads to add your first model, or import from Ollama in Local engine.' : 'Open Local engine to check the connection, then refresh.' : 'Open Manage connections to connect this provider, then refresh.'}</p></div>`;
+    return `<div class="model-entry ${selected ? 'is-selected' : ''}"><button class="model-row ${selected ? 'selected' : ''}" data-model="${escapeHTML(model.name)}" aria-pressed="${selected}" ${busy || benchmarkBusy ? 'disabled' : ''}><div class="model-row-info"><div class="model-name-line"><strong>${escapeHTML(model.displayName || shortModel(model.name))}</strong>${selected ? '<span class="model-selected-badge">✓ Current</span>' : `<span class="model-select-hint">${model.importable ? 'Import & use →' : 'Use model →'}</span>`}</div><span class="model-id">${escapeHTML(model.name)}</span><div class="capabilities"><span class="model-origin">${model.importable ? 'Installed in Ollama' : 'Ready in Wixal'}</span><span class="capability">Chat</span>${model.capabilities?.includes('tools') ? '<span class="capability tools">Tools</span>' : ''}${model.capabilities?.includes('vision') ? '<span class="capability vision">Images</span>' : ''}${model.capabilities?.includes('thinking') ? '<span class="capability">Thinking</span>' : ''}${!model.capabilities ? `<span class="capability">${model.importable ? 'Checked after import' : 'Capabilities unavailable'}</span>` : ''}<span class="model-context">${escapeHTML(model.details?.parameter_size || '')}${model.contextLength ? ` · ${Math.round(model.contextLength / 1024)}k max context` : ''}</span></div></div><span class="model-size">${local ? `${(model.size / 1e9).toFixed(1)} GB<small>on disk</small>` : '<small>Cloud</small>'}</span></button>${local && !model.importable ? `<div class="model-actions"><span class="${model.fit?.fits || benchmark ? '' : 'model-fit-warning'}">${benchmark ? `${benchmark.tokensPerSecond} tok/s · tested at ${Math.round(benchmark.context / 1024)}k` : model.fit ? model.fit.fits ? `Estimated fit · ${(model.fit.required / 1024 ** 3).toFixed(1)} GiB` : `May exceed RAM · ${(model.fit.required / 1024 ** 3).toFixed(1)} GiB estimate` : 'Memory estimate unavailable'}</span><button data-benchmark="${escapeHTML(model.name)}" ${busy || benchmarkBusy || state.modelDownload ? 'disabled' : ''}>Benchmark</button><details class="model-manage"><summary aria-label="Manage ${escapeHTML(model.name)}">•••</summary><button data-model-delete="${escapeHTML(model.name)}" ${busy || benchmarkBusy || state.modelDownload ? 'disabled' : ''}>Delete model…</button></details></div>` : ''}</div>`;
+  }).join('') : `<div class="model-empty"><strong>${query || activeFilters ? 'No matching models' : local ? connected ? 'Your library is empty' : 'Local engine offline' : 'Connect your provider'}</strong><p>${query || activeFilters ? 'Try another search or reset the filters.' : local ? connected ? 'Download an Ollama registry model, or refresh to find models already installed in Ollama.' : 'Open Local engine to check the connection, then refresh.' : 'Open Manage connections to connect this provider, then refresh.'}</p></div>`;
   $('model-list').querySelectorAll('[data-benchmark]').forEach(button => button.onclick = async () => { try { state = await invoke('benchmark-start', button.dataset.benchmark); render(); } catch {} });
   $('model-list').querySelectorAll('[data-model-delete]').forEach(button => button.onclick = () => { deleteModelName = button.dataset.modelDelete; $('model-delete-description').textContent = `${deleteModelName} · ${state.localRuntime.mode === 'managed' ? 'Wixal Local library' : 'external Ollama library'}`; $('models-dialog').close(); $('model-delete-dialog').showModal(); });
   $('context-size').value = String(state?.contextSize || 16384); $('context-size').disabled = busy || benchmarkBusy;
   $('model-pull-form').classList.toggle('hidden', !local);
   renderDownload(); renderRuntime(); renderModelAdvice();
-  $('model-library-info').textContent = local ? connected ? 'Capabilities reported by the local engine · memory fit is an estimate' : 'Start the local engine, then refresh.' : 'Tool and image support varies by model';
+  $('model-library-info').textContent = local ? connected ? 'All models use Wixal’s local engine · built-in tools are connected automatically' : 'Start the local engine, then refresh.' : 'Tool and image support varies by model';
   $('ollama-help').classList.toggle('hidden', !local || (connected && models.length > 0));
   $('model-list').querySelectorAll('[data-model]').forEach(button => button.onclick = () => useModel(button.dataset.model));
 }
 async function useModel(name) {
   const model = models.find(item => item.name === name);
   if (!model) { await loadModels(); return useModelAfterRefresh(name); }
-  const mode = model.capabilities?.includes('tools') ? state.mode : 'chat';
+  $('model-selection-status').textContent = model.importable ? `Preparing ${model.name} for Wixal…` : `Selecting ${model.name}…`;
   try {
-    const before = state.mode; state = await invoke('settings', { model: model.name, mode }); render();
+    state = await invoke('model-select', model.name);
+    await loadModels(); await loadLibraryInfo();
     if (!modelsPageOpen) $('models-dialog').close();
-    $('model-selection-status').textContent = `Using ${model.displayName || shortModel(model.name)}`;
-    if (before !== mode) toast('Switched to Chat. This model has no confirmed tool support.');
-  } catch {}
+    $('model-selection-status').textContent = `Using ${shortModel(model.name)} · Wixal local engine`;
+    if (!selectedModel()?.capabilities?.includes('tools')) toast('This model supports conversation. Choose a model marked Tools for actions.');
+  } catch { await refresh(); }
 }
+
 function useModelAfterRefresh(name) { if (models.some(item => item.name === name)) return useModel(name); toast('Refresh the library before selecting this model.'); }
 function renderCatalog() {
   const local = state.provider === 'ollama', type = $('model-type-filter').value, fit = $('model-fit-filter').value;
@@ -442,7 +564,7 @@ function renderMentions() {
   $('tool-mentions').querySelectorAll('button').forEach(b => b.onclick = () => insertMention(b.dataset.mention));
   const selected = availableTools().filter(t => new RegExp(`(?:^|\\s)@${t.id}(?=\\s|$|[.,!?])`).test(text));
   $('selected-mentions').classList.toggle('hidden', !selected.length);
-  $('selected-mentions').textContent = selected.length ? `Explicit tools: ${selected.map(t => '@' + t.id).join(', ')}` : '';
+  $('selected-mentions').textContent = selected.length ? `Requested tools: ${selected.map(t => '@' + t.id).join(', ')} · enabled follow-up tools stay available` : '';
 }
 function insertMention(id) {
   const input = $('prompt'), cursor = input.selectionStart, before = input.value.slice(0, cursor), replaced = before.replace(/@([a-zA-Z0-9_]*)$/, '@' + id + ' ');
@@ -452,12 +574,12 @@ function renderRuntime() {
   const runtime = state?.localRuntime; if (!runtime) return;
   const local = state.provider === 'ollama', managed = runtime.mode === 'managed';
   $('runtime-panel').classList.toggle('hidden', !local);
-  $('runtime-mode').value = runtime.mode;
+  $('runtime-mode').value = 'managed';
   $('ollama-help').querySelector('p').textContent = managed ? 'Open Downloads to add a model, or import from Ollama in Local engine.' : 'Open Ollama, then add a model from Downloads and refresh the list.';
   const locked = busy || !!state.benchmarkProgress || !!state.modelDownload || runtime.importing || ['starting', 'stopping'].includes(runtime.status);
   $('runtime-mode').disabled = locked;
   $('runtime-status').textContent = runtime.importing ? 'Importing…' : managed ? `${runtime.status} · ${runtime.version}` : 'External server';
-  $('runtime-description').textContent = managed ? 'Your model library lives with Wixal. No separate Ollama app is required.' : 'Uses your Ollama server on this Mac at port 11434 and its existing model library.';
+  $('runtime-description').textContent = 'All models run here on your Mac. Ollama downloads and imports use this same engine. Built-in tools are connected automatically.';
   if (managed && runtime.error) $('runtime-panel').open = true;
   $('runtime-error').textContent = runtime.error; $('runtime-error').classList.toggle('hidden', !runtime.error || !managed);
   $('runtime-start').disabled = locked || runtime.status === 'ready'; $('runtime-stop').disabled = locked || runtime.status !== 'ready';
@@ -538,7 +660,7 @@ function renderConnections() {
   $('chatgpt-accounts').querySelectorAll('[data-account-select]').forEach(button => button.onclick = async () => { try { connections = await invoke('chatgpt-select', button.dataset.accountSelect); renderConnections(); if (state.provider === 'chatgpt') await loadModels(); } catch {} });
   $('chatgpt-accounts').querySelectorAll('[data-account-connect]').forEach(button => button.onclick = () => signIn(button.dataset.accountConnect));
   $('chatgpt-accounts').querySelectorAll('[data-account-out]').forEach(button => button.onclick = async () => { try { connections = await invoke('chatgpt-sign-out', button.dataset.accountOut); toast(connections.message); renderConnections(); if (state.provider === 'chatgpt') await loadModels(); } catch {} });
-  $('sharing-projects').innerHTML = state.projects.length ? `<table class="sharing-table"><thead><tr><th>Project</th><th>Cloud models</th><th>Companion</th></tr></thead><tbody>${state.projects.map(p => `<tr><td>${escapeHTML(p.name)}</td><td><input type="checkbox" data-cloud="${p.id}" aria-label="Allow cloud context for ${escapeHTML(p.name)}" ${connections.cloudProjects.includes(p.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}></td><td><input type="checkbox" data-share="${p.id}" aria-label="Share ${escapeHTML(p.name)} with companion" ${connections.companion.sharedProjects.includes(p.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Open a project to choose what to share.</p>';
+  $('sharing-projects').innerHTML = state.projects.length ? `<table class="sharing-table"><thead><tr><th>Project</th><th>Companion</th></tr></thead><tbody>${state.projects.map(p => `<tr><td>${escapeHTML(p.name)}</td><td><input type="checkbox" data-share="${p.id}" aria-label="Share ${escapeHTML(p.name)} with companion" ${connections.companion.sharedProjects.includes(p.id) ? 'checked' : ''} ${busy ? 'disabled' : ''}></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Open a project to choose what to share.</p>';
   $('cloud-personal').checked = connections.cloudPersonal;
   $('companion-memory').checked = connections.companion.shareMemory;
   $('companion-enabled').checked = connections.companion.running;
@@ -550,9 +672,8 @@ function renderConnections() {
   $('api-key-form').querySelector('button').disabled = busy;
 }
 async function saveSharing() {
-  const settings = { cloudProjects: [...$('sharing-projects').querySelectorAll('[data-cloud]:checked')].map(input => input.dataset.cloud),
-    sharedProjects: [...$('sharing-projects').querySelectorAll('[data-share]:checked')].map(input => input.dataset.share),
-    cloudPersonal: $('cloud-personal').checked, shareMemory: $('companion-memory').checked, enabled: $('companion-enabled').checked };
+  const settings = { sharedProjects: [...$('sharing-projects').querySelectorAll('[data-share]:checked')].map(input => input.dataset.share),
+    shareMemory: $('companion-memory').checked, enabled: $('companion-enabled').checked };
   try { connections = await invoke('sharing', settings); state = await api.state(); render(); renderConnections(); } catch { renderConnections(); }
 }
 async function signIn(id) { try { await invoke('chatgpt-sign-in', id); connections = await api.connections(); renderConnections(); } catch {} }
@@ -679,11 +800,12 @@ $('folder-new-form').onsubmit = async event => {
 $('folder-open').onclick = async () => {
   if (folderLoading || !folderBrowser) return;
   $('folder-open').disabled = true;
-  try { await saveDraft(); state = await api['project-open'](folderBrowser.path); clearDraft(); resetTerminal(); render(); $('project-dialog').close(); $('prompt').focus(); }
+  try { await saveDraft(); state = await api['project-open'](folderBrowser.path, { mode: $('folder-memory-mode').value, size: Number($('folder-memory-size').value) }); clearDraft(); resetTerminal(); render(); $('project-dialog').close(); $('prompt').focus(); }
   catch (error) { folderError(error); }
   finally { $('folder-open').disabled = false; }
 };
 async function switchProject(id) { closeModelPage(); try { await saveDraft(); state = await invoke('project-select', id); clearDraft(); resetTerminal(); render(); } catch {} }
+function showHandoff() { if (busy) return; $('handoff-summary').disabled = !session()?.messages.length || !connected; $('handoff-status').textContent = ''; $('handoff-dialog').showModal(); }
 async function newSession() { closeModelPage(); try { await saveDraft(); state = await invoke('session-new'); clearDraft(); $('session-search').value = ''; render(); $('prompt').focus(); } catch {} }
 function resetTerminal() { terminalOpen = false; terminal?.reset(); $('terminal-panel').classList.add('hidden'); }
 async function toggleTerminal() {
@@ -804,10 +926,11 @@ const themes = [
   { id: 'sakura', name: 'Sakura', note: 'Charcoal & pink', bg: '#17181b', panel: '#25232a', accent: '#e9a5bd' },
   { id: 'midnight', name: 'Midnight', note: 'Cool blue', bg: '#151823', panel: '#222937', accent: '#a5b9e9' },
   { id: 'forest', name: 'Forest', note: 'Quiet green', bg: '#151e19', panel: '#22372c', accent: '#a5e9c1' },
-  { id: 'paper', name: 'Paper', note: 'Warm & light', bg: '#f1eee9', panel: '#ded9ce', accent: '#73583e' },
+  { id: 'paper', name: 'Paper', note: 'Warm & light', bg: '#f3f2ef', panel: '#ebe9e4', accent: '#73583e' },
 ];
 function applyAppearance() {
   document.documentElement.dataset.theme = state.ui.theme || 'sakura';
+  $('sidebar-app-icon').src = `../assets/icon-variants/${state.appIcon || 'sakura'}.png`;
   document.documentElement.dataset.reduceMotion = String(!!state.ui.reduceMotion);
   document.documentElement.style.setProperty('--conversation-size', `${state.ui.textSize || 13}px`);
   if (terminal) {
@@ -822,10 +945,17 @@ function renderSettings() {
   $('theme-options').querySelectorAll('button').forEach(button => button.onclick = () => savePreference({ theme: button.dataset.themeChoice }));
   $('settings-text-size').value = state.ui.textSize || 13;
   $('settings-motion').checked = !!state.ui.reduceMotion;
+  $('settings-launch-animation').checked = state.ui.launchAnimation !== false;
+  $('settings-launch-sound').checked = state.ui.launchSound !== false;
+  $('settings-icon-theme').checked = !state.ui.appIcon || state.ui.appIcon === 'theme';
+  $('settings-icon-theme').disabled = busy;
+  $('icon-options').innerHTML = ['sakura', 'midnight', 'pearl', 'copper'].map(id => `<button class="icon-card" type="button" data-icon-choice="${id}" aria-pressed="${state.appIcon === id}" ${busy ? 'disabled' : ''}><img src="../assets/icon-variants/${id}.png" alt=""><span>${id[0].toUpperCase() + id.slice(1)}</span></button>`).join('');
+  $('icon-options').querySelectorAll('button').forEach(button => button.onclick = () => savePreference({ appIcon: button.dataset.iconChoice }));
+  $('settings-icon-note').textContent = `${!state.ui.appIcon || state.ui.appIcon === 'theme' ? 'Following theme' : 'Selected icon'}: ${state.appIcon[0].toUpperCase() + state.appIcon.slice(1)}. Changes Wixal and the Mac Dock while the app is running.`;
   $('settings-sidebar').checked = !!state.ui.sidebarCollapsed;
   $('settings-summary').checked = state.autoSummary !== false;
   $('settings-context').value = state.contextSize;
-  ['settings-text-size', 'settings-motion', 'settings-summary', 'settings-context'].forEach(id => $(id).disabled = busy);
+  ['settings-text-size', 'settings-motion', 'settings-launch-animation', 'settings-launch-sound', 'settings-summary', 'settings-context'].forEach(id => $(id).disabled = busy);
   $('settings-status').textContent = busy ? 'Model preferences can be changed when the current task finishes.' : 'Changes are saved automatically.';
 }
 async function savePreference(value) {
@@ -837,6 +967,9 @@ function showSettings() {
 }
 $('settings-button').onclick = showSettings;
 $('settings-text-size').onchange = event => savePreference({ textSize: Number(event.target.value) });
+$('settings-icon-theme').onchange = event => savePreference({ appIcon: event.target.checked ? 'theme' : state.appIcon });
+$('settings-launch-animation').onchange = event => savePreference({ launchAnimation: event.target.checked });
+$('settings-launch-sound').onchange = event => savePreference({ launchSound: event.target.checked });
 $('settings-motion').onchange = event => savePreference({ reduceMotion: event.target.checked });
 $('settings-summary').onchange = event => savePreference({ autoSummary: event.target.checked });
 $('settings-context').onchange = async event => { await savePreference({ contextSize: Number(event.target.value) }); await loadModels(); };
@@ -862,6 +995,7 @@ $('composer-files').onclick = $('header-files').onclick;
 $('header-tools').onclick = () => toggleDrawer('toolkit');
 $('header-memory').onclick = () => toggleDrawer('memory');
 $('header-terminal').onclick = toggleTerminal;
+$('approval-mode').onchange = async event => { try { state = await invoke('approval-mode', event.target.value); render(); } catch { render(); } };
 $('composer-tools').onclick = () => { $('prompt').value += `${$('prompt').value && !/\s$/.test($('prompt').value) ? ' ' : ''}@`; sizePrompt(); mentionIndex = 0; renderMentions(); $('prompt').focus(); };
 $('new-chat').onclick = newSession; $('open-project').onclick = openProject; $('refresh-models').onclick = () => loadModels(true); $('model-refresh').onclick = async () => { await loadModels(true); await loadLibraryInfo(); };
 $('terminal-button').onclick = toggleTerminal; $('close-terminal').onclick = toggleTerminal;
@@ -896,6 +1030,33 @@ $('runtime-import').onclick = async () => {
   $('runtime-import-status').textContent = 'Copying and verifying model files…';
   try { state = await invoke('runtime-import', $('runtime-import-model').value); $('runtime-import-status').textContent = `Imported ${state.imported.name}.`; await loadModels(); }
   catch (error) { $('runtime-import-status').textContent = error.message; await refresh(); }
+};
+$('website-simulate').onclick = async () => {
+  if (busy) return;
+  try {
+    setBusy(true); streamText = '';
+    await invoke('chat', 'Use website_simulate with report_prefix website-simulation. Use the structured cases returned by the tool to explain each reproduced attack versus each hardened defense. Read saved report sections only for specific additional evidence. Clearly state these are disposable local fixtures and do not establish vulnerabilities in the website. Give concrete remediation and next tests.');
+    if (!$('toolkit-drawer').classList.contains('hidden')) toggleDrawer('toolkit');
+  } catch { setBusy(false); }
+};
+$('website-form').onsubmit = async event => {
+  event.preventDefault(); if (busy) return;
+  try {
+    const args = { url: $('website-target').value, profile: $('website-profile').value, max_pages: 8, protected_paths: $('website-protected').value.split(',').map(p => p.trim()).filter(Boolean), report_prefix: $('website-report').value };
+    await invoke('website-plan', args);
+    setBusy(true); streamText = '';
+    await invoke('chat', `Use website_assess with exactly these authorised assessment arguments: ${JSON.stringify(args)}. Use the structured tool result as assessment evidence. Read saved report sections only for specific missing details. Explain confirmed configuration findings, suspected issues, successful checks, request errors and limits. Do not claim exploitation without reproduced evidence.`);
+    if (!$('toolkit-drawer').classList.contains('hidden')) toggleDrawer('toolkit');
+  } catch { setBusy(false); }
+};
+$('scan-form').onsubmit = async event => {
+  event.preventDefault(); if (busy) return;
+  try {
+    const plan = await invoke('security-plan', { target: $('scan-target').value, profile: $('scan-profile').value, ...($('scan-ports').value.trim() ? { ports: $('scan-ports').value.trim() } : {}) });
+    setBusy(true); streamText = '';
+    await invoke('chat', `Run the authorised ${plan.profile} assessment of ${plan.target}${plan.ports ? ` on TCP ports ${plan.ports}` : ''}. Use network_scan with profile ${plan.profile}, then network_read until completion. Report port/service evidence and script observations, distinguish suspected issues from verified vulnerabilities, and suggest relevant follow-up checks.`);
+    if (!$('toolkit-drawer').classList.contains('hidden')) toggleDrawer('toolkit');
+  } catch { setBusy(false); }
 };
 $('tool-search').oninput = renderToolkit; $('tool-category').onchange = renderToolkit;
 $('tools-enable-all').onclick = async () => { try { state = await invoke('settings', { enabledTools: availableTools().map(t => t.id) }); render(); } catch {} };
@@ -934,7 +1095,7 @@ $('session-menu').onkeydown = event => {
 };
 document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => $(button.dataset.close).close());
 $('palette').querySelectorAll('button').forEach(button => button.onclick = () => { $('palette').close(); actions[button.dataset.action](); });
-$('memory-form').onsubmit = async event => { event.preventDefault(); try { state = await invoke('memory-add', $('memory-input').value); $('memory-input').value = ''; render(); } catch {} };
+$('memory-form').onsubmit = async event => { event.preventDefault(); try { state = memoryEditId ? await invoke('memory-update', memoryEditId, $('memory-input').value) : await invoke('memory-add', $('memory-input').value); cancelMemoryEdit(); render(); } catch {} };
 function positionModeMenu() {
   const menu = $('mode-menu'); if (!menu.matches(':popover-open')) return;
   const rect = $('mode-button').getBoundingClientRect();
@@ -962,7 +1123,7 @@ window.addEventListener('resize', () => { positionModeMenu(); updateLatestButton
 $('composer').onsubmit = async event => {
   event.preventDefault(); const prompt = $('prompt').value.trim(); if (!prompt || busy || session()?.archivedAt) return;
   if (!connected || !selectedModel()) { toast(`Connect ${providerLabels[state.provider]} and choose a model first.`); showModels(); return; }
-  if (state.mode === 'agent' && project() && !selectedModel().capabilities?.includes('tools')) { toast('This model needs Chat mode, or choose a model marked Tools.'); showModels(); return; }
+  if (state.mode === 'agent' && !selectedModel().capabilities?.includes('tools')) { toast('This model needs Chat mode, or choose a model marked Tools.'); showModels(); return; }
   if (attachments.length && !selectedModel().capabilities?.includes('vision')) { toast('The attached images need a model marked Images.'); showModels(); return; }
   streamText = ''; setBusy(true);
   try { await invoke('chat', prompt, attachments.map(image => image.id)); $('prompt').value = ''; renderMentions(); attachments = []; sizePrompt(); await saveDraft(); renderAttachments(); $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight; }
@@ -975,6 +1136,7 @@ $('prompt').onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey 
 $('stop').onclick = () => api.stop();
 document.querySelectorAll('[data-prompt]').forEach(button => button.onclick = () => { $('prompt').value = button.dataset.prompt; sizePrompt(); $('prompt').focus(); if (button.dataset.project && !project()) toast('Open a project folder to explore its files.'); });
 document.addEventListener('keydown', event => {
+  if (entryVisible) return;
   if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); if (!$('settings-dialog').open) showSettings(); }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') { event.preventDefault(); if (!busy) showModels(); }
   if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 't') { event.preventDefault(); actions.toolkit(); }
@@ -1002,12 +1164,16 @@ function showApproval(data) {
   }
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('approval-dialog').showModal(); $('decline').focus();
 }
-async function respondApproval(allowed) { const id = approvalId; approvalId = null; $('approval-dialog').close(); if (id) await api.approval({ id, allowed }); }
+async function respondApproval(allowed) {
+  const id = approvalId; approvalId = null; $('approval-dialog').close();
+  runPhase = allowed ? `Using ${availableTools().find(tool => tool.id === liveTool)?.name || liveTool}…` : 'Reading tool results';
+  renderMessages(); if (id) await api.approval({ id, allowed });
+}
 $('approve').onclick = () => respondApproval(true); $('decline').onclick = () => respondApproval(false);
 $('approval-dialog').addEventListener('cancel', event => { event.preventDefault(); respondApproval(false); });
 api.onEvent(async event => {
   if (event.type === 'runtime' && state) { state.localRuntime = event.value; renderRuntime(); renderDownload(); if (event.value.status === 'error' && state.provider === 'ollama') { connected = false; $('connection-label').textContent = 'Wixal Local offline'; $('connection-dot').classList.add('offline'); renderWorkspaceContext(); } }
-  if (event.type === 'run-started') { streamText = ''; setBusy(true); }
+  if (event.type === 'run-started') { streamText = ''; inspectedAction = null; runFailure = ''; liveTool = ''; liveCommandOutput = ''; runPhase = 'Working on your request…'; $('activity-dock').open = false; setBusy(true); renderActivityDock(); }
   if (event.type === 'benchmark') { state.benchmarkProgress = event.value; renderBenchmarkProgress(); }
   if (event.type === 'benchmark-done') { toast(`Benchmark saved for ${event.name}.`); await refresh(); }
   if (event.type === 'benchmark-idle') { state.benchmarkProgress = null; await refresh(); }
@@ -1016,7 +1182,13 @@ api.onEvent(async event => {
   if (event.type === 'connections') { connections = await api.connections(); renderConnections(); if (event.message) toast(event.message); if (event.firstPlanUse) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('plan-notice-dialog').showModal(); } if (state.provider !== 'ollama') await loadModels(); }
   if (event.type === 'state') { streamText = ''; await refresh(); }
   if (event.type === 'token') { streamText += event.text; if (!streamFrame) streamFrame = requestAnimationFrame(() => { streamFrame = null; renderStreamingMessage(); }); }
-  if (event.type === 'phase') $('activity-label').textContent = event.value;
+  if (event.type === 'phase') {
+    const tool = event.value.startsWith('Using ') ? event.value.slice(6) : null;
+    if (tool) { liveTool = tool; liveCommandOutput = ''; }
+    runPhase = tool ? `Using ${availableTools().find(item => item.id === tool)?.name || tool}…` : event.value;
+    $('activity-label').textContent = runPhase; renderMessages();
+  }
+  if (event.type === 'command-output') { liveCommandOutput += event.text; renderActivityDock(); }
   if (event.type === 'extensions-changed') await refresh();
   if (event.type === 'model-downloads' && state) {
     const key = event.items.map(item => `${item.id}:${item.state}`).join('|'), changed = key !== downloadStateKey;
@@ -1025,12 +1197,168 @@ api.onEvent(async event => {
   }
   if (event.type === 'model-download-done') { toast(`Downloaded ${event.name}. Choose it in the model picker.`); if (state.provider === 'ollama') { await loadModels(); await loadLibraryInfo(); } }
 
+  if (event.type === 'context') { renderContextMeter(event); }
   if (event.type === 'context') $('context-note').textContent = event.omitted > 0 ? event.summarized ? `${event.summarized} older messages summarized` : `${event.omitted} older messages outside context` : '';
-  if (event.type === 'error') { toast(event.message); if (state.provider === 'chatgpt' && /usage limit/i.test(event.message)) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('usage-limit-dialog').showModal(); } }
+  if (event.type === 'error') { runFailure = event.message; toast(event.message); if (state.provider === 'chatgpt' && /usage limit/i.test(event.message)) { document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close()); $('usage-limit-dialog').showModal(); } }
   if (event.type === 'done') { if (streamFrame) cancelAnimationFrame(streamFrame); streamFrame = null; streamText = ''; setBusy(false); if ($('approval-dialog').open) $('approval-dialog').close(); await refresh(); $('prompt').focus(); }
-  if (event.type === 'approval') showApproval(event);
+  if (event.type === 'approval-mode') { state = await api.state(); if (event.value === 'all' && $('approval-dialog').open) { approvalId = null; $('approval-dialog').close(); } render(); }
+  if (event.type === 'auto-approved') { runPhase = `Using ${availableTools().find(tool => tool.id === event.tool)?.name || event.tool}…`; $('activity-label').textContent = runPhase; renderMessages(); }
+  if (event.type === 'approval') { runPhase = 'Waiting for your review'; showApproval(event); renderMessages(); }
   if (event.type === 'terminal') terminal?.write(event.text);
   if (event.type === 'terminal-exit') terminal?.write(`\r\n[Shell exited: ${event.exitCode}. Hide and reopen to restart.]\r\n`);
-  if (event.type === 'shortcut') actions[event.action]?.();
+  if (event.type === 'shortcut' && !entryVisible) actions[event.action]?.();
 });
-(async () => { connections = await api.connections(); await refresh(); await loadModels(); $('prompt').focus(); })().catch(error => toast(error.message));
+
+let accountAction = 'sign-in', accountWorking = false, entryVisible = false;
+function renderSetup() {
+  $('setup-account-status').textContent = state.account?.signedIn ? `Signed in as ${state.account.profile.name}` : 'Guest workspace';
+  $('setup-finish').textContent = state.account?.signedIn ? 'Open workspace →' : 'Continue as guest →';
+  $('setup-engine-status').textContent = state.localRuntime?.status === 'running' ? `Local engine ready${state.model ? ' · ' + shortModel(state.model) : ' · choose a model to start chatting'}` : `Local engine: ${state.localRuntime?.status || 'starting'}. You can set up models from the library.`;
+  $('setup-project-status').textContent = project() ? `Project selected: ${project().name}` : 'Choose a project folder, or start in your personal workspace.';
+  $('setup-themes').innerHTML = themes.map(t => `<button class="theme-card" data-setup-theme="${t.id}" aria-pressed="${state.ui.theme === t.id}"><span class="theme-preview" style="--preview-bg:${t.bg};--preview-panel:${t.panel};--preview-accent:${t.accent}" aria-hidden="true"></span>${t.name}<small>${t.note}</small></button>`).join('');
+  $('setup-themes').querySelectorAll('button').forEach(b => b.onclick = () => savePreference({ theme: b.dataset.setupTheme }));
+}
+function showSetup() { document.querySelectorAll('dialog[open]').forEach(d => d.close()); renderSetup(); $('setup-dialog').showModal(); }
+async function finishSetup() { try { state = await invoke('setup-complete'); $('setup-dialog').close(); render(); } catch {} }
+$('setup-finish').onclick = finishSetup;
+$('setup-dialog').addEventListener('cancel', event => { event.preventDefault(); finishSetup(); });
+$('setup-dialog').querySelector('[data-close]').onclick = finishSetup;
+$('setup-account').onclick = () => { $('setup-dialog').close(); showAccount(); };
+$('setup-models').onclick = () => { $('setup-dialog').close(); showModels(); };
+$('setup-project').onclick = async () => { $('setup-dialog').close(); await openProject(); showSetup(); };
+$('settings-setup').onclick = showSetup;
+function renderAccount() {
+  const a = state.account, user = a?.profile;
+  if (!a) return;
+  $('account-label').textContent = a.signedIn ? user.name : 'Guest';
+  $('account-auth').classList.toggle('hidden', a.signedIn);
+  $('account-profile').classList.toggle('hidden', !a.signedIn);
+  $('account-status').textContent = a.configured ? a.message || '' : 'Online accounts are not configured yet. Guest mode is ready to use.';
+  $('account-login-tab').setAttribute('aria-pressed', String(accountAction === 'sign-in'));
+  $('account-create-tab').setAttribute('aria-pressed', String(accountAction === 'create'));
+  $('account-name-wrap').classList.toggle('hidden', accountAction !== 'create');
+  $('account-name').required = accountAction === 'create';
+  $('account-password').autocomplete = accountAction === 'create' ? 'new-password' : 'current-password';
+  $('account-password').minLength = accountAction === 'create' ? 10 : 1;
+  $('account-submit').textContent = accountWorking ? 'Please wait…' : accountAction === 'create' ? 'Create account' : 'Sign in';
+  document.querySelectorAll('#account-dialog button, #account-dialog input, #account-auth button, #account-auth input, #start-guest, #start-resume').forEach(el => { if (!el.dataset.close) el.disabled = accountWorking || busy; });
+  $('account-submit').disabled ||= !a.configured;
+  $('account-forgot').disabled ||= !a.configured;
+  if (entryVisible) { $('start-resume').classList.toggle('hidden', !a.signedIn); $('start-resume').textContent = user ? `Continue as ${user.name}` : 'Continue to Wixal'; }
+  if (user) {
+    $('account-display-name').textContent = user.name;
+    $('account-profile-email').textContent = user.email;
+    $('account-verification').textContent = user.verified ? 'Email verified' : 'Verify your email to enable cloud presets';
+    $('account-verify-actions').classList.toggle('hidden', user.verified);
+    for (const id of ['preset-save', 'preset-name', 'preset-sync']) $(id).disabled ||= !user.verified;
+    $('account-presets').innerHTML = a.presets.length ? a.presets.map(p => `<div class="preset-row"><strong>${escapeHTML(p.name)}</strong><div><button class="secondary" data-preset-apply="${escapeHTML(p.id)}">Apply</button><button class="text-button" data-preset-delete="${escapeHTML(p.id)}">Delete</button></div></div>`).join('') : '<p class="muted">No presets yet. Save your current workspace setup to get started.</p>';
+    $('account-presets').querySelectorAll('[data-preset-apply]').forEach(b => { b.disabled = accountWorking || busy || !user.verified; b.onclick = () => accountRequest('preset-apply', b.dataset.presetApply); });
+    $('account-presets').querySelectorAll('[data-preset-delete]').forEach(b => { b.disabled = accountWorking || busy || !user.verified; b.onclick = () => accountRequest('preset-delete', b.dataset.presetDelete); });
+  }
+}
+function showAccount() { document.querySelectorAll('dialog[open]').forEach(d => d.close()); renderAccount(); $('account-dialog').showModal(); }
+async function accountRequest(name, value) {
+  if (accountWorking) return;
+  accountWorking = true; renderAccount();
+  try { state = await invoke(name, value); render(); if (entryVisible && ['account-create', 'account-sign-in'].includes(name) && state.account.signedIn) await continueEntry('account'); return true; }
+  catch (error) { $('account-status').textContent = error.message.replace(/^Error invoking remote method '[^']+': Error: /, ''); return false; }
+  finally { accountWorking = false; const message = $('account-status').textContent; renderAccount(); $('account-status').textContent = message; }
+}
+
+function restoreAccountPanel() {
+  $('account-dialog').insertBefore($('account-auth'), $('account-profile'));
+  $('account-dialog').append($('account-status'));
+}
+function showEntry() {
+  document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  entryVisible = true; document.body.classList.add('entry-active');
+  $('start-page').classList.remove('hidden');
+  document.querySelector('.workspace').inert = true;
+  document.querySelector('.titlebar').inert = true;
+  $('start-auth-host').append($('account-auth'), $('account-status'));
+  accountAction = 'sign-in'; renderAccount();
+  if (!state.account.signedIn) $('account-email').focus();
+}
+async function continueEntry(choice) {
+  try {
+    state = await invoke('entry-complete', choice);
+    entryVisible = false; document.body.classList.remove('entry-active'); restoreAccountPanel();
+    $('account-password').value = '';
+    $('start-page').classList.add('hidden');
+    document.querySelector('.workspace').inert = false;
+    document.querySelector('.titlebar').inert = false;
+    render();
+    if (!state.setup.completed) showSetup();
+    else $('prompt').focus();
+  } catch (error) { $('account-status').textContent = error.message.replace(/^Error invoking remote method '[^']+': Error: /, ''); }
+}
+$('start-guest').onclick = () => continueEntry('guest');
+$('start-resume').onclick = () => continueEntry('account');
+async function showLegal(id) {
+  try { const doc = await invoke('legal-document', id); $('legal-title').textContent = doc.title; $('legal-body').innerHTML = DOMPurify.sanitize(marked.parse(doc.markdown)); $('legal-dialog').showModal(); $('legal-dialog').scrollTop = 0; }
+  catch {}
+}
+document.querySelectorAll('[data-legal]').forEach(button => button.onclick = () => showLegal(button.dataset.legal));
+$('legal-body').onclick = async event => { const link = event.target.closest('a'); if (link) { event.preventDefault(); try { await invoke('legal-link', link.getAttribute('href')); } catch {} } };
+
+$('account-dialog').addEventListener('close', () => { $('account-password').value = ''; });
+$('account-button').onclick = showAccount; $('settings-account').onclick = showAccount;
+$('account-login-tab').onclick = () => { accountAction = 'sign-in'; $('account-password').value = ''; renderAccount(); };
+$('account-create-tab').onclick = () => { accountAction = 'create'; $('account-password').value = ''; renderAccount(); };
+$('account-form').onsubmit = async event => { event.preventDefault(); const value = { email: $('account-email').value, password: $('account-password').value, name: $('account-name').value }; $('account-password').value = ''; await accountRequest(accountAction === 'create' ? 'account-create' : 'account-sign-in', value); };
+$('account-forgot').onclick = () => accountRequest('account-reset', $('account-email').value);
+$('account-sign-out').onclick = () => accountRequest('account-sign-out');
+$('account-refresh').onclick = () => accountRequest('account-refresh'); $('account-resend').onclick = () => accountRequest('account-resend');
+$('preset-sync').onclick = () => accountRequest('preset-sync');
+$('preset-form').onsubmit = async event => { event.preventDefault(); if (await accountRequest('preset-save', $('preset-name').value)) $('preset-name').value = ''; };
+
+(async () => { connections = await api.connections(); await refresh(); await window.wixalLaunch; if (!state.setup.entryCompleted) showEntry(); else { document.body.classList.remove('entry-active'); $('start-page').classList.add('hidden'); document.querySelector('.workspace').inert = false; if (!state.setup.completed) showSetup(); } await loadModels(); renderSetup(); const security = await api['security-tools'](); $('security-tool-status').textContent = security.installed ? 'Nmap ready · results return to this chat' : 'Nmap missing · install with brew install nmap'; $('scan-profile').innerHTML = security.profiles.map(p => `<option value="${p.id}">${escapeHTML(p.label)} · ${escapeHTML(p.intensity)}</option>`).join(''); $('scan-profile').value = 'services'; if (!entryVisible && !document.querySelector('dialog[open]')) $('prompt').focus(); })().catch(error => toast(error.message));
+
+const memoryHelp = size => Number(size) === 8000 ? 'Light: quick to curate, focused recall. Fewer saved details; up to 1,000 characters retrieved per request.' : Number(size) === 24000 ? 'Balanced: space for decisions and preferences; up to 2,400 characters retrieved per request. Recommended for most projects.' : 'Detailed: retains more decisions; up to 4,000 characters retrieved per request. More to curate and less room for live chat if many details are relevant.';
+function cancelMemoryEdit() { memoryEditId = null; $('memory-input').value = ''; $('memory-save').textContent = 'Save memory'; $('memory-edit-cancel').classList.add('hidden'); }
+function renderMemoryOptions(memories) {
+  const p = project(), size = p?.memorySize || 24000, mode = p?.memoryMode || 'project', used = memories.reduce((n, m) => n + m.content.length, 0);
+  $('project-memory-controls').classList.toggle('hidden', !p);
+  $('project-memory-mode').value = mode; $('project-memory-size').value = size;
+  $('memory-budget-help').textContent = memoryHelp(size);
+  $('memory-capacity').value = Math.min(100, used / size * 100);
+  $('memory-capacity-label').textContent = `${used.toLocaleString()} / ${size.toLocaleString()} saved characters. Relevant earlier chats are retrieved locally within the same request budget; they do not consume saved-note capacity.`;
+  for (const id of ['project-memory-mode', 'project-memory-size', 'memory-input', 'memory-save']) $(id).disabled = busy || (['memory-input', 'memory-save'].includes(id) && ['off', 'global'].includes(mode));
+  $('global-memory-enabled').checked = state.globalMemoryEnabled !== false; $('global-memory-enabled').disabled = busy;
+  if (document.activeElement !== $('global-memory-input')) $('global-memory-input').value = state.globalMemory || '';
+  $('global-memory-description').textContent = state.globalMemoryAccount ? 'Saved explicitly to your verified Wixal account through Firebase. Only this short profile syncs; project notes and chats stay on this Mac.' : 'Guest preferences stay on this Mac. Signing in uses that account’s separate profile; guest preferences are not uploaded automatically.';
+  $('global-memory-refresh').classList.toggle('hidden', !state.globalMemoryAccount);
+  $('global-memory-form').querySelectorAll('button, textarea').forEach(node => node.disabled = busy || (state.globalMemoryAccount && !state.account?.profile?.verified));
+  $('global-memory-capacity').textContent = `${$('global-memory-input').value.length} / 1,200 characters`;
+}
+async function saveMemoryOptions() { try { state = await invoke('project-memory-settings', { mode: $('project-memory-mode').value, size: Number($('project-memory-size').value) }); render(); } catch { render(); } }
+$('project-memory-mode').onchange = saveMemoryOptions; $('project-memory-size').onchange = saveMemoryOptions;
+$('folder-memory-size').onchange = () => { $('folder-memory-help').textContent = memoryHelp($('folder-memory-size').value); }; $('folder-memory-size').onchange();
+$('memory-edit-cancel').onclick = cancelMemoryEdit;
+$('global-memory-enabled').onchange = async event => { try { state = await invoke('settings', { globalMemoryEnabled: event.target.checked }); render(); } catch {} };
+$('global-memory-input').oninput = () => { $('global-memory-capacity').textContent = `${$('global-memory-input').value.length} / 1,200 characters`; };
+$('global-memory-form').onsubmit = async event => { event.preventDefault(); try { state = await invoke('global-memory-save', $('global-memory-input').value); $('global-memory-input').blur(); render(); toast(state.globalMemoryAccount ? 'Global preferences saved to your account.' : 'Global preferences saved on this Mac.'); } catch {} };
+$('global-memory-refresh').onclick = async () => { try { state = await invoke('global-memory-refresh'); render(); } catch {} };
+function renderContextMeter(value) {
+  $('context-progress').value = value.percent;
+  $('context-usage-label').textContent = `~${value.used.toLocaleString()} / ${value.inputLimit.toLocaleString()} input tokens · ${value.limit.toLocaleString()} window`;
+  $('context-usage-label').title = `Estimated tokenizer usage including tools, memories and instructions. ${value.reserve.toLocaleString()} tokens reserved for the reply. Older turns may be summarized. This is not an exact tokenizer count.`;
+  $('context-warning').classList.toggle('hidden', value.percent < 80 && !value.omitted);
+  $('context-new-chat').disabled = busy; $('context-warning-new').disabled = busy;
+}
+function scheduleContextPreview() {
+  clearTimeout(contextPreviewTimer); const revision = ++contextPreviewRevision;
+  contextPreviewTimer = setTimeout(async () => { try { const value = await api['context-preview']($('prompt').value); if (revision === contextPreviewRevision) renderContextMeter(value); } catch {} }, 150);
+}
+$('prompt').addEventListener('input', scheduleContextPreview);
+$('context-new-chat').onclick = showHandoff; $('context-warning-new').onclick = showHandoff;
+$('handoff-empty').onclick = async () => { $('handoff-dialog').close(); await newSession(); };
+$('handoff-summary').onclick = async () => {
+  if (busy) return; setBusy(true); $('handoff-stop').classList.remove('hidden'); $('handoff-empty').disabled = true; $('handoff-summary').disabled = true;
+  $('handoff-status').textContent = 'Summarizing with the selected local model…'; render();
+  try { await saveDraft(); state = await invoke('session-handoff'); clearDraft(); $('handoff-dialog').close(); toast(session()?.handoff?.method === 'excerpts' ? 'Summary unavailable. Labelled fallback excerpts were carried into the new chat.' : 'Summary added to the new chat. Review it before continuing.'); }
+  catch { $('handoff-status').textContent = 'The original chat is saved. Retry or start fresh.'; }
+  finally { $('handoff-stop').classList.add('hidden'); $('handoff-empty').disabled = false; $('handoff-summary').disabled = false; setBusy(false); }
+};
+
+$('handoff-stop').onclick = () => { $('handoff-status').textContent = 'Stopping summary…'; api.stop(); };

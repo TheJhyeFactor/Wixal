@@ -1,0 +1,24 @@
+.launch-screen {
+  position: fixed; inset: 0; margin: 0; width: 100vw; height: 100vh;
+  max-width: none; max-height: none; padding: 0; outline: none; border: 0; border-radius: 0;
+  background: var(--bg, #151619); color: var(--text, #eee9e5); overflow: hidden;
+}
+.launch-screen::backdrop { background: var(--bg, #151619); }
+.launch-brand { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.launch-halo { position: absolute; width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--pink, #e9a5bd) 18%, transparent), transparent 68%); }
+.launch-mark { width: 122px; height: 122px; z-index: 1; overflow: visible; }
+.launch-mark path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.launch-w { stroke: currentColor; stroke-width: 7; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.launch-cursor { stroke: var(--pink, #e9a5bd); stroke-width: 6; opacity: 0; }
+.launch-name { z-index: 1; margin-top: 18px; font-size: 28px; font-weight: 600; letter-spacing: -1.2px; opacity: 0; }
+.launch-name span { color: var(--pink, #e9a5bd); }
+.launch-playing .launch-w { animation: launch-draw 650ms 80ms ease-out forwards; }
+.launch-playing .launch-cursor { animation: launch-reveal 250ms 610ms ease-out forwards; }
+.launch-playing .launch-name { animation: launch-reveal 350ms 520ms ease-out forwards; }
+.launch-playing .launch-halo { animation: launch-glow 1250ms ease-out both; }
+.launch-playing .launch-brand { animation: launch-exit 300ms 1500ms ease-in forwards; }
+@keyframes launch-draw { to { stroke-dashoffset: 0; } }
+@keyframes launch-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes launch-glow { from { opacity: 0; transform: scale(.7); } 65% { opacity: 1; } to { opacity: .8; transform: scale(1.1); } }
+@keyframes launch-exit { to { opacity: 0; transform: scale(1.025); } }
+@media (prefers-reduced-motion: reduce) { .launch-playing * { animation: none !important; } }

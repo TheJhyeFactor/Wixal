@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><title>Wixal sakura app icon</title><defs>
+  <linearGradient id="bg" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#f6c1d3"/><stop offset=".55" stop-color="#bf749b"/><stop offset="1" stop-color="#714766"/></linearGradient>
+  <linearGradient id="mark" x1="0" y1="0" x2=".3" y2="1"><stop stop-color="#fffaf7"/><stop offset="1" stop-color="#f5e5eb"/></linearGradient>
+  <linearGradient id="rim" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#ffe2ec" stop-opacity=".75"/><stop offset=".5" stop-color="#ffe2ec" stop-opacity=".12"/><stop offset="1" stop-color="#ffe2ec" stop-opacity=".3"/></linearGradient>
+  <radialGradient id="glow" cx=".3" cy=".15" r=".9"><stop stop-color="#ffe5ef" stop-opacity=".22"/><stop offset="1" stop-color="#ffe5ef" stop-opacity="0"/></radialGradient>
+  <filter id="shadow" x="-.3" y="-.3" width="1.6" height="1.8"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity=".24"/></filter>
+  </defs><rect x="32" y="32" width="960" height="960" rx="214" fill="url(#bg)"/><rect x="32" y="32" width="960" height="960" rx="214" fill="url(#glow)"/><rect x="37" y="37" width="950" height="950" rx="209" fill="none" stroke="url(#rim)" stroke-width="4"/>
+  <g filter="url(#shadow)"><path d="M270 300 374 690 521 404 668 690 772 300" fill="none" stroke="url(#mark)" stroke-width="68" stroke-linecap="round" stroke-linejoin="round"/><path d="M714 798h116" fill="none" stroke="#ffd9e8" stroke-width="48" stroke-linecap="round"/></g></svg>

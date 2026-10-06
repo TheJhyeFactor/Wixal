@@ -19,7 +19,7 @@ async function modelDetails(name, fetcher = fetch) {
   const values = info.model_info || {};
   const number = suffix => Number(Object.entries(values).find(([key]) => key.endsWith(suffix))?.[1]) || 0;
   const layers = number('.block_count'), embedding = number('.embedding_length'), heads = number('.attention.head_count'), kvHeads = number('.attention.head_count_kv');
-  return { kvBytesPerToken: layers && embedding && heads && kvHeads ? Math.ceil(2 * layers * (embedding / heads) * kvHeads) : null, capabilities: info.capabilities || [], details: info.details || {}, contextLength: contextEntry?.[1] || null };
+  return { kvBytesPerToken: layers && embedding && heads && kvHeads ? Math.ceil(2 * layers * (embedding / heads) * kvHeads) : null, capabilities: info.capabilities || [], thinking: info.thinking || null, details: info.details || {}, contextLength: contextEntry?.[1] || null };
 }
 async function getModels(fetcher = fetch, { refresh = false } = {}) {
   const response = await fetcher(`${await localEndpoint()}/api/tags`, { signal: AbortSignal.timeout(5000) });

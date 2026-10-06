@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.7.3",
+  "version": "0.7.7",
   "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
   "main": "app/main.cjs",
   "private": true,
@@ -24,14 +24,23 @@
     "test:performance": "node scripts/performance-smoke.cjs",
     "test:browser": "env -u ELECTRON_RUN_AS_NODE electron scripts/browser-tools-smoke.cjs",
     "test:command-tools": "node scripts/command-tools-ui-smoke.cjs",
+    "test:activity": "node scripts/activity-ui-smoke.cjs",
     "postpackage": "node scripts/runtime-package.cjs",
     "test:settings": "node scripts/settings-smoke.cjs",
+    "test:launch": "node scripts/launch-smoke.cjs",
+    "test:icons": "node scripts/icon-smoke.cjs",
     "test:sidebar": "node scripts/sidebar-smoke.cjs",
     "test:project-picker": "node scripts/project-picker-smoke.cjs",
     "test:models": "node scripts/model-picker-smoke.cjs",
     "test:model-library": "node scripts/model-library-smoke.cjs",
     "test:model-download-live": "node scripts/model-download-live-smoke.cjs",
-    "test:workspace": "node scripts/workspace-ui-smoke.cjs"
+    "test:workspace": "node scripts/workspace-ui-smoke.cjs",
+    "test:chat-tools-live": "node scripts/chat-tools-live-smoke.cjs",
+    "test:security": "node scripts/security-ui-smoke.cjs",
+    "test:website": "node --test test/website-assessment.test.cjs",
+    "test:website-ui": "node scripts/website-ui-smoke.cjs",
+    "test:accounts": "node scripts/accounts-smoke.cjs",
+    "test:memory": "node scripts/memory-smoke.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",

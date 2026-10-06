@@ -45,6 +45,13 @@ const definition = (name, description, properties, required) => ({ type: 'functi
 }});
 const str = description => ({ type: 'string', description });
 const definitions = [
+  definition('website_simulate', 'Run reproducible attack simulations against disposable vulnerable and hardened loopback fixtures: reflected scripts, framing headers, sensitive-file canaries, redirects, access checks, cross-origin writes, forwarding-header throttling and logout replay. Saves evidence reports. These fixtures validate tests and do not prove a production website is vulnerable.', { report_prefix: str('Project-relative report filename prefix, default website-simulation') }, []),
+  definition('website_assess', 'Assess an authorised website with bounded same-origin GET checks. baseline checks headers, HTTPS and supplied protected paths; probes adds benign reflection, sensitive-file signatures and open-redirect canaries. Saves JSON and Markdown reports in the project. Does not sign in or write to the website. Findings are evidence, not proof of exploitation.', { url: str('Authorised HTTP(S) URL without credentials or query'), profile: { type: 'string', enum: ['baseline', 'probes'] }, max_pages: { type: 'integer', minimum: 1, maximum: 12 }, protected_paths: { type: 'array', maxItems: 8, items: { type: 'string' }, description: 'Known protected same-origin API paths to check without credentials' }, report_prefix: str('Project-relative report filename prefix, default website-assessment') }, ['url']),
+  definition('workspace_info', 'Discover the current Wixal workspace, selected local model, enabled tools and review rules. Built-in tools are already connected; no setup is needed.', {}, []),
+  definition('security_tools', 'Discover available network scan profiles and whether Nmap is installed. Tools are already connected to Wixal.', {}, []),
+  definition('network_scan', 'Start a bounded Nmap scan against an authorised IP, website host or private /24–/32 network. Choose discovery, ports, services, web, tls, ssh, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence.', { target: str('Authorised IP, hostname, HTTP(S) URL or private IPv4 CIDR'), profile: { type: 'string', enum: ['discovery', 'ports', 'services', 'web', 'tls', 'ssh', 'enumeration', 'checks'] }, ports: str('Optional TCP ports or ranges, e.g. 22,80,443'), timeout_seconds: { type: 'integer', minimum: 10, maximum: 600 } }, ['target']),
+  definition('network_read', 'Read stdout/stderr, port/service/script evidence and completion status from a network_scan session. Poll until finished; continue using next_offset when more is true.', { session_id: str('Scan session ID'), offset: { type: 'integer', minimum: 0 }, wait_ms: { type: 'integer', minimum: 0, maximum: 10000 } }, ['session_id']),
+  definition('network_stop', 'Stop a running network scan and its child processes.', { session_id: str('Scan session ID') }, ['session_id']),
   definition('command_start', 'Start an AI-selected shell command on the Mac after review. Supports website, server and network tools installed on the host. Returns a session ID; read output before deciding next steps. Piped stdin, not a PTY.', { command: str('Shell command'), timeout_seconds: { type: 'integer', minimum: 1, maximum: 3600 } }, ['command']),
   definition('command_read', 'Read real stdout/stderr and status from a command session. Output returns to this chat. Poll running jobs and use next_offset for subsequent chunks.', { session_id: str('Command session ID'), offset: { type: 'integer', minimum: 0 }, wait_ms: { type: 'integer', minimum: 0, maximum: 10000, description: 'Wait before reading a running job, default 1000 milliseconds' } }, ['session_id']),
   definition('command_write', 'Send reviewed text to a running command stdin. Include newline when needed. Never send passwords or credentials.', { session_id: str('Command session ID'), input: str('Text to send'), close_stdin: { type: 'boolean' } }, ['session_id', 'input']),
@@ -83,16 +90,46 @@ function runCommand(command, root, signal, onOutput = () => {}) {
   });
 }
 
-async function executeTool(name, args, { root, approve, signal, onOutput, allowedTools, store, fetcher, outputLimit = 100000 }) {
+async function executeTool(name, args, { root, approve, signal, onOutput, allowedTools, store, fetcher, toolCatalog = definitions, modelInfo, outputLimit = 100000 }) {
   if (allowedTools && !allowedTools.includes(name)) throw new Error(`${name} is switched off in the tool kit.`);
+  if (name === 'website_simulate') {
+    if (!root) throw new Error('Open a project folder for simulation reports.');
+    const prefix = args.report_prefix ?? 'website-simulation';
+    if (typeof prefix !== 'string' || !prefix || prefix.length > 300) throw new Error('Supply a project-relative report prefix.');
+    await safePath(root, prefix + '.json', true); await safePath(root, prefix + '.md', true);
+    if (!await approve({ name, command: `Website attack simulation\nTarget: disposable loopback fixtures only\nReports: ${prefix}.json and ${prefix}.md`, root })) return 'User declined this simulation.';
+    const { simulateWebsite, simulationMarkdown } = require('./website-simulation.cjs');
+    const report = await simulateWebsite({ signal, browserProbe: async url => JSON.parse(await inspectBrowser({ url }, { signal, approve: async () => true })) });
+    const context = { root, approve, signal, store, outputLimit: 8000000 };
+    const json = await executeTool('write_file', { path: prefix + '.json', content: JSON.stringify(report, null, 2) + '\n' }, context);
+    const markdown = await executeTool('write_file', { path: prefix + '.md', content: simulationMarkdown(report) }, context);
+    return JSON.stringify({ target: report.target, summary: report.summary, cases: report.cases.map(({ id, fixture, status, defenseHeld }) => ({ id, fixture, status, defenseHeld })), limitations: report.limitations, reports: { json: json.startsWith('User declined') ? json : prefix + '.json', markdown: markdown.startsWith('User declined') ? markdown : prefix + '.md' }, output: simulationMarkdown(report) });
+  }
+  if (name === 'website_assess') {
+    if (!root) throw new Error('Open a project folder for website assessment reports.');
+    const { websitePlan, assessWebsite, markdownReport } = require('./website-assessment.cjs');
+    const plan = websitePlan(args), prefix = args.report_prefix ?? 'website-assessment';
+    if (typeof prefix !== 'string' || !prefix || prefix.length > 300) throw new Error('Supply a project-relative report prefix.');
+    await safePath(root, prefix + '.json', true); await safePath(root, prefix + '.md', true);
+    if (!await approve({ name, command: `GET-only website assessment\nTarget: ${plan.url}\nProfile: ${plan.profile}\nMaximum pages: ${plan.maxPages}\nProtected paths: ${plan.protectedPaths.join(', ') || '(none)'}\nReports: ${prefix}.json and ${prefix}.md`, root })) return 'User declined this website assessment.';
+    const report = await assessWebsite(args, { fetcher, signal });
+    const context = { root, approve, signal, store, outputLimit: 8000000 };
+    const jsonSaved = await executeTool('write_file', { path: prefix + '.json', content: JSON.stringify(report, null, 2) + '\n' }, context);
+    const mdSaved = await executeTool('write_file', { path: prefix + '.md', content: markdownReport(report) }, context);
+    const grouped = Object.values(report.findings.reduce((groups, f) => { groups[f.id] ??= { id: f.id, severity: f.severity, title: f.title, confidence: f.confidence, occurrences: 0, example: { url: f.url, evidence: f.evidence }, remediation: f.remediation }; groups[f.id].occurrences++; return groups; }, {}));
+    const checks = Object.values(report.cases.reduce((groups, c) => { const key = c.id + ':' + c.status; groups[key] ??= { id: c.id, status: c.status, count: 0, example: { target: c.target, evidence: c.evidence } }; groups[key].count++; return groups; }, {}));
+    return JSON.stringify({ target: report.target, summary: report.summary, findings: grouped, checks, protectedPaths: report.scope.protectedPaths, limitations: report.limitations, reports: { json: jsonSaved.startsWith('User declined') ? jsonSaved : prefix + '.json', markdown: mdSaved.startsWith('User declined') ? mdSaved : prefix + '.md' }, output: `Completed ${report.summary.requests} GET requests. ${report.summary.errors} request errors. ${grouped.map(f => `${f.severity}: ${f.title} (${f.occurrences} paths, ${f.confidence})`).join('\n')}\nThe structured findings and checks above are the evidence summary. Read a saved report only for specific additional details. No authentication or website writes were performed.` });
+  }
   if (!root && ['list_files', 'read_file', 'search_files', 'write_file', 'run_command'].includes(name)) throw new Error('Open a project folder to use this tool.');
   if (signal?.aborted) throw new Error('Stopped');
   if (!args || typeof args !== 'object') throw new Error('Invalid tool arguments');
+  if (['security_tools', 'network_scan', 'network_read', 'network_stop'].includes(name)) return require('./security-tools.cjs').executeSecurity(name, args, { root, approve, signal, store });
+  if (name === 'workspace_info') return JSON.stringify(require('./workspace-context.cjs').workspaceContext(store, toolCatalog, modelInfo));
   if (name === 'browser_inspect') return inspectBrowser(args, { approve, signal });
   if (name === 'command_save_output') {
     const chunks = []; let offset = 0, result;
     do { result = JSON.parse(await executeCommandSession('command_read', { session_id: args.session_id, offset, wait_ms: 0 }, { root, store })); chunks.push(result.output); offset = result.next_offset; } while (result.more);
-    const content = JSON.stringify({ session_id: args.session_id, state: result.state, exitCode: result.exitCode, reason: result.reason, earliest_offset: result.earliest_offset, output: chunks.join('') }, null, 2);
+    const content = JSON.stringify({ command: result.command, started: result.started, finished: result.finished, assessment: result.assessment, session_id: args.session_id, state: result.state, exitCode: result.exitCode, reason: result.reason, earliest_offset: result.earliest_offset, output: chunks.join('') }, null, 2);
     // Reuse the existing review, path containment and concurrent-edit checks.
     return executeTool('write_file', { path: args.path, content }, { root, approve, signal, store, outputLimit: 8000000 });
   }

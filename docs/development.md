@@ -6,7 +6,7 @@ Use Node.js 22 or newer, the Xcode command line tools, and an Apple Silicon Mac 
 
 Stay on the current 0.7 release line. Ship these refinements as 0.7.x patch increments, beginning with 0.7.1; do not advance to 0.8.0 without a new decision from Jhye. The current release checkout uses `main`.
 
-The local provider is always named **Wixal Local**, including when it uses an external Ollama server. Ollama is the underlying engine or separate installation option, not the provider name.
+The engine is always **Wixal Local**. Ollama is the underlying bundled engine and a source of importable model weights. Production inference cannot select an external server or cloud provider.
 
 The 0.7.1 model chooser opens on installed models, with a separate Downloads tab. Provider, context, hardware and collapsible local-engine controls sit beside the library. Search and filters apply to the active tab, with independent filter choices for installed models and downloads. Model deletion stays behind each model's menu and the existing confirmation dialog.
 
@@ -76,11 +76,11 @@ App source, package metadata and production dependencies are unpacked from asar 
 
 ## Wixal Local development
 
-Run `npm run runtime:stage` before `npm start`; packaging stages the verified upstream payload automatically. The ordinary app/provider suites explicitly exercise external Ollama compatibility. Use `WIXAL_SMOKE_MANAGED=1 npm run test:app` for the full image/file-tool flow through the bundled engine. `npm run test:runtime` covers real managed-engine import, inference, stop/start, library persistence and quit cleanup. Both use disposable state and independent model copies. See [local runtime development](local-runtime.md) for source builds, attribution, pinned provenance and the tested versus untested build paths.
+Run `npm run runtime:stage` before `npm start`; packaging stages the verified upstream payload automatically. Protocol fixture suites can use an external test endpoint only with disposable `WIXAL_DATA_DIR`. Use `WIXAL_SMOKE_MANAGED=1 npm run test:app` for the full image/file-tool flow through the bundled engine. `npm run test:runtime` covers real managed-engine import, inference, stop/start, library persistence and quit cleanup. Both use disposable state and independent model copies. See [local runtime development](local-runtime.md) for source builds, attribution, pinned provenance and the tested versus untested build paths.
 
 `npm run test:performance` uses protocol fixtures and real file reads through Electron to exercise explicit @tools, reported usage, benchmarks/cancellation, model filters, deletion confirmation and categorized tool controls. It complements the real managed-engine benchmark/deletion test. The command-session unit tests execute real host fixtures; browser inspection has a local rendered-page fixture in `scripts/browser-tools-smoke.cjs`.
 
-`npm run test:models` exercises the model manager through Electron with disposable state and Ollama metadata fixtures. It covers Installed/Downloads tabs, keyboard navigation, selection, search, independent filters, catalog sorting/tag choice, context persistence, cloud-provider setup, empty-library recovery and desktop/compact layouts in dark and light themes. It saves screenshots in `artifacts/`. Use `WIXAL_APP_PATH` to run against a packaged app.
+`npm run test:models` exercises the model manager through Electron with disposable state and Ollama metadata fixtures. It covers Installed/Downloads tabs, keyboard navigation, selection, search, independent filters, catalog sorting/tag choice, context persistence, local-only engine selection, empty-library recovery and desktop/compact layouts in dark and light themes. It saves screenshots in `artifacts/`. Use `WIXAL_APP_PATH` to run against a packaged app.
 
 `npm run test:model-library` exercises the dedicated Models page, serial downloads, pause/resume/cancel/retry, completion verification, selection, persisted jobs, suggested context and memory release with protocol fixtures. `npm run test:model-download-live` downloads `gemma3:270m` from the registry into disposable managed storage, verifies installation, selects and benchmarks it, releases memory and checks restart persistence. The live check contacts the registry and removes only its temporary library. Use `WIXAL_APP_PATH` to exercise a packaged build.
 
@@ -101,3 +101,13 @@ Keep this work on the 0.7.x patch release line. Sidebar motion uses a shared 280
 Layout responds optimistically and serializes saves, preserving the final target during rapid reversals. Hidden navigation is inert, with focus returned to the toggle. Saved layout is applied without startup motion. OS and app reduced-motion preferences remain supported.
 
 Run `npm run test:sidebar`, `npm run test:workspace` and `npm run test:settings` against source and the packaged app. Record screenshots and the sidebar GIF from real renderer frames with `npm run media`; never interpolate a static screenshot to represent app behavior.
+
+`npm run test:chat-tools-live` imports tool-capable models into an isolated bundled runtime and exercises natural Chat file reads, missing-URL clarification, real rendered browser evidence and reviewed command continuation. Use `WIXAL_TOOL_MODELS` to choose comma-separated installed tags.
+
+`npm run test:security` drives the scan form with an inference protocol fixture and real loopback Nmap. It checks workspace context, thinking metadata, no dialogs in Approved all, persistence, Review prompting and switching to all while waiting. Unit tests add real HTTP/TLS fixtures, report metadata, target validation, disabled tools, cancellation and project ownership.
+
+Set `WIXAL_TEST_SCAN_ONLY=1 WIXAL_TOOL_MODELS=gpt-oss:20b npm run test:chat-tools-live` for a real bundled-model Approved all assessment: it scans a disposable loopback TCP listener, reads completion and saves/validates a JSON evidence report without dialogs.
+
+## Memory checks
+
+`npm run test:memory` exercises the real Electron memory controls and IPC with disposable workspace data and deterministic model responses. It checks saved scopes/budgets, note edits, guest profile persistence, model switching, visible handoff, cancellation, fresh-chat creation and context warnings. Screenshots are saved to `/tmp/wixal-*.png`. Use `WIXAL_APP_PATH` to exercise the packaged app. Core regression coverage is in `test/memory-context.test.cjs`. Live Firebase and actual model checks are separate from fixtures.

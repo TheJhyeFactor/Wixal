@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const { Store } = require('../app/store.cjs');
 (async () => {
   const root = path.resolve(__dirname, '..'), temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-settings-'));
-  const store = new Store(temp); store.addProject(root); store.save();
+  const store = new Store(temp); store.addProject(root); store.data.setup = { completed: true, entryCompleted: true }; store.save();
   const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: temp }; delete env.ELECTRON_RUN_AS_NODE;
   let app;
   try {

@@ -68,18 +68,11 @@ test('partial, token-limited and error streams never execute a provider tool cal
     await assert.rejects(streamCloud({ ...base, provider, fetcher: async () => new Response('', { status: 401 }) }), /authentication/);
   }
 });
-test('all new providers enforce real edit review and return denial through their native tool protocol', async t => {
+test('every cloud and custom provider is excluded from local model execution', async t => {
   for (const provider of ['xai', 'deepseek', 'anthropic', 'gemini', 'groq', 'mistral', 'openrouter', 'custom']) {
     const dir = await directory(t), store = new Store(path.join(dir, 'data')); store.addProject(dir); store.data.provider = provider; store.data.model = 'fixture'; store.data.cloudProjects = [store.data.activeProject];
-    store.data.customProvider = { baseURL: 'http://127.0.0.1:1234/v1', model: 'fixture', tools: true, vision: false };
-    let count = 0, approvals = 0;
-    await runAgent({ store, prompt: 'Write a file', details: { capabilities: ['tools'] }, signal: new AbortController().signal, emit: () => {}, approve: async () => { approvals++; return false; }, cloudToken: async () => 'fixture-key', fetcher: async (url, options) => {
-      const body = JSON.parse(options.body); count++;
-      if (count === 2) assert.match(JSON.stringify(body), /User declined this file edit/);
-      const call = count === 1 ? { name: 'write_file', args: { path: 'denied.txt', content: 'must not save' } } : null;
-      return provider === 'xai' ? fixtures.responses(call) : provider === 'anthropic' ? fixtures.anthropic(call) : fixtures.completion(call);
-    } });
-    assert.equal(approvals, 1, provider); assert.equal(count, 2, provider); await assert.rejects(fs.access(path.join(dir, 'denied.txt')));
+    await assert.rejects(runAgent({ store, prompt: 'Use tools', fetcher: async () => assert.fail('No external inference request is allowed') }), /only with its local engine/);
+    assert.equal(store.session().messages.length, 0);
   }
 });
 test('a custom endpoint change strips old endpoint signatures but retains textual evidence', async () => {

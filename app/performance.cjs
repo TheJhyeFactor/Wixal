@@ -1,6 +1,7 @@
 const os = require('node:os');
 const { createHash } = require('node:crypto');
 const { streamChat } = require('./agent.cjs');
+const { thinkingOptions } = require('./model-options.cjs');
 const { localEndpoint } = require('./models.cjs');
 let deviceIdentity;
 function hardware() {
@@ -20,7 +21,7 @@ async function benchmark(model, contextSize, signal, emit, fetcher = fetch) {
   for (let sample = 0; sample < 2; sample++) {
     emit({ phase: sample ? 'Warm run · measuring generation speed' : 'First run · loading and generating', sample: sample + 1, tokens: 0 });
     let received = 0;
-    const result = await streamChat({ model: model.name, stream: true, think: false,
+    const result = await streamChat({ model: model.name, stream: true, ...thinkingOptions(model),
       messages: [{ role: 'user', content: 'Count upwards from 1 to 200. Write each number and its English word on a separate line. Continue until you reach 200.' }],
       options: { num_ctx: context, num_predict: 128, temperature: 0, seed: 42 } }, signal,
       () => { emit({ phase: sample ? 'Warm run' : 'First run', sample: sample + 1, chunks: ++received }); }, fetcher);

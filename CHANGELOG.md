@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.7 — 6 October 2026
+
+- Added a 1,200-character explicit global preference profile, local for guests and owner-only Firebase syncing for verified accounts.
+- Added project memory scope choices, editable notes, 8k/24k/48k saved-character budgets, capacity indicators and explanations of recall tradeoffs.
+- Automatically retrieves bounded relevant excerpts from earlier active chats in the same project; project-only excludes global preferences.
+- Added a context meter, reply reserve, model/RAM-aware 32k ceiling and recommendations to continue in a new chat.
+- Added fresh-chat and model-summary handoff choices with visible injected context, retained source history and labelled failure excerpts.
+- Fixed local model switching by recording the generating model and converting older foreign tool exchanges into portable text evidence.
+- Included the local tool, assessment and interface improvements developed in 0.7.4–0.7.6, plus account setup, optional presets, launch controls and app icon choices.
+
+
+## 0.7.6 — 6 October 2026 (local build)
+
+- Added restrained surface depth across all four themes, softer floating-panel shadows and a warmer Paper palette with clearer card separation.
+- Kept the newest tool evidence readable during long assessments; empty local-model conclusions retry once without repeating tools, then surface an error if still blank.
+- Added native website assessments with bounded same-origin GET probes, protected-path checks and saved JSON/Markdown evidence.
+- Added portable vulnerable/hardened attack fixtures with browser script execution, cross-origin writes, throttling and logout replay.
+- Added website/attack buttons and embedded evidence-focused assessment response guidance for every local tool-capable model.
+- Verified website/source assessments and local Qwen tool workflows in development.
+
+## 0.7.5 — 6 October 2026 (local build)
+
+- Restricted inference to the included Wixal local engine and combined ready models with importable Ollama models in one picker.
+- Automatically embedded live workspace, tool and approval context in model requests; added workspace_info.
+- Used supported thinking metadata for GPT-OSS and retained reasoning across tool steps; migrated the default context to 8k.
+- Added persistent workspace-scoped Approved all, immediate policy switching during runs and local action records.
+- Added eight Nmap assessment profiles, validated targets/ports, owned scan sessions, cancellation, readable port/service evidence and JSON report metadata.
+- Preserved valid command-result JSON when shortening long output for model context.
+- Added real HTTP/TLS scan fixtures and model/tool/approval UI tests.
+
+## 0.7.4 — 6 October 2026 (local build)
+
+- Enabled native tools automatically in Chat and Agent for tool-capable models.
+- Kept enabled follow-up tools available after @mentions and allowed visible clarification for missing arguments.
+
+
 ## 0.7.3 — 6 October 2026
 
 - Coordinated sidebar width, brand, toggle, new-chat and footer motion, with fixed-width navigation and a short label fade.

@@ -12,7 +12,7 @@ const root = path.resolve(__dirname, '..');
   const directory = path.join(temp, 'state'), store = new Store(directory); store.addProject(folder);
   const history = store.session(); history.title = 'Saved code and long chat';
   history.messages = [{ role: 'user', content: 'Show an example', created: Date.now() }, { role: 'assistant', content: '```js\nconsole.log("Workspace verified");\n```\n\n' + Array.from({ length: 70 }, (_, i) => `Paragraph ${i}: saved conversation content.`).join('\n\n'), created: Date.now() }];
-  const start = store.newSession(); store.data.mode = 'chat'; store.data.autoSummary = false; store.save();
+  const start = store.newSession(); store.data.setup = { completed: true, entryCompleted: true }; store.data.ui.launchAnimation = false; store.data.mode = 'chat'; store.data.autoSummary = false; store.save();
   const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: directory }; delete env.ELECTRON_RUN_AS_NODE; delete env.WIXAL_TEST_PROJECT;
   let app, previousClipboard;
   try {

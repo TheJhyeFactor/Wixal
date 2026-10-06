@@ -13,7 +13,7 @@ try {
     const count = ext => release.assets.filter(asset => asset.name.toLowerCase().endsWith('.' + ext)).reduce((sum, asset) => sum + asset.download_count, 0);
     return { release, dmg: count('dmg'), zip: count('zip') };
   });
-  document.querySelector('[data-stats-total]').textContent = rows.reduce((sum, row) => sum + row.dmg + row.zip, 0).toLocaleString();
+  document.querySelectorAll('[data-download-total]').forEach(el => { el.textContent = rows.reduce((sum, row) => sum + row.dmg + row.zip, 0).toLocaleString(); });
   const latest = rows.find(row => !row.release.prerelease);
   document.querySelector('[data-stats-latest]').textContent = latest ? `${latest.release.tag_name}: ${(latest.dmg + latest.zip).toLocaleString()}` : 'No releases';
   const tbody = document.querySelector('[data-stats-rows]');
@@ -29,5 +29,6 @@ try {
   }
   status.textContent = 'Retrieved from GitHub ' + new Date().toLocaleString() + '.';
 } catch {
+  document.querySelectorAll('[data-download-total]').forEach(el => { el.textContent = 'Unavailable'; });
   status.textContent = 'GitHub counts are temporarily unavailable. Use the release links below or try again later.';
 }

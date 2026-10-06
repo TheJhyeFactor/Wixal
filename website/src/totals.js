@@ -29,4 +29,4 @@ async function users() {
     if (note) note.textContent = 'Visitor total is awaiting an up-to-date Google Analytics report.';
   }
 }
-await Promise.allSettled([downloads(), users()]);
+await Promise.allSettled([document.querySelector('[data-stats-rows]') ? Promise.resolve() : downloads(), users()]);

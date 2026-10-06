@@ -21,6 +21,7 @@ export async function collect() {
     throw new Error(`Analytics report unavailable (${response.status}); previous snapshot retained`);
   }
   const report = await response.json();
+  console.log('Aggregate report shape:', JSON.stringify({ keys: Object.keys(report), headers: report.metricHeaders, rowCount: report.rowCount, rows: report.rows?.map(row => ({ metricValues: row.metricValues })), metadata: report.metadata }));
   const snapshot = { active_users: parseCount(report), period_days: 30, includes_today: true, updated_at: new Date().toISOString(), timezone: report.metadata?.timeZone || 'Australia/Sydney', source: 'Google Analytics 4', status: 'available' };
   const dir = resolve(process.env.USERS_DIR || 'artifacts/website-users');
   await mkdir(dir, { recursive: true });

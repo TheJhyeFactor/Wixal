@@ -4,4 +4,6 @@ assert.equal(parseCount({ rows: [{ metricValues: [{ value: '12' }] }] }), 12);
 assert.equal(parseCount({ rowCount: 0 }), 0);
 assert.equal(parseCount({ metricHeaders: [{ name: 'activeUsers', type: 'TYPE_INTEGER' }], metadata: { timeZone: 'Australia/Sydney' } }), 0);
 for (const report of [{}, { rows: [{ metricValues: [{ value: '-1' }] }] }, { rows: [{ metricValues: [{ value: '9007199254740992' }] }] }, { rowCount: 0, metadata: { subjectToThresholding: true } }, { rowCount: 0, metadata: { dataLossFromOtherRow: true } }]) assert.throws(() => parseCount(report));
+assert.equal(parseCount({ kind: 'analyticsData#runReport', metadata: { timeZone: 'Australia/Sydney', currencyCode: 'AUD' } }), 0);
+assert.throws(() => parseCount({ kind: 'unexpected', metadata: { timeZone: 'Australia/Sydney' } }));
 console.log('Active user report validation passed');

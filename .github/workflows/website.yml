@@ -28,6 +28,7 @@ jobs:
         env:
           BASE_PATH: /Wixal/
           SITE_ORIGIN: https://thejhyefactor.github.io
+          GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
         run: |
           npm run build
           npm run check

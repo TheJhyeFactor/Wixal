@@ -77,3 +77,7 @@ node website/scripts/capture-features.cjs /absolute/path/to/release-checkout --s
 Use a clean checkout of the release with the desktop dependencies installed. This mode captures actual project-memory controls, a saved sample note and the browser-inspection control. It uses a disposable project/state and does not run a model or a web request. The memory capture frames the drawer through its actual saved-note element; no UI or result is fabricated.
 
 The 0.7.2 refresh uses genuine packaged app captures of the Models page and verified download queue. Download links target v0.7.2. The local provider is Wixal Local; Ollama is credited as the underlying engine.
+
+## Download and visitor tracking
+
+See [metrics setup](../docs/download-metrics.md). The site has opt-in GA4 page views and release download click events, a persistent footer privacy control, and a public /stats/ page using current GitHub release asset counts. /privacy/ explains the collection. The desktop app is unaffected.

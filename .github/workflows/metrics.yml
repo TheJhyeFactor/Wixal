@@ -1,0 +1,54 @@
+name: Wixal download metrics
+on:
+  schedule:
+    - cron: '23 19 * * *'
+  workflow_dispatch:
+  release:
+    types: [published]
+permissions:
+  contents: write
+concurrency:
+  group: wixal-download-metrics
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Collect release counts and available repository traffic
+        env:
+          GH_TOKEN: ${{ secrets.METRICS_TRAFFIC_TOKEN || github.token }}
+          METRICS_DIR: ${{ runner.temp }}/wixal-metrics
+        run: node scripts/github-metrics.mjs
+      - name: Archive daily snapshots on metrics branch
+        env:
+          REPORT_DIR: ${{ runner.temp }}/wixal-metrics
+        run: |
+          git fetch origin wixal-metrics || true
+          if git show-ref --verify --quiet refs/remotes/origin/wixal-metrics; then
+            git worktree add "$RUNNER_TEMP/metrics-archive" origin/wixal-metrics
+          else
+            git worktree add --detach "$RUNNER_TEMP/metrics-archive"
+            cd "$RUNNER_TEMP/metrics-archive"
+            git checkout --orphan wixal-metrics
+            git rm -rf .
+            cd "$GITHUB_WORKSPACE"
+          fi
+          cd "$RUNNER_TEMP/metrics-archive"
+          mkdir -p snapshots
+          cp "$REPORT_DIR/latest.json" latest.json
+          cp "$REPORT_DIR/README.md" README.md
+          cp "$REPORT_DIR/latest.json" "snapshots/$(date -u +%F).json"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add README.md latest.json snapshots
+          git commit -m "Record Wixal download metrics $(date -u +%F)"
+          git push origin HEAD:refs/heads/wixal-metrics
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wixal-github-metrics
+          path: ${{ runner.temp }}/wixal-metrics
+          retention-days: 90

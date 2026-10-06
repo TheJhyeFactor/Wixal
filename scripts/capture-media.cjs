@@ -47,6 +47,38 @@ const root = path.resolve(__dirname, '..');
       await page.locator(id).click();
     }
     await capture('workspace', 'Open a project and make yourself at home.', 3000);
+    // Capture the actual renderer's collapse/reversal frames, rather than tweening still images.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 880));
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.waitForFunction(() => document.querySelector('.welcome-wordmark').getAnimations({ subtree: true }).every(animation => animation.playState !== 'running'));
+    const cdp = await page.context().newCDPSession(page), motionFrames = [];
+    cdp.on('Page.screencastFrame', event => {
+      motionFrames.push({ data: Buffer.from(event.data, 'base64'), timestamp: event.metadata.timestamp });
+      void cdp.send('Page.screencastFrameAck', { sessionId: event.sessionId });
+    });
+    await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 90, maxWidth: 1360, maxHeight: 880, everyNthFrame: 1 });
+    await page.evaluate(() => toggleSidebar(true));
+    await page.waitForFunction(() => document.querySelector('#sidebar').getBoundingClientRect().width === 62);
+    await new Promise(resolve => setTimeout(resolve, 650));
+    await page.evaluate(() => toggleSidebar(false));
+    await page.waitForFunction(() => document.querySelector('#sidebar').getBoundingClientRect().width === 260);
+    await new Promise(resolve => setTimeout(resolve, 650));
+    await cdp.send('Page.stopScreencast'); await cdp.detach();
+    if (motionFrames.length < 6) throw new Error('Too few real sidebar animation frames');
+    // Downsample real high-refresh frames to about 25 fps, retaining their actual timings.
+    const sampledMotion = [motionFrames[0]];
+    for (const frame of motionFrames.slice(1)) if (frame.timestamp - sampledMotion.at(-1).timestamp >= .035) sampledMotion.push(frame);
+    if (sampledMotion.at(-1) !== motionFrames.at(-1)) sampledMotion.push(motionFrames.at(-1));
+    const motionRaw = [], motionDelays = [];
+    for (let i = 0; i < sampledMotion.length; i++) {
+      motionRaw.push(await sharp(sampledMotion[i].data).resize(990, 640, { fit: 'contain', background: '#191a20' }).removeAlpha().raw().toBuffer());
+      motionDelays.push(i === sampledMotion.length - 1 ? 1200 : Math.max(20, Math.min(1200, Math.round((sampledMotion[i + 1].timestamp - sampledMotion[i].timestamp) * 1000))));
+    }
+    await fs.mkdir(path.join(root, 'docs/media'), { recursive: true });
+    await sharp(Buffer.concat(motionRaw), { raw: { width: 990, height: 640 * motionRaw.length, channels: 3, pageHeight: 640 } }).gif({ delay: motionDelays, loop: 0, colours: 128, dither: .3 }).toFile(path.join(root, 'docs/media/sidebar-motion.gif'));
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1680, 1080));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    if (process.env.WIXAL_MEDIA_SIDEBAR_ONLY) { console.log('Saved actual sidebar motion frames.'); return; }
     await page.click('#model-button');
     await page.locator('.model-row').first().waitFor();
     await page.locator('#models-dialog').evaluate(el => { el.scrollTop = 0; });

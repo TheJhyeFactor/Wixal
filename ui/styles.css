@@ -1336,12 +1336,6 @@ main { transition: min-width .2s ease; }
 .sidebar-wordmark { display: inline-flex; font: 600 26px/1.2 var(--mono); letter-spacing: -2px; }
 .sidebar-wordmark > span { display: inline-block; }
 .brand .sidebar-toggle { margin-left: auto; }
-.sidebar-wordmark.arriving > span { animation: letter-arrive .55s cubic-bezier(.2,.8,.2,1) both; }
-.sidebar-wordmark.arriving > span:nth-child(2) { animation-delay: .045s; }
-.sidebar-wordmark.arriving > span:nth-child(3) { animation-delay: .09s; }
-.sidebar-wordmark.arriving > span:nth-child(4) { animation-delay: .135s; }
-.sidebar-wordmark.arriving > span:nth-child(5) { animation-delay: .18s; }
-.sidebar-wordmark.arriving > .wordmark-cursor { animation: cursor-arrive 1.2s ease-out .2s both; }
 #session-search { margin: 16px 0 0; width: 100%; padding: 9px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
 .project-heading { margin: 20px 7px 10px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
 .projects { flex: 1; min-height: 0; max-height: none; overflow: auto; }
@@ -1695,3 +1689,37 @@ main.is-new-chat .bottom-status { margin-top: 20px; }
 .mode-menu [aria-checked="true"] .mode-check { visibility: visible; }
 .draft-status { font-size: 9px; color: var(--muted); white-space: nowrap; }
 @media(max-width: 1100px) { .draft-status { display: none; } }
+
+/* Sidebar motion keeps fixed-width navigation from squeezing while the rail travels. */
+.sidebar { --sidebar-motion: 280ms cubic-bezier(.22,.8,.24,1); padding: 18px 12px 0; transition: width var(--sidebar-motion), padding-inline var(--sidebar-motion); }
+.workspace:has(.sidebar.collapsed) .sidebar { padding: 18px 8px 0; }
+.sidebar .brand { position: relative; display: block; flex: 0 0 auto; height: 56px; min-height: 0; padding: 0; transition: height var(--sidebar-motion); }
+.sidebar.collapsed .brand { height: 92px; padding: 0; }
+.sidebar .sidebar-wordmark { position: absolute; left: 4px; top: 3px; display: inline-flex; white-space: nowrap; opacity: 1; transform: translateX(0); transition: opacity 150ms ease 90ms, transform var(--sidebar-motion), visibility 0s; }
+.sidebar.collapsed .sidebar-wordmark { display: inline-flex; opacity: 0; transform: translateX(-8px); visibility: hidden; transition: opacity 90ms ease, transform var(--sidebar-motion), visibility 0s 90ms; }
+.sidebar .brand-mark, .sidebar.collapsed .brand-mark { position: absolute; display: grid; width: 34px; height: 34px; left: 50%; top: 0; transform: translateX(-50%) scale(.9); opacity: 0; visibility: hidden; transition: opacity 100ms ease, transform var(--sidebar-motion), visibility 0s 100ms; }
+.sidebar.collapsed .brand-mark { opacity: 1; visibility: visible; transform: translateX(-50%) scale(1); transition: opacity 140ms ease 100ms, transform var(--sidebar-motion), visibility 0s; }
+.sidebar .brand .sidebar-toggle, .sidebar.collapsed .brand .sidebar-toggle { position: absolute; width: 32px; height: 32px; right: 0; top: 0; margin: 0; transition: right var(--sidebar-motion), top var(--sidebar-motion), background 150ms; }
+.sidebar.collapsed .brand .sidebar-toggle { right: calc(50% - 16px); top: 44px; }
+.sidebar-toggle .sidebar-direction { transform-origin: 15px 12px; transition: transform var(--sidebar-motion); }
+.sidebar.collapsed .sidebar-toggle .sidebar-direction { transform: rotate(180deg); }
+.sidebar .new-chat, .sidebar.collapsed .new-chat { position: relative; display: block; flex: 0 0 42px; height: 42px; min-height: 42px; margin: 0; padding: 0; overflow: hidden; }
+.sidebar .new-chat > span:first-child { position: absolute; left: 10px; top: 50%; width: 20px; line-height: 20px; transform: translateY(-50%); transition: left var(--sidebar-motion); }
+.sidebar.collapsed .new-chat > span:first-child { left: calc(50% - 10px); font-size: 18px; }
+.sidebar .new-chat-label, .sidebar.collapsed .new-chat-label { position: absolute; display: block; left: 37px; top: 50%; transform: translateY(-50%); }
+.sidebar .new-chat kbd, .sidebar.collapsed .new-chat kbd { position: absolute; display: block; right: 12px; top: 50%; transform: translateY(-50%); white-space: nowrap; }
+.sidebar .sidebar-content, .sidebar.collapsed .sidebar-content { display: flex; width: 236px; flex: 1; opacity: 1; transform: translateX(0); visibility: visible; transition: opacity 150ms ease 90ms, transform var(--sidebar-motion), visibility 0s; }
+.sidebar.collapsed .sidebar-content { opacity: 0; transform: translateX(-8px); visibility: hidden; transition: opacity 90ms ease, transform var(--sidebar-motion), visibility 0s 90ms; }
+.sidebar .sidebar-bottom, .sidebar.collapsed .sidebar-bottom { margin: 9px -12px 0; padding: 8px 10px max(9px, env(safe-area-inset-bottom)); flex: 0 0 auto; transition: margin-inline var(--sidebar-motion); }
+.sidebar.collapsed .sidebar-bottom { margin-inline: -8px; }
+.sidebar .sidebar-bottom > :is(.nav-button, .workspace-menu-toggle), .sidebar.collapsed .sidebar-bottom > :is(.nav-button, .workspace-menu-toggle) { position: relative; display: block; padding: 0; overflow: hidden; }
+.sidebar .sidebar-bottom > :is(.nav-button, .workspace-menu-toggle) > span:first-child { position: absolute; left: 10px; top: 10px; transition: left var(--sidebar-motion); }
+.sidebar.collapsed .sidebar-bottom > :is(.nav-button, .workspace-menu-toggle) > span:first-child { left: calc(50% - 10px); }
+.sidebar .rail-label, .sidebar.collapsed .rail-label, .sidebar .workspace-menu-label, .sidebar.collapsed .workspace-menu-label { position: absolute; display: block; left: 40px; top: 10px; white-space: nowrap; }
+.sidebar .workspace-menu-chevron, .sidebar.collapsed .workspace-menu-chevron { position: absolute; display: block; right: 10px; top: 10px; }
+.sidebar :is(.new-chat-label, .new-chat kbd, .rail-label, .workspace-menu-label, .workspace-menu-chevron) { opacity: 1; visibility: visible; transition: opacity 150ms ease 90ms, visibility 0s; }
+.sidebar.collapsed :is(.new-chat-label, .new-chat kbd, .rail-label, .workspace-menu-label, .workspace-menu-chevron) { opacity: 0; visibility: hidden; transition: opacity 80ms ease, visibility 0s 80ms; }
+.sidebar-bottom #download-queue-badge { position: absolute; right: 10px; top: 11px; }
+.sidebar.collapsed #download-queue-badge { right: 0; top: 1px; font-size: 8px; min-width: 12px; padding: 0 2px; }
+.sidebar.layout-initializing, .sidebar.layout-initializing * { transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .sidebar *, .sidebar { transition: none !important; animation: none !important; } }

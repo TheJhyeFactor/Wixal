@@ -37,12 +37,68 @@ const { Store } = require('../app/store.cjs');
     assert.equal(await page.evaluate(() => state.activeProject), null);
     await page.fill('#session-search', 'Wixal first'); assert.equal(await page.locator('.session-item').count(), 1);
     await page.fill('#session-search', '');
-    await page.click('#sidebar-toggle'); await page.waitForFunction(() => document.querySelector('#sidebar').classList.contains('collapsed'));
-    assert.equal(await page.locator('#settings-button').evaluate(el => el.getBoundingClientRect().right <= document.querySelector('#sidebar').getBoundingClientRect().right), true);
-    await page.click('#sidebar-toggle'); await page.waitForFunction(() => document.querySelector('#sidebar-wordmark').classList.contains('arriving'));
-    assert.equal(await page.locator('#sidebar-wordmark span').first().evaluate(el => getComputedStyle(el).animationName), 'letter-arrive');
+    // The flow under test is expanded navigation -> collapse/reverse -> aligned, saved rail.
+    // Browser plugin not available; the Electron app requires its real preload and IPC.
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.fill('#prompt', 'Keep this draft while the sidebar moves.');
+    await page.locator('#session-search').focus();
+    await page.evaluate(() => toggleSidebar(true));
+    assert.equal(await page.locator('#sidebar-content').evaluate(el => el.inert), true);
+    assert.equal(await page.locator('#sidebar-toggle').evaluate(el => el === document.activeElement), true);
+    await page.waitForFunction(() => {
+      const width = document.querySelector('#sidebar').getBoundingClientRect().width;
+      return width > 63 && width < 250;
+    });
+    const midpoint = await page.locator('#sidebar').evaluate(el => ({ width: el.getBoundingClientRect().width, contentWidth: el.querySelector('.sidebar-content').getBoundingClientRect().width }));
+    assert.ok(midpoint.width > 62 && midpoint.width < 260);
+    assert.equal(midpoint.contentWidth, 236, 'Navigation retains its width during collapse');
+    await page.waitForFunction(() => Math.abs(document.querySelector('#sidebar').getBoundingClientRect().width - 62) < .1);
+    assert.equal(await page.locator('#sidebar-wordmark').evaluate(el => getComputedStyle(el).visibility), 'hidden');
+    assert.equal(await page.locator('#sidebar-content').evaluate(el => getComputedStyle(el).visibility), 'hidden');
+    await page.evaluate(() => {
+      window.sidebarOriginalInvoke = invoke; window.sidebarPending = 0; window.sidebarPeak = 0;
+      invoke = async (name, ...args) => {
+        if (name !== 'layout') return window.sidebarOriginalInvoke(name, ...args);
+        window.sidebarPeak = Math.max(window.sidebarPeak, ++window.sidebarPending);
+        try { await new Promise(resolve => setTimeout(resolve, 90)); return await window.sidebarOriginalInvoke(name, ...args); }
+        finally { window.sidebarPending--; }
+      };
+    });
+    await page.evaluate(async () => {
+      toggleSidebar(false);
+      await new Promise(resolve => setTimeout(resolve, 65));
+      toggleSidebar(true);
+      await new Promise(resolve => setTimeout(resolve, 40));
+      await toggleSidebar(false);
+    });
+    await page.waitForFunction(() => document.querySelector('#sidebar').getBoundingClientRect().width === 260 && !state.ui.sidebarCollapsed);
+    assert.equal(await page.evaluate(() => window.sidebarPeak), 1, 'Layout saves are serialized');
+    await page.evaluate(() => { invoke = window.sidebarOriginalInvoke; });
+    assert.equal(await page.locator('#sidebar-content').evaluate(el => el.inert), false);
+    assert.equal(await page.locator('#prompt').inputValue(), 'Keep this draft while the sidebar moves.');
+    await page.reload(); await page.locator('[data-project-select]').first().waitFor();
+    assert.equal(await page.locator('#sidebar').evaluate(el => el.classList.contains('collapsed')), false);
+    // The popover follows its anchor while geometry is moving; it never drifts above another row.
+    await page.click('#workspace-menu-toggle');
+    await page.waitForFunction(() => document.querySelector('#workspace-menu').getAnimations().every(animation => animation.playState !== 'running'));
+    await page.evaluate(() => toggleSidebar(true));
+    await page.waitForFunction(() => document.querySelector('#sidebar').getBoundingClientRect().width < 240);
+    const anchored = await page.evaluate(() => {
+      const menu = document.querySelector('#workspace-menu').getBoundingClientRect();
+      const button = document.querySelector('#workspace-menu-toggle').getBoundingClientRect();
+      return { left: menu.left, anchorLeft: Math.max(12, button.left), bottom: menu.bottom, anchorTop: button.top };
+    });
+    assert.ok(Math.abs(anchored.left - anchored.anchorLeft) < 2);
+    assert.ok(Math.abs(anchored.bottom + 8 - anchored.anchorTop) < 2);
+    await page.click('#workspace-menu-toggle');
+    await page.waitForFunction(() => !document.querySelector('#workspace-menu').matches(':popover-open'));
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    assert.equal(await page.locator('#sidebar-wordmark span').first().evaluate(el => getComputedStyle(el).animationName), 'none');
+    await page.evaluate(() => toggleSidebar(false));
+    assert.equal(await page.locator('#sidebar').evaluate(el => el.getBoundingClientRect().width), 260);
+    assert.equal(await page.locator('#sidebar').evaluate(el => getComputedStyle(el).transitionDuration), '0s');
+    await page.evaluate(() => toggleSidebar(true));
+    assert.equal(await page.locator('#sidebar').evaluate(el => el.getBoundingClientRect().width), 62);
+    await page.evaluate(() => toggleSidebar(false));
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 880));
     await page.screenshot({ path: path.join(root, 'artifacts/sidebar-projects.png'), animations: 'disabled' });
     await page.reload(); await page.locator('[data-project-select]').first().waitFor();
@@ -74,13 +130,15 @@ const { Store } = require('../app/store.cjs');
         }
         assert.equal(bounds[1].top - bounds[0].bottom, 4); assert.equal(bounds[2].top - bounds[1].bottom, 4);
         await page.click('#workspace-menu-toggle');
+        await page.waitForFunction(() => document.querySelector('#workspace-menu-toggle').getAttribute('aria-expanded') === 'true');
         const menu = await page.locator('#workspace-menu').boundingBox(); assert.ok(menu.x >= 0 && menu.x + menu.width <= width && menu.y >= 0 && menu.y + menu.height <= height);
         assert.ok(menu.y + menu.height <= bounds[2].top);
         await page.screenshot({ path: path.join(root, `artifacts/sidebar-footer-${width}-${collapsed ? 'collapsed' : 'expanded'}.png`), animations: 'disabled' });
         await page.click('#workspace-menu-toggle');
+        await page.waitForFunction(() => !document.querySelector('#workspace-menu').matches(':popover-open'));
       }
     }
     assert.deepEqual(errors, []);
-    console.log('PASS: nested project chats, cross-project selection/new chat, personal workspace, memory isolation/persistence/counts, search, expansion animation, reduced motion, compact rail and aligned Models/Settings/Workspace controls with anchored menu in both sidebar modes');
+    console.log('PASS: nested project chats, cross-project selection/new chat, personal workspace, memory isolation/persistence/counts, search, coordinated motion, rapid reversal persistence, focus and inert content, anchored menu during motion, reduced motion, compact rail and aligned Models/Settings/Workspace controls with anchored menu in both sidebar modes');
   } finally { if (app) await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

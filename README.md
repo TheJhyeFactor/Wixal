@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.2/Wixal-0.7.2-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.2/Wixal-0.7.2-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.2">Release notes</a>
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.3/Wixal-0.7.3-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.3/Wixal-0.7.3-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.3">Release notes</a>
   <br>
-  <sub>Version 0.7.2 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
+  <sub>Version 0.7.3 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@
 
 Open a folder and start a conversation. Your files, saved notes, and terminal are there when you need them.
 
-![The Wixal 0.7.2 workspace, with project and conversation navigation beside the chat composer](docs/screenshots/workspace.png)
+![The Wixal 0.7.3 workspace, with project and conversation navigation beside the chat composer](docs/screenshots/workspace.png)
 
 - **Bring the context.** Browse and search project files, attach images, and save notes for future conversations.
 - **Review the work.** Choose which tools the model can use. Approve file edits and commands before they run.
@@ -43,23 +43,26 @@ Open a folder and start a conversation. Your files, saved notes, and terminal ar
 <details>
 <summary><strong>See Wixal in action</strong> — a short tour of the app</summary>
 
-![Recorded tour of model selection, project files, tool controls, notes, and the terminal in Wixal 0.7.2](docs/media/workspace-tour.gif)
+![Recorded tour of model selection, project files, tool controls, notes, and the terminal in Wixal 0.7.3](docs/media/workspace-tour.gif)
+
+![Recorded collapse and expansion of the Wixal 0.7.3 sidebar](docs/media/sidebar-motion.gif)
 
 [View the screenshots](docs/screenshots) for a still version of the tour.
 
 </details>
 
-## New in 0.7.2
+## Workspace refinements in 0.7.3
 
-**A more useful main workspace.** Project and model readiness sit beside the composer, with Files, Tools, Memory and Terminal directly in the header. The local provider remains **Wixal Local**.
+**A more useful main workspace, introduced in 0.7.2 and refined in 0.7.3.** Project and model readiness sit beside the composer, with Files, Tools, Memory and Terminal directly in the header. The local provider remains **Wixal Local**.
 
+- **Move between layouts.** The sidebar fades and moves together, reverses smoothly, and respects reduced motion.
 - **Keep your place.** Text drafts save on this Mac and return when you switch chats or reopen the app.
 - **Work through long replies.** Copy individual code blocks, jump to the latest message and read earlier content while a reply streams.
 - **Choose deliberately.** Chat and Agent have explicit choices with descriptions. The Models page still handles selection, in-app downloads and measured performance.
 
 Streaming updates the pending reply without rebuilding saved messages on each frame. This reduces renderer work; model inference speed depends on the model and your Mac.
 
-[0.7.2 release notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.2) · [Models and performance guide](docs/performance.md) · [How Wixal Local works](docs/local-runtime.md)
+[0.7.3 release notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.3) · [Models and performance guide](docs/performance.md) · [How Wixal Local works](docs/local-runtime.md)
 
 Wixal Local is built on pinned open-source Ollama 0.35.1, with its original credits and notices preserved. A separate Ollama server and cloud providers remain optional. [Upstream credits](THIRD_PARTY_NOTICES.md)
 
@@ -105,11 +108,11 @@ Conversations and project notes are saved on your Mac. When you use a cloud mode
 
 ## Get started
 
-1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.2/Wixal-0.7.2-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
+1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.3/Wixal-0.7.3-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
 2. **Connect a model.** Open **Models** in the sidebar and download or import a model with Wixal Local, or open **Workspace → Connections** to add a provider.
 3. **Open your project.** Press **⌘O** to choose a folder and **⌘L** to choose a model. Then start a conversation.
 
-This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.2#install).
+This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.3#install).
 
 ## Guides & development
 

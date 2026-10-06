@@ -754,10 +754,16 @@ function renderAttachments() {
   $('attachments').querySelectorAll('button').forEach(button => button.onclick = async () => { try { await invoke('image-remove', button.dataset.remove); attachments = attachments.filter(image => image.id !== button.dataset.remove); renderAttachments(); } catch {} });
 }
 $('attach-image').onclick = async () => { if (!selectedModel()?.capabilities?.includes('vision')) { toast('Choose a model marked Images to attach photos or screenshots.'); showModels(); return; } try { attachments.push(...await invoke('images-open')); renderAttachments(); } catch {} };
+let sidebarTarget = null, sidebarSave = null, sidebarMenuFrame = 0, sidebarInitialized = false;
 function applySidebarLayout() {
-  const collapsed = !!state?.ui?.sidebarCollapsed;
-  const reopening = $('sidebar').classList.contains('collapsed') && !collapsed;
-  if (reopening) { const wordmark = $('sidebar-wordmark'); wordmark.classList.remove('arriving'); void wordmark.offsetWidth; wordmark.classList.add('arriving'); }
+  if (!sidebarInitialized) {
+    sidebarInitialized = true; $('sidebar').classList.add('layout-initializing');
+    requestAnimationFrame(() => requestAnimationFrame(() => $('sidebar').classList.remove('layout-initializing')));
+  }
+  const collapsed = sidebarTarget ?? !!state?.ui?.sidebarCollapsed;
+  if (collapsed && $('sidebar-content').contains(document.activeElement)) $('sidebar-toggle').focus();
+  $('sidebar-content').inert = collapsed;
+  $('sidebar-content').setAttribute('aria-hidden', String(collapsed));
   $('sidebar').classList.toggle('collapsed', collapsed);
   $('sidebar-toggle').setAttribute('aria-expanded', String(!collapsed));
   $('sidebar-toggle').setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
@@ -765,10 +771,17 @@ function applySidebarLayout() {
   $('show-sidebar').classList.add('hidden');
   requestAnimationFrame(positionWorkspaceMenu);
 }
-async function toggleSidebar(collapsed = !state.ui.sidebarCollapsed) {
-  if (!!state.ui.sidebarCollapsed === !!collapsed) return;
-  try { state = await invoke('layout', !!collapsed); applySidebarLayout(); }
-  catch { applySidebarLayout(); }
+async function toggleSidebar(collapsed = !(sidebarTarget ?? !!state.ui.sidebarCollapsed)) {
+  // Start motion immediately; serialize persistence so rapid reversals cannot save an old target.
+  if ((sidebarTarget ?? !!state.ui.sidebarCollapsed) === !!collapsed) return sidebarSave;
+  sidebarTarget = !!collapsed; applySidebarLayout();
+  if (!sidebarSave) sidebarSave = (async () => {
+    while (sidebarTarget !== !!state.ui.sidebarCollapsed) {
+      try { state = await invoke('layout', sidebarTarget); }
+      catch { toast('Could not save the sidebar layout.'); break; }
+    }
+  })().finally(() => { sidebarTarget = null; sidebarSave = null; applySidebarLayout(); });
+  return sidebarSave;
 }
 function positionWorkspaceMenu() {
   const menu = $('workspace-menu'); if (!menu.matches(':popover-open')) return;
@@ -776,13 +789,17 @@ function positionWorkspaceMenu() {
   menu.style.left = `${Math.max(12, Math.min(button.left, innerWidth - rect.width - 12))}px`;
   menu.style.top = `${Math.max(12, button.top - rect.height - 8)}px`;
 }
-function toggleWorkspaceMenu() {
-  const menu = $('workspace-menu');
-  if (menu.matches(':popover-open')) { menu.hidePopover(); return; }
-  menu.showPopover(); positionWorkspaceMenu();
-}
 window.addEventListener('resize', positionWorkspaceMenu);
 $('sidebar').addEventListener('transitionend', positionWorkspaceMenu);
+function followSidebarMenu() {
+  cancelAnimationFrame(sidebarMenuFrame);
+  const follow = () => {
+    positionWorkspaceMenu();
+    sidebarMenuFrame = $('workspace-menu').matches(':popover-open') && $('sidebar').getAnimations().some(animation => animation.playState === 'running') ? requestAnimationFrame(follow) : 0;
+  };
+  sidebarMenuFrame = requestAnimationFrame(follow);
+}
+$('sidebar').addEventListener('transitionrun', event => { if (event.target === $('sidebar')) followSidebarMenu(); });
 const themes = [
   { id: 'sakura', name: 'Sakura', note: 'Charcoal & pink', bg: '#17181b', panel: '#25232a', accent: '#e9a5bd' },
   { id: 'midnight', name: 'Midnight', note: 'Cool blue', bg: '#151823', panel: '#222937', accent: '#a5b9e9' },
@@ -829,8 +846,11 @@ $('settings-dialog').querySelectorAll('[data-settings-action]').forEach(button =
 function palette() { if ($('palette').open) $('palette').close(); else $('palette').showModal(); }
 const actions = { settings: showSettings, sidebar: toggleSidebar, archives: showArchives, open: openProject, new: newSession, terminal: toggleTerminal, connections: showConnections, tasks: showTasks, memory: () => toggleDrawer('memory'), toolkit: () => toggleDrawer('toolkit'), files: showFiles, palette, models: showModels };
 $('sidebar-toggle').onclick = () => toggleSidebar(); $('show-sidebar').onclick = () => toggleSidebar(false);
-$('workspace-menu-toggle').onclick = toggleWorkspaceMenu;
-$('workspace-menu').addEventListener('toggle', event => $('workspace-menu-toggle').setAttribute('aria-expanded', String(event.newState === 'open')));
+$('workspace-menu-toggle').onclick = () => requestAnimationFrame(positionWorkspaceMenu);
+$('workspace-menu').addEventListener('toggle', event => {
+  $('workspace-menu-toggle').setAttribute('aria-expanded', String(event.newState === 'open'));
+  if (event.newState === 'open') { positionWorkspaceMenu(); followSidebarMenu(); }
+});
 $('workspace-menu').addEventListener('click', event => { if (event.target.closest('button')) $('workspace-menu').hidePopover(); });
 $('project-label').onclick = openProject;
 $('welcome-context').onclick = () => project() ? showFiles() : openProject();

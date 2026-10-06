@@ -93,3 +93,11 @@ The workspace header exposes Files, Tools, Memory and Terminal. Project and mode
 Streaming updates only the pending text node on animation frames; saved Markdown is rendered on state transitions. Scrolling up keeps your reading position, with a button to return to the latest message. Code blocks have a dedicated clipboard action.
 
 `npm run test:workspace` exercises text draft recovery across chat changes, page reload and full Electron restart; invalid draft requests; real file access and clipboard; header drawers; keyboard mode selection; stable saved/pending message nodes during a protocol-fixture stream; scroll preservation; clearing sent drafts; returning to chats from Models; and compact layout. Browser plugin is not available, so this uses Playwright's real Electron renderer. Fixtures are confined to disposable app data and are never used for public screenshots.
+
+## Sidebar motion refinements in 0.7.3
+
+Keep this work on the 0.7.x patch release line. Sidebar motion uses a shared 280 ms curve for width and control positions, short opacity transitions for labels, and fixed-width project navigation to avoid repeated text wrapping. It removes the sidebar letter-stagger animation and its forced layout read. The only animation-frame loop follows an open Workspace popover while the rail is moving; it stops when motion ends or the menu closes.
+
+Layout responds optimistically and serializes saves, preserving the final target during rapid reversals. Hidden navigation is inert, with focus returned to the toggle. Saved layout is applied without startup motion. OS and app reduced-motion preferences remain supported.
+
+Run `npm run test:sidebar`, `npm run test:workspace` and `npm run test:settings` against source and the packaged app. Record screenshots and the sidebar GIF from real renderer frames with `npm run media`; never interpolate a static screenshot to represent app behavior.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.3 — 6 October 2026
+
+- Coordinated sidebar width, brand, toggle, new-chat and footer motion, with fixed-width navigation and a short label fade.
+- Made collapse and expand respond immediately, reverse smoothly and save the final layout in order during rapid toggles.
+- Removed collapsed navigation from keyboard focus, restored focus to the toggle when needed, and respected both macOS and in-app reduced-motion preferences.
+- Fixed repeated Workspace-button clicks to close its menu, kept the menu anchored throughout motion and preserved equal, centered bottom-left controls at desktop and compact sizes.
+- Applied saved layout without a startup animation and refreshed real app screenshots and a recorded sidebar animation.
+
 ## 0.7.2 — 6 October 2026
 
 - Redesigned the main workspace with project/model readiness, practical starting prompts, a focused composer and direct Files, Tools, Memory and Terminal controls.

@@ -97,3 +97,9 @@ Local verification:
 - Desktop opening, models/memory balance and mobile web/companion layouts were visually inspected. Visible preview ratios match their source images; maximum measured ratio deviation was below 0.0002.
 - Capability links navigate to the intended feature under the sticky header. The new browser-control preview opens at full size; Escape closes the dialog and returns focus to its trigger.
 - No browser errors or warnings were recorded. Neutral black/charcoal Dark and the existing Light palette remain in use.
+
+## 0.7.2 workspace refresh
+
+Current packaged 0.7.2 screenshots now lead the homepage and Product gallery and Desktop overview. Model library/download/performance previews include an actual Gemma 3 12B benchmark and a completed registry download; feature captures use a disposable project and actual terminal test. The provider remains Wixal Local. Download links target v0.7.2, and new copy stays to a short release sentence plus the practical header/draft workflow.
+
+The in-app browser verified screenshot tabs, enlarged image opening/closing, mobile navigation and dark appearance. Product layouts at 1280, 390 and 320 pixels had no horizontal overflow or broken loaded images, and no browser errors/warnings were recorded. Desktop and mobile screenshots were visually reviewed. Build checks resolve 282 local assets/pages/fragments across seven HTML documents and verify image dimensions. The companion remains explicitly labelled as an illustration.

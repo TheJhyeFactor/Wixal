@@ -27,6 +27,7 @@ const showcaseOnly = process.argv.includes('--showcase');
     app = await electron.launch({args:[appRoot],env,...(process.env.WIXAL_APP_PATH ? {executablePath:process.env.WIXAL_APP_PATH} : {})});
     const page = await app.firstWindow();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1200,800));
+    await page.locator('.title-version').filter({hasText:appRequire('./package.json').version}).waitFor();
     await page.locator('#project-label').filter({hasText:'Website project'}).waitFor();
     const failures=[];
     page.on('pageerror',error=>failures.push(error.message));

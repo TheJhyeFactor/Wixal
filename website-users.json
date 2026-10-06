@@ -1,0 +1,9 @@
+{
+  "active_users": 0,
+  "period_days": 30,
+  "includes_today": true,
+  "updated_at": "2026-10-06T05:11:01.497Z",
+  "timezone": "Australia/Sydney",
+  "source": "Google Analytics 4",
+  "status": "available"
+}

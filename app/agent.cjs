@@ -27,7 +27,7 @@ function contextMessages(messages, budget = 44000, vision = true) {
   return { messages: kept, omitted: messages.length - kept.length };
 }
 
-const { boundedToolResult } = require('./tool-evidence.cjs');
+const { boundedToolResult, latestEvidence } = require('./tool-evidence.cjs');
 
 function ollamaMessages(messages, model, supportsTools = true) {
   let foreign = false;
@@ -69,7 +69,8 @@ function fitRequest(messages, tools, limit) {
 }
 function previewHistory(messages, tools, limit, system) {
   const cloned = structuredClone(messages), evidence = cloned.filter(m => m.role === 'tool');
-  evidence.forEach((message, index) => { message.content = boundedToolResult(message.content, index === evidence.length - 1 ? 3000 : 400); });
+  const latest = latestEvidence(evidence);
+  evidence.forEach((message, index) => { message.content = boundedToolResult(message.content, index === latest ? 3000 : 400); });
   return fitRequest([{ role: 'system', content: system }, ...cloned], tools, limit);
 }
 
@@ -175,8 +176,9 @@ async function runAgent({ store, prompt, images = [], details, signal, emit, app
     // models to reread the same report in ever smaller chunks.
     const evidenceBudget = Math.max(3500, Math.floor(budget * .7));
     const olderBudget = Math.max(200, Math.floor(evidenceBudget * .3 / Math.max(1, toolMessages.length - 1)));
+    const latest = latestEvidence(toolMessages);
     for (const [index, message] of toolMessages.entries()) {
-      const limit = index === toolMessages.length - 1 ? Math.max(3000, Math.floor(evidenceBudget * .8)) : olderBudget;
+      const limit = index === latest ? Math.max(3000, Math.floor(evidenceBudget * .8)) : olderBudget;
       message.content = boundedToolResult(message.content, limit);
     }
     if (store.data.autoSummary !== false) await compactSession({ session, omitted: context.omitted, budget, summarize, signal, save: () => store.save(), emit });

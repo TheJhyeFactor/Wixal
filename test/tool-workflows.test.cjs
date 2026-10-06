@@ -127,3 +127,14 @@ test('idle context previews use bounded evidence while retaining full original c
  const messages=[{role:'user',content:'Read the website'}];for(let i=0;i<6;i++){messages.push({role:'assistant',content:'',tool_calls:[{function:{name:'browser_read',arguments:{session_id:'one'}}}]},{role:'tool',tool_name:'browser_read',content:JSON.stringify({session_id:'one',text:'live evidence '.repeat(4000),url:'https://jhye.dev/',next_offset:56000})});}messages.push({role:'assistant',content:'Read actual evidence.'});
  const original=JSON.stringify(messages),preview=previewHistory(messages,[],8192,'App context '.repeat(500));assert.ok(usage(preview,[],8192).used<=usage(preview,[],8192).inputLimit);assert.ok(JSON.stringify(preview).length<original.length*.15);assert.equal(JSON.stringify(messages),original);
 });
+test('closing and saving acknowledgements never replace the latest substantive evidence in model input',async t=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'wixal-conclusion-evidence-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));const store=new Store(path.join(root,'state'));store.addProject(root);store.data.model='fixture';store.data.enabledTools=['read_file','write_file'];
+ const text='Page introduction.\n'.repeat(30)+'ACTUAL_PROJECT_PROOF: Apertide and garak scan planner.\n'+'Project details.\n'.repeat(80);await fs.writeFile(path.join(root,'page.txt'),text);let requests=0;
+ await runAgent({store,prompt:'Read page.txt, save a marker and report the two projects.',details:{capabilities:['tools']},signal:new AbortController().signal,emit:()=>{},approve:async()=>true,fetcher:async(_url,request)=>{
+  const body=JSON.parse(request.body);requests++;
+  if(requests===1)return new Response(JSON.stringify({done:true,message:{content:'',tool_calls:[{function:{name:'read_file',arguments:{path:'page.txt'}}}]}}));
+  if(requests===2)return new Response(JSON.stringify({done:true,message:{content:'',tool_calls:[{function:{name:'write_file',arguments:{path:'marker.txt',content:'saved'}}}]}}));
+  assert.ok(body.messages.some(m=>m.role==='tool'&&m.tool_name==='read_file'&&m.content.includes('ACTUAL_PROJECT_PROOF')));return new Response(JSON.stringify({done:true,message:{content:'Apertide and garak scan planner.'}}));
+ }});assert.equal(requests,3);
+ const {latestEvidence}=require('../app/tool-evidence.cjs');assert.equal(latestEvidence([{tool_name:'browser_read',content:JSON.stringify({text})},{tool_name:'browser_close',content:JSON.stringify({state:'closed'})}]),0);
+});

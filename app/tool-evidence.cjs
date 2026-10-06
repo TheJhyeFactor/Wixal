@@ -42,4 +42,10 @@ function boundedToolResult(content, limit) {
   }
   return JSON.stringify(result);
 }
-module.exports = { boundedToolResult };
+function hasEvidence(message) {
+ const content = message.content || '';
+ if (/^(Error:|User declined)/.test(content) || ['workspace_info','browser_close','command_start','command_write','command_stop','network_scan','network_stop','write_file','edit_file','make_directory','save_memory','command_save_output'].includes(message.tool_name)) return false;
+ try { const value = JSON.parse(content); return ['text','content','output'].some(key => typeof value[key] === 'string' && value[key].trim()) || ['results','findings','checks','cases','controls'].some(key => Array.isArray(value[key]) && value[key].length); } catch { return !!content.trim(); }
+}
+function latestEvidence(messages) { const index = messages.findLastIndex(hasEvidence); return index >= 0 ? index : messages.length - 1; }
+module.exports = { boundedToolResult, hasEvidence, latestEvidence };

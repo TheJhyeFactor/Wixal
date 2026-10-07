@@ -1,0 +1,5 @@
+#!/bin/zsh
+set -eu
+native_root="${0:A:h:h}"
+export PYTHONPATH="$native_root/engine"
+exec "${WIXAL_NATIVE_PYTHON:-python3}" -m wixal.cli "$@"

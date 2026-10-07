@@ -1,0 +1,427 @@
+"""Python port of project, command, network, memory and MCP tool enforcement."""
+import asyncio
+import codecs
+import html
+import ipaddress
+import json
+import os
+import re
+import shutil
+import signal
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from .storage import identity, now
+
+DEFINITIONS = json.loads((Path(__file__).parent / "resources/tools.json").read_text())
+SKIP = {".git", "node_modules", ".venv", "venv", "release", ".next", "dist", ".build"}
+
+
+def sensitive(relative):
+    return any(re.match(r"^\.env(?:\.|$)", p) or p in {".ssh", ".aws", ".gnupg", ".npmrc", ".netrc", "credentials.enc", "wixal-connection.json", "workspace.sqlite3"}
+               or re.search(r"\.(pem|key|p12|pfx)$", p, re.I) for p in Path(relative).parts)
+
+
+def safe_path(root, relative, writing=False):
+    if not root:
+        raise ValueError("Open a project directory")
+    if not isinstance(relative, str) or Path(relative).is_absolute() or sensitive(relative):
+        raise ValueError("Use a project-relative path without credentials")
+    base = Path(root).resolve(strict=True)
+    target = base / relative
+    actual = target.resolve(strict=not writing)
+    if not actual.is_relative_to(base) or sensitive(actual.relative_to(base)):
+        raise ValueError("Path escapes the project or reaches protected credentials")
+    if writing and not actual.parent.is_dir():
+        raise ValueError("Parent directory must exist")
+    return actual
+
+
+def validate(args, schema):
+    if not isinstance(args, dict):
+        raise ValueError("Tool arguments must be an object")
+    properties = schema.get("properties", {})
+    if any(k not in args for k in schema.get("required", [])):
+        raise ValueError("Missing required tool argument")
+    if schema.get("additionalProperties") is False and set(args) - set(properties):
+        raise ValueError("Unknown tool argument")
+    for key, value in args.items():
+        rule = properties.get(key, {})
+        types = {"string": str, "integer": int, "number": (int, float), "array": list, "object": dict, "boolean": bool}
+        expected = types.get(rule.get("type"))
+        if expected and (not isinstance(value, expected) or rule.get("type") in ("integer", "number") and isinstance(value, bool)):
+            raise ValueError(f"Invalid type for {key}")
+        if "enum" in rule and value not in rule["enum"]:
+            raise ValueError(f"Invalid value for {key}")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if value < rule.get("minimum", value) or value > rule.get("maximum", value):
+                raise ValueError(f"{key} is outside its bounds")
+        if isinstance(value, str) and len(value) > rule.get("maxLength", 100000):
+            raise ValueError(f"{key} is too long")
+        if isinstance(value, list):
+            if len(value) > rule.get("maxItems", 100):
+                raise ValueError("Too many items")
+            for item in value:
+                validate({"item": item}, {"properties": {"item": rule.get("items", {})}})
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def http_request(args):
+    url = urllib.parse.urlsplit(args["url"])
+    if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
+        raise ValueError("Use an HTTP(S) URL without credentials")
+    method = args.get("method", "GET").upper()
+    if method not in ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"):
+        raise ValueError("Unsupported HTTP method")
+    body = args.get("body")
+    if body is not None:
+        if method in ("GET", "HEAD") or len(body) > 16000:
+            raise ValueError("Invalid HTTP body")
+        json.loads(body)
+    if method not in ("GET", "HEAD") and args.get("offset", 0):
+        raise ValueError("Write pagination could repeat a mutation")
+    request = urllib.request.Request(args["url"], data=body.encode() if body else None, method=method,
+        headers={"User-Agent": "Wixal-Native/1", **({"Content-Type": "application/json"} if body else {})})
+    opener = urllib.request.build_opener(NoRedirect)
+    try:
+        response = opener.open(request, timeout=20)
+    except urllib.error.HTTPError as error:
+        response = error
+    with response:
+        raw = response.read(1024*1024+1)
+        text = raw[:1024*1024].decode("utf-8", errors="replace")
+        if "text/html" in response.headers.get("Content-Type", ""):
+            text = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", "", text, flags=re.S | re.I)
+            text = html.unescape(re.sub(r"<[^>]+>", " ", text))
+            text = re.sub(r"[ \t]+", " ", text)
+        offset, limit = args.get("offset", 0), args.get("max_chars", 12000)
+        if not 0 <= offset <= len(text):
+            raise ValueError("Invalid response offset")
+        return dict(url=args["url"], status=response.code, headers=dict(response.headers), content=text[offset:offset+limit],
+            next_offset=min(len(text), offset+limit), more=offset+limit < len(text), truncated=len(raw)>1024*1024,
+            redirect=response.headers.get("Location"))
+
+
+PROFILES = {
+    "discovery": ["-sn", "-PS22,80,443"], "ports": ["-sT", "-Pn"],
+    "services": ["-sT", "-Pn", "-sV", "--version-light"],
+    "web": ["-sT", "-Pn", "-sV", "--script", "http-title,http-headers,http-security-headers"],
+    "tls": ["-sT", "-Pn", "-sV", "--script", "ssl-cert,ssl-enum-ciphers"],
+    "ssh": ["-sT", "-Pn", "-sV", "--script", "ssh-hostkey,ssh2-enum-algos"],
+    "enumeration": ["-sT", "-Pn", "-sV", "--script", "http-enum"],
+    "checks": ["-sT", "-Pn", "-sV", "--script", "ssl-poodle,http-cookie-flags,http-security-headers"]}
+
+
+def scan_plan(args):
+    target = args["target"].strip()
+    if "://" in target:
+        url = urllib.parse.urlsplit(target)
+        if url.scheme not in ("http", "https") or url.username or url.password:
+            raise ValueError("Invalid scan URL")
+        target = url.hostname or ""
+    if "/" in target:
+        net = ipaddress.ip_network(target, strict=False)
+        if net.version != 4 or net.prefixlen < 24 or not any(net.subnet_of(ipaddress.ip_network(cidr)) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8")):
+            raise ValueError("Subnet scans require a private IPv4 /24–/32")
+    else:
+        try:
+            ipaddress.ip_address(target)
+        except ValueError:
+            if not re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?", target) or any(not p or len(p)>63 for p in target.split(".")):
+                raise ValueError("Invalid scan target")
+    profile = args.get("profile", "services")
+    if profile not in PROFILES:
+        raise ValueError("Unknown scan profile")
+    ports = args.get("ports", "22,53,80,443,445,3389,8080,8443")
+    if not re.fullmatch(r"\d{1,5}(?:-\d{1,5})?(?:,\d{1,5}(?:-\d{1,5})?)*", ports):
+        raise ValueError("Invalid TCP ports")
+    for part in ports.split(","):
+        values = list(map(int, part.split("-")))
+        if not 1 <= values[0] <= values[-1] <= 65535:
+            raise ValueError("Ports must be 1–65535")
+    seconds = args.get("timeout_seconds", 180)
+    return [*(["-6"] if ":" in target else []), *PROFILES[profile], "-n", "--reason", "-T3", "--max-retries", "1",
+            "--host-timeout", f"{seconds}s", "--script-timeout", "30s", *([] if profile=="discovery" else ["-p", ports]), "-oX", "-", target]
+
+
+def web_search(args):
+    """Return actual provider links, with bounded fallback on provider failure."""
+    failures = []
+    for provider, base in (("DuckDuckGo", "https://lite.duckduckgo.com/lite/"),
+                           ("Bing", "https://www.bing.com/search")):
+        params = {"q": args["query"]}
+        if provider == "Bing":
+            params["format"] = "rss"
+        url = base + "?" + urllib.parse.urlencode(params)
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; Wixal-Native/1)"}), timeout=20) as response:
+                raw = response.read(1024 * 1024).decode("utf-8")
+            results = []
+            if provider == "Bing":
+                root = ET.fromstring(raw)
+                if root.tag != "rss":
+                    raise ValueError("Provider returned an unexpected response")
+                for item in root.findall("./channel/item"):
+                    results.append(dict(title=item.findtext("title", ""), url=item.findtext("link", "")))
+            else:
+                if "anomaly.js" in raw or "bots use DuckDuckGo" in raw:
+                    raise ValueError("Provider returned a bot challenge")
+                for attributes, title in re.findall(r"<a\b([^>]*)>(.*?)</a>", raw, re.S):
+                    if "result-link" not in attributes and "result__a" not in attributes:
+                        continue
+                    match = re.search(r'href=[\"\']([^\"\']+)', attributes)
+                    if not match:
+                        continue
+                    href = match.group(1)
+                    href = html.unescape(href)
+                    href = urllib.parse.parse_qs(urllib.parse.urlsplit(href).query).get("uddg", [href])[0]
+                    results.append(dict(title=html.unescape(re.sub("<[^>]+>", "", title)), url=href))
+                if not results and "No results" not in raw:
+                    raise ValueError("Provider response did not contain recognised search results")
+            results = [item for item in results if item["url"].startswith(("http://", "https://"))]
+            return dict(results=results[:max(1, min(20, int(args.get("limit", 8))))],
+                        state="results" if results else "no_results", provider=provider, providerFailures=failures)
+        except (OSError, ValueError, ET.ParseError) as error:
+            failures.append(dict(provider=provider, error=str(error)))
+    raise ValueError("Search providers unavailable: " + "; ".join(f'{row["provider"]}: {row["error"]}' for row in failures))
+
+
+class Tools:
+    def __init__(self, store, approve, emit, mcp, host=None):
+        self.store, self.approve, self.emit, self.mcp, self.host = store, approve, emit, mcp, host
+        self.jobs = {}
+        self.delegate = None
+
+    def catalog(self):
+        return DEFINITIONS + self.mcp.definitions()
+
+    def files(self, directory="."):
+        root = self.store.project()["root"]
+        start = safe_path(root, directory)
+        result = []
+        for folder, dirs, files in os.walk(start, followlinks=False):
+            dirs[:] = sorted(d for d in dirs if d not in SKIP and not sensitive(d) and not (Path(folder)/d).is_symlink()
+                             and len(Path(folder).relative_to(start).parts)<6)
+            for file in sorted(files):
+                p = Path(folder) / file
+                if not p.is_symlink() and not sensitive(p.relative_to(root)):
+                    result.append(str(p.relative_to(root)))
+                if len(result) >= 1200:
+                    return result
+        return result
+
+    async def start_command(self, command, seconds, session_id, argv=None):
+        if sum(j["state"]=="running" for j in self.jobs.values()) >= 8:
+            raise ValueError("Eight commands are already running")
+        project = self.store.project()
+        if not project or not command.strip() or len(command)>8000:
+            raise ValueError("A project and valid command are required")
+        if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds)):
+            return "User declined this command."
+        child = await asyncio.create_subprocess_exec(*(argv or ["/bin/zsh", "-l", "-c", command]), cwd=project["root"],
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True)
+        job_id = identity()
+        job = dict(id=job_id, owner=session_id, projectId=project["id"], command=command, started=now(), state="running",
+                   output="", base=0, exitCode=None, child=child, reason=None)
+        self.jobs[job_id] = job
+        async def collect():
+            decoder=codecs.getincrementaldecoder('utf-8')(errors='replace')
+            try:
+                async with asyncio.timeout(seconds):
+                    while chunk := await child.stdout.read(8192):
+                        text = decoder.decode(chunk)
+                        job["output"] += text
+                        extra = max(0, len(job["output"])-1024*1024)
+                        job["base"] += len(job['output'][:extra].encode('utf-16-le'))//2
+                        job["output"] = job["output"][extra:]
+                        self.emit("command-output", dict(text=text, session_id=job_id))
+                    tail=decoder.decode(b'',final=True)
+                    if tail:job['output']+=tail;self.emit('command-output',dict(text=tail,session_id=job_id))
+                    job["exitCode"] = await child.wait()
+                    job["state"] = "stopped" if job["reason"] else "completed"
+            except TimeoutError:
+                self.stop_job(job, "timeout")
+                await child.wait()
+                job["state"] = "stopped"
+            finally:
+                job["finished"] = now()
+        job["collector"] = asyncio.create_task(collect())
+        return dict(session_id=job_id, state="running")
+
+    def stop_job(self, job, reason="user_stop"):
+        if job["child"].returncode is None:
+            job["reason"] = reason
+            try:
+                os.killpg(job["child"].pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    async def read_job(self, args, session_id):
+        job = self.jobs.get(args["session_id"])
+        if not job or job["owner"] != session_id or job["projectId"] != (self.store.project() or {}).get("id"):
+            raise ValueError("Command belongs to another conversation or project")
+        if job["state"] == "running":
+            await asyncio.sleep(args.get("wait_ms", 1000)/1000)
+        offset = args.get("offset", job["base"])
+        encoded=job['output'].encode('utf-16-le');units=len(encoded)//2
+        if offset<0 or offset>job["base"]+units:
+            raise ValueError("Invalid output offset")
+        start = max(offset, job["base"])
+        maximum=args.get('max_chars',24000)
+        if not isinstance(maximum,int) or not 1<=maximum<=100000:raise ValueError('Choose 1–100,000 output characters')
+        data=encoded[(start-job['base'])*2:(start-job['base']+maximum)*2]
+        try:output=data.decode('utf-16-le')
+        except UnicodeDecodeError:
+            try:output=data[:-2].decode('utf-16-le')
+            except UnicodeDecodeError as error:raise ValueError('Output offset must align to a character boundary') from error
+        return dict(session_id=job["id"], command=job["command"], state=job["state"], exitCode=job["exitCode"],
+                    reason=job["reason"], output=output, offset=start, next_offset=start+len(output.encode('utf-16-le'))//2,
+                    more=start+len(output.encode('utf-16-le'))//2<job["base"]+units, earliest_offset=job["base"], started=job["started"], finished=job.get("finished"))
+
+    async def execute(self, name, args, session_id):
+        if name not in self.store.data["enabledTools"]:
+            raise ValueError(f"{name} is switched off in the tool kit")
+        definition = next((t for t in self.catalog() if t["function"]["name"]==name), None)
+        if not definition:
+            raise ValueError("Tool is unavailable")
+        validate(args, definition["function"]["parameters"])
+        root = (self.store.project() or {}).get("root")
+        from .context_policy import requires_project
+        if requires_project(name) and (self.store.project() or {}).get('syncRootRequired'):raise ValueError('Locate this synced project folder in Settings before using project tools')
+        if name == "load_skill":
+            skill = next((s for s in self.store.data["skills"] if s["name"]==args["name"]),None)
+            if not skill: raise ValueError("Unknown skill")
+            return dict(name=skill["name"],instructions=skill["content"])
+        if name == "delegate_task":
+            if not self.delegate: raise ValueError("Delegation is unavailable in a child agent")
+            return await self.delegate(args["prompt"])
+        if name == "workspace_info":
+            from .context_policy import eligible,category
+            available=eligible(self.catalog(),self.store.data['enabledTools'],self.store.project())
+            return dict(app="Wixal Native", project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name'])) for t in available],memory=self.store.memory.snapshot()['policy'])
+        if name == "list_files":
+            return self.files(args.get("directory", "."))[args.get("offset", 0):]
+        if name in ("read_file", "search_files"):
+            files = [args["path"]] if name == "read_file" else self.files()
+            results = []
+            for relative in files:
+                file = safe_path(root, relative)
+                if not file.is_file() or file.stat().st_size>1024*1024:
+                    if name=='read_file':raise ValueError('Choose a readable text file below 1 MB, not a directory')
+                    continue
+                try:
+                    text = file.read_text()
+                except UnicodeError:
+                    if name=='read_file':raise ValueError('This file is not UTF-8 text')
+                    continue
+                if "\0" in text:
+                    if name=='read_file':raise ValueError('This file contains binary data')
+                    continue
+                if name == "read_file":
+                    offset = args.get("offset", 0)
+                    return dict(content=text[offset:offset+24000], next_offset=min(len(text), offset+24000), more=offset+24000<len(text))
+                results.extend(dict(path=relative, line=i+1, text=line[:400]) for i,line in enumerate(text.splitlines()) if args["query"].lower() in line.lower())
+            return results[args.get("offset", 0):][:100]
+        if name in ("write_file", "edit_file", "make_directory"):
+            file = safe_path(root, args["path"], True)
+            before = file.read_bytes() if file.is_file() else None
+            if name == "edit_file":
+                text = (before or b"").decode()
+                if not args["old_text"] or text.count(args["old_text"])!=1:
+                    raise ValueError("Edit requires one exact unique match")
+                content = text.replace(args["old_text"], args["new_text"])
+            else:
+                content = args.get("content", "")
+            if len(content)>100000:
+                raise ValueError("File write exceeds 100,000 characters")
+            if not await self.approve(dict(name=name, path=str(file), content=content, before=(before or b"").decode(errors="replace"))):
+                return "User declined this file operation."
+            if safe_path(root, args["path"], True)!=file or (file.read_bytes() if file.is_file() else None)!=before:
+                raise ValueError("File changed during review")
+            if name == "make_directory":
+                file.mkdir()
+            else:
+                file.write_text(content)
+            return f"Saved {args['path']}"
+        if name == "save_memory":
+            session=next((s for s in self.store.data['sessions'] if s['id']==session_id),{})
+            source=next((m for m in reversed(session.get('messages',[])) if m['role']=='user'),{})
+            scope=args.get('scope','project')
+            if not await self.approve(dict(name=name, content=args["content"],scope=scope,replace_id=args.get('replace_id'))):
+                return "User declined this memory."
+            note=self.store.memory.save(args['content'],scope,session_id,source.get('id'),args.get('replace_id'))
+            return dict(saved=True,id=note['id'],scope=scope,content=note['content'])
+        if name=='recall_memory':
+            if hasattr(self,'runtime'):await self.store.memory.prepare(args['query'],self.runtime,args.get('scope'),session_id)
+            return dict(results=self.store.memory.recall(args['query'],args.get('scope'),exclude_session=session_id),note='Saved facts and allowed history only. Earlier assistant text is evidence, not verified fact.')
+        if name=='forget_memory':
+            if not await self.approve(dict(name=name,id=args['id'],action='Forget this saved memory and exclude its source from recall')):return 'User declined forgetting memory.'
+            return dict(forgotten=self.store.memory.forget(args['id']))
+        if name == "search_history":
+            if (self.store.project() or {}).get("memoryMode") in ("off", "global"):
+                raise ValueError("Project recall is disabled")
+            return self.store.memory.recall(args['query'],scope='project',limit=8,exclude_session=session_id)
+        if name in ("command_start", "run_command"):
+            result = await self.start_command(args["command"], args.get("timeout_seconds", 60 if name=="run_command" else 600), session_id)
+            if name=="run_command" and isinstance(result, dict):
+                await self.jobs[result["session_id"]]["collector"]
+                return await self.read_job(dict(session_id=result["session_id"], wait_ms=0), session_id)
+            return result
+        if name in ("command_read", "network_read"):
+            return await self.read_job(args, session_id)
+        if name in ("command_stop", "network_stop", "command_write", "command_save_output"):
+            result = await self.read_job(dict(session_id=args["session_id"], wait_ms=0), session_id)
+            job = self.jobs[args["session_id"]]
+            if name.endswith("stop"):
+                self.stop_job(job)
+                return dict(session_id=job["id"], cancellationRequested=True)
+            if name=="command_save_output":
+                result["output"] = job["output"]
+                return await self.execute("write_file", dict(path=args["path"], content=json.dumps(result, indent=2)), session_id)
+            if not await self.approve(dict(name=name, command=args["input"])):
+                return "User declined command input."
+            job["child"].stdin.write(args["input"].encode())
+            await job["child"].stdin.drain()
+            if args.get("close_stdin"):
+                job["child"].stdin.close()
+            return dict(inputSent=True)
+        if name == "security_tools":
+            return dict(installed=bool(shutil.which("nmap") or Path("/opt/homebrew/bin/nmap").is_file()), profiles=list(PROFILES), interpretation="Scan observations need verification")
+        if name == "network_scan":
+            executable = shutil.which("nmap") or ("/opt/homebrew/bin/nmap" if Path("/opt/homebrew/bin/nmap").exists() else None)
+            if not executable:
+                raise ValueError("Install Nmap to use network assessment")
+            argv = [executable, *scan_plan(args)]
+            return await self.start_command(" ".join(argv), args.get("timeout_seconds", 180), session_id, argv)
+        if name in ("http_request", "web_search"):
+            if not await self.approve(dict(name=name, **args, **({"providers": ["lite.duckduckgo.com", "www.bing.com"]} if name == "web_search" else {}))):
+                return "User declined this network request."
+            if name=="http_request":
+                return await asyncio.to_thread(http_request, args)
+            return await asyncio.to_thread(web_search, args)
+        if name.startswith("browser_"):
+            if not self.host:
+                raise ValueError("Rendered browser tools require the native desktop")
+            if name in ("browser_open", "browser_action", "browser_inspect") and not await self.approve(dict(name=name, **args)):
+                return "User declined this browser action."
+            return await self.host("browser", dict(name=name, args=args, owner=session_id))
+        if name.startswith("mcp_"):
+            if not await self.approve(dict(name=name, arguments=args)):
+                return "User declined this MCP action."
+            return await self.mcp.execute(name, args)
+        if name in ("website_assess", "website_simulate"):
+            from .website import execute_website
+            return await execute_website(self, name, args, session_id)
+        raise ValueError("Unknown tool")
+
+    async def close(self, owner=None):
+        jobs = [j for j in self.jobs.values() if owner is None or j["owner"]==owner]
+        for job in jobs:
+            self.stop_job(job)
+        await asyncio.gather(*(j["collector"] for j in jobs), return_exceptions=True)

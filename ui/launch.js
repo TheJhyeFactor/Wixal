@@ -2,11 +2,12 @@
 window.wixalLaunch = new Promise(resolve => {
   const screen = document.getElementById('launch-screen');
   const audio = document.getElementById('launch-audio');
-  let finished = false, timeout;
+  let finished = false, timeout, animations = [];
   const finish = () => {
     if (finished) return;
     finished = true;
     clearTimeout(timeout);
+    animations.forEach(animation => animation.cancel());
     audio.pause();
     if (screen.open) screen.close();
     screen.remove();
@@ -19,6 +20,7 @@ window.wixalLaunch = new Promise(resolve => {
     if (finished) return;
     const ui = state.ui || {};
     document.documentElement.dataset.theme = ui.theme || 'sakura';
+    document.getElementById('launch-version').textContent = state.appVersion ? `v${state.appVersion}` : '';
     const motion = ui.launchAnimation !== false && !ui.reduceMotion && !matchMedia('(prefers-reduced-motion: reduce)').matches;
     const start = () => {
       if (finished) return;
@@ -35,9 +37,9 @@ window.wixalLaunch = new Promise(resolve => {
         return;
       }
       screen.showModal();
-      screen.classList.add('launch-playing');
+      animations = window.WixalLaunchMotion.play(screen.querySelector('.launch-scene'));
       clearTimeout(timeout);
-      timeout = setTimeout(finish, 1850);
+      timeout = setTimeout(finish, window.WixalLaunchMotion.duration);
     };
     // Electron creates the window hidden; start when frames can actually be presented.
     requestAnimationFrame(start);

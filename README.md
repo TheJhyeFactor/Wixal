@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.8/Wixal-0.7.8-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.8/Wixal-0.7.8-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.8">Release notes</a>
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.9/Wixal-0.7.9-macOS-arm64.dmg"><strong>Download for Mac</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.9/Wixal-0.7.9-macOS-arm64.zip">ZIP</a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.9">Release notes</a>
   <br>
-  <sub>Version 0.7.8 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
+  <sub>Version 0.7.9 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14 or newer</sub>
 </p>
 
 <p align="center">
@@ -51,7 +51,11 @@ Open a folder and start a conversation. Your files, saved notes, and terminal ar
 
 </details>
 
-## Current release: 0.7.8
+## Current release: 0.7.9
+
+The 0.7.9 release is a feature-completion patch release. It includes the launch and appearance refinements, clearer tool and memory workflows, and the native SwiftUI/Python preview work documented in [`native/IMPLEMENTATION_STATUS_2026-10-07.md`](native/IMPLEMENTATION_STATUS_2026-10-07.md). The native preview now has semantic memory retrieval, reviewed local-model memory suggestions, conflict-aware consolidation, encrypted folder sync, remote HTTP MCP plumbing, awake closed-app schedules, interactive WebKit pages, and broader packaged acceptance evidence. The native preview remains Apple Silicon macOS-only and development-signed.
+
+Known limitations are documented in [the native completion status](native/IMPLEMENTATION_STATUS_2026-10-07.md) and [the remaining review](native/REMAINING_REVIEW.md). Fresh account creation/verification, exhaustive VoiceOver and minimum-size UI coverage, external OAuth providers, two-device cloud-folder delivery, sleeping-Mac wake, other platforms, comparative app performance, and Developer ID/notarised distribution remain follow-up work. Cloud inference and the external ChatGPT companion remain deferred.
 
 The 0.7.8 release adds isolated browser sessions with reviewed navigation, clicks and ordinary form controls; delayed-content waits; readable search snippets; paginated HTTP and file-search results; exact file edits and directory creation. Tool schemas are loaded by task so enabled tools leave more room for the conversation. Declined actions and three identical tool failures end tool execution for that turn. [Tool workflows and limits](docs/tool-workflows.md).
 
@@ -80,7 +84,7 @@ The preceding 0.7.7 release added project memory scopes and budgets, a small opt
 
 Streaming updates the pending reply without rebuilding saved messages on each frame. This reduces renderer work; model inference speed depends on the model and your Mac.
 
-[0.7.7 release notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.8) · [Models and performance guide](docs/performance.md) · [How Wixal Local works](docs/local-runtime.md)
+[0.7.7 release notes](docs/release-0.7.7.md) · [Models and performance guide](docs/performance.md) · [How Wixal Local works](docs/local-runtime.md)
 
 Wixal Local is built on pinned open-source Ollama 0.35.1, with its original credits and notices preserved. Models already installed in Ollama can be imported; all inference runs through Wixal’s included engine. [Upstream credits](THIRD_PARTY_NOTICES.md)
 
@@ -125,13 +129,15 @@ The optional companion can still share selected projects and queue tasks for Wix
 
 ## Get started
 
-1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.8/Wixal-0.7.8-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
+1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.9/Wixal-0.7.9-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**.
 2. **Connect a model.** Open **Models** in the sidebar and download a model tag or click **Import & use** on an installed Ollama model.
 3. **Open your project.** Press **⌘O** to choose a folder and **⌘L** to choose a model. Then start a conversation.
 
-This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.8#install).
+This preview is not Developer ID signed or notarised. If macOS blocks the first launch, see the [installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.9#install).
 
 ## Guides & development
+
+A separate **SwiftUI/AppKit desktop and Python agent port** is under development in [`native/`](native/README.md). It runs alongside the Electron app. The native notes include build instructions, verification and an explicit feature-parity checklist; the published download above remains the Electron release.
 
 | Looking for… | Start here |
 | :--- | :--- |

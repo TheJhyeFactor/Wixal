@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "A local AI workspace for Mac. Project tools, local models and a real terminal.",
   "main": "app/main.cjs",
   "private": true,
@@ -9,7 +9,7 @@
     "test": "node --test test/*.test.cjs",
     "test:app": "node scripts/smoke.cjs",
     "rebuild": "electron-rebuild -f -w node-pty",
-    "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{app,node_modules}' --asar.unpack=package.json --extra-resource=runtime/ollama --extend-info=resources/Info.plist --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(runtime|release|test|scripts|artifacts|docs|assets/social|\\.git)($|/)'",
+    "package": "electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{app,node_modules}' --asar.unpack=package.json --extra-resource=runtime/ollama --extend-info=resources/Info.plist --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(native|runtime|release|test|scripts|artifacts|docs|assets/social|\\.git)($|/)'",
     "check": "node scripts/check.cjs",
     "assets": "node scripts/graphics.cjs && node scripts/icon.cjs",
     "media": "node scripts/capture-media.cjs",

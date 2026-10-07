@@ -1,0 +1,5 @@
+#!/bin/zsh
+set -eu
+native_root="${0:A:h:h}"
+native_app="$native_root/../release/native/Wixal Native.app"
+exec "$native_app/Contents/Resources/engine/wixal-engine" --terminal --runtime "$native_app/Contents/Resources/ollama" "$@"

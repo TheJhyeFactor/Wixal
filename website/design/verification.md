@@ -109,3 +109,11 @@ The in-app browser verified screenshot tabs, enlarged image opening/closing, mob
 Current packaged 0.7.3 workspace, models, downloads and performance captures replace the prior images. Focused feature captures also come from that binary and a disposable sample project, including an actual terminal test. All image captions now identify 0.7.3. Download links target the same patch release, and the brief release and desktop copy describe coordinated sidebar motion alongside the existing draft/header improvements. The README records the actual animation without adding an autoplay asset to the website.
 
 Local in-app browser checks exercised gallery selection and enlarged screenshot opening/closing. Product layouts at 1280x900, 390x844 and 320x844 had no horizontal overflow, no broken loaded images and no recorded browser errors/warnings. Desktop and mobile Dark screenshots were inspected. Build/check passes for seven HTML documents, 282 local asset/page/fragment links and intrinsic image dimensions. The optional companion stays explicitly labelled as a workflow illustration.
+
+## 0.7.7 memory and context release
+
+The product page now describes project-only, project plus global, global-only and off scopes; the 8,000 / 24,000 / 48,000 character saved-note budgets; the 1,200-character global profile; and estimated context usage with fresh-chat summary handoff. New images come from the packaged 0.7.7 Electron memory checks using disposable sample data. Older captures retain their 0.7.3 captions. Model copy describes local inference and switching within a chat. Download and release links target 0.7.7.
+
+The production-base build and checks passed for nine HTML documents and 386 local links. Browser checks inspected the memory layout at the normal panel width, 390px and 1440px, with no horizontal overflow, and verified the full-size image preview loads and closes. No browser warnings or errors were reported. Optional analytics consent behavior is unchanged and its existing checks passed.
+
+The Tools page also documents the shipped bounded website assessments, installed-Nmap scan profiles, local practice fixtures and workspace approval modes, with direct guides and explicit evidence limits. Its new section anchor and normal-width layout were checked in the browser.

@@ -12,4 +12,4 @@ Known limitations remain: fresh-account creation and verification, password-chan
 
 Download the Apple Silicon DMG or ZIP below, drag `Wixal.app` to Applications, and open it. Requires macOS 14 or newer. The application is not Developer ID signed or notarised, so macOS may require the usual Open action from Privacy & Security after the first launch.
 
-SHA-256 hashes for the release downloads are in `SHA256SUMS.txt`.
+The published assets are the Electron DMG and ZIP. The native preview capabilities described above require the separate source/local native package. GitHub lists SHA-256 digests for these assets; this release does not include a `SHA256SUMS.txt` asset.

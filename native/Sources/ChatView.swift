@@ -91,28 +91,39 @@ struct ChatView: View {
                     }
                     VStack(spacing:8){
                         if !timelineMilestones.isEmpty || engine.busy {
-                            TimelineDock(engine:engine,milestones:timelineMilestones,selectedID:$selectedMilestone,folded:$foldedTimeline,replaying:$replayingTimeline,replay:replayTimeline)
+                            TimelineDock(engine:engine,milestones:timelineMilestones,selectedID:$selectedMilestone,folded:$foldedTimeline,replaying:$replayingTimeline,replay:replayTimeline,maximumDetailHeight:max(90,min(220,geometry.size.height*0.24)))
                                 .padding(.horizontal,32)
                         }
                         composer(compact:geometry.size.width<680)
                     }.frame(maxWidth:900).padding(.top,8)
                 }
             }.frame(width:geometry.size.width,height:geometry.size.height).background(theme.background)
-        }.onAppear{restoreDraft();engine.selectedSkill=skill;engine.refreshContext()}
+        }.onAppear{restoreActivity();restoreDraft();engine.selectedSkill=skill;engine.refreshContext()}
         .onChange(of:skill){_,value in engine.selectedSkill=value}
-        .onChange(of:sessionID){_,_ in replayTask?.cancel();replayingTimeline=false;selectedMilestone=nil;foldedTimeline=false;saveDraftImmediately();restoreDraft()}
+        .onChange(of:sessionID){old,new in saveActivity(old);replayTask?.cancel();replayingTimeline=false;restoreActivity();saveDraftImmediately();restoreDraft()}
         .onChange(of:prompt){_,_ in mentionIndex=0;mentionsDismissed=false;queueDraft()}
         .onChange(of:attachments){_,_ in queueDraft()}
-        .onDisappear{replayTask?.cancel();replayingTimeline=false;saveDraftImmediately()}
+        .onDisappear{saveActivity(sessionID);replayTask?.cancel();replayingTimeline=false;saveDraftImmediately()}
         .sheet(isPresented:$detailsPresented){ConversationDetailsView(engine:engine)}
     }
+    private func saveActivity(_ id:String){
+        guard !id.isEmpty else{return}
+        UserDefaults.standard.set(["selection":selectedMilestone ?? "","folded":foldedTimeline] as [String:Any],forKey:"activity.\(id)")
+    }
+    private func restoreActivity(){
+        let saved=UserDefaults.standard.dictionary(forKey:"activity.\(sessionID)") ?? [:]
+        let selection=textValue(saved["selection"])
+        selectedMilestone=selection.isEmpty ? nil : selection
+        foldedTimeline=saved["folded"] as? Bool ?? false
+    }
     private func replayTimeline() {
-        guard !timelineMilestones.isEmpty, !replayingTimeline else { return }
+        if replayingTimeline{replayTask?.cancel();replayingTimeline=false;return}
+        guard !timelineMilestones.isEmpty, !engine.busy else { return }
         replayingTimeline=true; foldedTimeline=false; replayTask?.cancel()
         let ids=timelineMilestones.map(\.id)
         replayTask=Task { @MainActor in
             for id in ids {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else { replayingTimeline=false;return }
                 selectedMilestone=id
                 try? await Task.sleep(nanoseconds:420_000_000)
             }
@@ -143,7 +154,7 @@ struct ChatView: View {
                 if let query=mentionQuery {mentionSuggestions(query).padding(.horizontal,18).padding(.top,8)}
                 HStack(alignment:.top,spacing:14){
                     ZStack(alignment:.topLeading){
-                        PromptEditor(text:$prompt,theme:theme,send:send,selection:caret,onSelection:{caret=$0;mentionsDismissed=false},mentionKey:handleMentionKey,onHeight:{editorHeight=$0}).frame(height:editorHeight)
+                        PromptEditor(text:$prompt,theme:theme,send:send,selection:caret,onSelection:{caret=$0;mentionsDismissed=false},mentionKey:handleMentionKey,onHeight:{editorHeight=$0}).frame(height:min(editorHeight,compact ? 100 : 170))
                         if prompt.isEmpty{Text(engine.project.map{"Ask about \(textValue($0["name"])) or describe a task…"} ?? "Ask a question or describe a task…").font(.system(size:14)).foregroundStyle(theme.muted).padding(.top,4).allowsHitTesting(false)}
                     }
                     Button(action:engine.busy ? engine.stop : send){Image(systemName:engine.busy ? "stop.fill" : "arrow.up").font(.system(size:19,weight:.medium)).foregroundStyle(theme.light ? theme.raised : theme.background).frame(width:32,height:32).background(theme.accent,in:RoundedRectangle(cornerRadius:10))}.buttonStyle(.plain).disabled(!engine.busy && ((prompt.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty && attachments.isEmpty) || !engine.connected || incompatibleImages)).accessibilityLabel(engine.busy ? "Stop response" : "Send message").keyboardShortcut(.return,modifiers:.command)
@@ -163,7 +174,7 @@ struct ChatView: View {
             if incompatibleImages {Button("Choose an Images model to send these attachments",action:openModels).buttonStyle(.plain).font(.system(size:11)).foregroundStyle(theme.accent).padding(.bottom,8)}
             if engine.modelCapabilitiesKnown && !engine.supportsTools && !textValue(engine.state["model"]).isEmpty{Text("Conversation-only model · replies without tools. Choose a model marked Tools for actions.").font(.system(size:10)).foregroundStyle(theme.muted).padding(.bottom,8)}
             if contextRatio>=0.8{HStack{Text("Conversation nearing its context limit. Continue in a new chat to carry the work forward.");Spacer();Button("Continue…"){detailsPresented=true}}.font(.system(size:10)).foregroundStyle(theme.accent).padding(.bottom,8)}
-        }.padding(.horizontal,32)
+        }.padding(.horizontal,compact ? 16 : 32)
     }
     private var starters: some View {
         HStack(spacing:8){
@@ -259,7 +270,7 @@ struct MessageView: View {
             HStack{
                 if role == "user"{Spacer(minLength:50)}
                 VStack(alignment:.leading,spacing:12){
-                    HStack(spacing:8){Text(role=="user" ? "▸ You" : "Wixal").font(.system(size:11)).foregroundStyle(role=="user" ? theme.muted : theme.accent);if let time=message["created"] as? Double{Text(Date(timeIntervalSince1970:time/1000),style:.time).font(.system(size:9)).foregroundStyle(theme.muted)};Spacer();Button{NSPasteboard.general.clearContents();NSPasteboard.general.setString(textValue(message["content"]),forType:.string)}label:{Image(systemName:"doc.on.doc").font(.system(size:10))}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Copy message")}
+                    HStack(spacing:8){Text(role=="user" ? "▸ You" : "Wixal").font(.system(size:11)).foregroundStyle(role=="user" ? theme.muted : theme.accent);if let time=message["created"] as? Double{Text(Date(timeIntervalSince1970:time/1000),style:.time).font(.system(size:9)).foregroundStyle(theme.muted)};Spacer();Button{NSPasteboard.general.clearContents();NSPasteboard.general.setString(textValue(message["content"]),forType:.string)}label:{Image(systemName:"doc.on.doc").font(.system(size:10))}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Copy message").accessibilityLabel("Copy \(role == "user" ? "your" : "Wixal") message")}
                     if role=="user", !messageAttachments.isEmpty{AttachmentStrip(attachments:messageAttachments,engine:engine)}
                     if role=="user"{Text(textValue(message["displayContent"] ?? message["content"])).font(.system(size:textSize)).lineSpacing(6).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}else{MarkdownMessage(content:textValue(message["content"]))}
                     if role=="assistant",!records(message["memoryEvidence"]).isEmpty {

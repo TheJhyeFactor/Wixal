@@ -37,7 +37,7 @@ struct ConnectionsView: View {
                 Toggle("Share saved project memory", isOn: Binding(get: { companion["shareMemory"] as? Bool ?? false }, set: { save(shared, memory: $0) })).toggleStyle(.checkbox)
                 Text("Global preferences, account credentials and unshared projects are excluded. Remote tasks queue for your review and never start automatically.").font(.system(size: 10)).foregroundStyle(theme.muted)
             }
-            WixalSection(title: "Task inbox") { Button("Review companion tasks ↗") { navigate("Task inbox") } }
+            WixalSection(title: "Task inbox") { Button("Review companion tasks ↗") { navigate("Tasks") } }
             WixalSection(title: "External tools", detail: "Trusted local MCP servers are configured separately. Connecting one launches its executable on your Mac.") { Button("Manage external tools ↗") { navigate("Settings") } }
             if working { ProgressView().controlSize(.small) }; if !error.isEmpty { Text(error).font(.system(size: 11)).foregroundStyle(theme.muted) }
         }.font(.system(size: 12)).buttonStyle(WixalButtonStyle(outlined: true)).disabled(working)

@@ -24,6 +24,9 @@ struct ToolsDrawer:View {
     var body:some View {
         VStack(alignment:.leading,spacing:16){
             HStack{VStack(alignment:.leading,spacing:6){Text("WORKSPACE TOOLS").font(.system(size:9,design:.monospaced)).tracking(1).foregroundStyle(theme.muted);Text("Tool kit").font(.system(size:21,weight:.medium))};Spacer();Button(action:close){Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel("Close tools")}
+            if engine.busy && !engine.assessmentProgress.isEmpty {
+                HStack(alignment:.top){ProgressView().controlSize(.small);VStack(alignment:.leading,spacing:4){Text(textValue(engine.assessmentProgress["state"]).capitalized);if let completed=engine.assessmentProgress["completed"] as? Int{Text("\(completed) checks completed").foregroundStyle(theme.muted)}};Spacer();Button("Stop assessment"){engine.action("assessment-cancel")}.buttonStyle(WixalButtonStyle(outlined:true))}.font(.system(size:11)).accessibilityElement(children:.contain).accessibilityLabel("Assessment progress")
+            }
             ScrollView{VStack(alignment:.leading,spacing:18){
                 Text("Enabled tools are available to models marked Tools. Manual assessments run without model inference. Each action uses this workspace’s review setting.").font(.system(size:11)).foregroundStyle(theme.muted).lineSpacing(4)
                 TextField("Find a tool…",text:$query).wixalField()
@@ -35,7 +38,6 @@ struct ToolsDrawer:View {
                 scanForm
                 Divider().overlay(theme.line)
                 websiteForm
-                if engine.busy && !engine.assessmentProgress.isEmpty{HStack{ProgressView().controlSize(.small);Text(textValue(engine.assessmentProgress["state"]))};Button("Stop assessment"){engine.action("assessment-cancel")}.buttonStyle(WixalButtonStyle(outlined:true))}
                 if let output=engine.assessmentProgress["output"] as? String,!output.isEmpty{DisclosureGroup("Live scanner output"){Text(output).font(.system(size:10,design:.monospaced)).textSelection(.enabled)}}
                 results
             }}
@@ -52,7 +54,29 @@ struct ToolsDrawer:View {
         VStack(alignment:.leading,spacing:12){Text("Website assessment").font(.system(size:14,weight:.medium));TextField("Authorised https:// website",text:$url).wixalField();Picker("Profile",selection:$websiteProfile){Text("Headers and protected paths").tag("baseline");Text("Bounded unauthenticated probes").tag("probes")};TextField("Protected paths, comma separated",text:$paths).wixalField();TextField("Unused report prefix",text:$prefix).wixalField();Button("Review and assess website"){run("website_assess",["url":url,"profile":websiteProfile,"protected_paths":paths.split(separator:",").map{String($0).trimmingCharacters(in:.whitespaces)},"report_prefix":prefix,"max_pages":12])}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(!enabled("website_assess") || !engine.connected || url.isEmpty || prefix.isEmpty || engine.project==nil || engine.busy);Text("Local attack simulations").font(.system(size:12,weight:.medium));Text("Checks vulnerable and hardened disposable loopback fixtures. Uses synthetic data.").font(.system(size:10)).foregroundStyle(theme.muted);Button("Review and run local simulations"){run("website_simulate",["report_prefix":prefix+"-simulation"])}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(!enabled("website_simulate") || !engine.connected || engine.project==nil || prefix.isEmpty || engine.busy)}.font(.system(size:11))
     }
     private var results:some View {
-        VStack(alignment:.leading,spacing:12){Text("Recent results").font(.system(size:14,weight:.medium));ForEach(Array(records(engine.state["assessmentResults"]).filter{textValue($0["projectId"])==textValue(engine.state["activeProject"])}.reversed().enumerated()),id:\.offset){_,item in DisclosureGroup(textValue(item["name"]).replacingOccurrences(of:"_",with:" ").capitalized){Text(pretty(item["result"] ?? [:])).font(.system(size:10,design:.monospaced)).textSelection(.enabled);Button("Save output to project…"){let panel=NSSavePanel();panel.directoryURL=URL(fileURLWithPath:engine.root);panel.nameFieldStringValue="assessment-output.json";if panel.runModal() == .OK,let destination=panel.url,destination.path.hasPrefix(engine.root+"/"){engine.action("tool",["name":"write_file","arguments":["path":String(destination.path.dropFirst(engine.root.count+1)),"content":pretty(item["result"] ?? [:])]])}}.disabled(engine.busy)}.font(.system(size:11)).wixalCard()}}
+        VStack(alignment:.leading,spacing:12){
+            Text("Recent results").font(.system(size:14,weight:.medium))
+            ForEach(Array(records(engine.state["assessmentResults"]).filter{textValue($0["projectId"])==textValue(engine.state["activeProject"])}.reversed().enumerated()),id:\.offset){_,item in
+                let result=item["result"] as? [String:Any] ?? [:]
+                let status=textValue(item["status"] ?? result["status"])
+                let partial=result["partial"] as? Bool ?? false
+                VStack(alignment:.leading,spacing:8){
+                    Text(textValue(item["name"]).replacingOccurrences(of:"_",with:" ").capitalized).font(.system(size:12,weight:.medium))
+                    Label(partial ? "Partial result · " + (status.isEmpty ? "Interrupted" : status.capitalized) : (status.isEmpty ? "Completed" : status.capitalized),systemImage:partial ? "stop.circle" : "checkmark.circle").foregroundStyle(partial ? theme.muted : theme.accent)
+                    if partial {
+                        Text("Completed checks and captured evidence remain available below.").foregroundStyle(theme.muted)
+                        if !textValue(result["interrupted"]).isEmpty{Text("Interrupted: " + textValue(result["interrupted"])).textSelection(.enabled)}
+                    }
+                    let cases=records(result["cases"])
+                    if !cases.isEmpty {Text("\(cases.count) checks recorded");ForEach(Array(cases.enumerated()),id:\.offset){_,check in Text(textValue(check["title"] ?? check["name"] ?? check["path"])).textSelection(.enabled)}}
+                    DisclosureGroup("Evidence and technical details"){Text(pretty(result)).font(.system(size:10,design:.monospaced)).textSelection(.enabled)}
+                    Button("Save output to project…"){
+                        let panel=NSSavePanel();panel.directoryURL=URL(fileURLWithPath:engine.root);panel.nameFieldStringValue="assessment-output.json"
+                        if panel.runModal() == .OK,let destination=panel.url,destination.path.hasPrefix(engine.root+"/"){engine.action("tool",["name":"write_file","arguments":["path":String(destination.path.dropFirst(engine.root.count+1)),"content":pretty(result)]])}
+                    }.disabled(engine.busy)
+                }.font(.system(size:11)).wixalCard()
+            }
+        }
     }
     private func run(_ name:String,_ arguments:[String:Any]){
         guard (engine.state["enabledTools"] as? [String] ?? []).contains(name) else{engine.error="Enable " + name.replacingOccurrences(of:"_",with:" ") + " in the tool list first.";return}

@@ -22,16 +22,43 @@ struct WorkspaceSyncView:View {
             }
             ForEach(state["warnings"] as? [String] ?? [],id:\.self){Text($0).font(.system(size:11)).foregroundStyle(theme.muted)}
             ForEach(Array(records(state["conflicts"]).enumerated()),id:\.offset){_,conflict in
-                VStack(alignment:.leading,spacing:8){
-                    Text("Review incoming \(textValue(conflict["collection"])): \(textValue(conflict["title"]))").font(.system(size:12,weight:.medium))
-                    DisclosureGroup("Incoming content"){Text(pretty(conflict["record"] ?? [:])).font(.system(size:11,design:.monospaced)).textSelection(.enabled)}
-                    HStack{Button("Keep local"){run("sync-resolve",["id":textValue(conflict["id"]),"choice":"local"])};Button("Use incoming"){run("sync-resolve",["id":textValue(conflict["id"]),"choice":"remote"])}}
-                }.wixalCard()
+                conflictCard(conflict)
             }
             ForEach(Array(records(engine.state["projects"]).filter{$0["syncRootRequired"] as? Bool == true}.enumerated()),id:\.offset){_,project in
                 HStack{Text("Choose the local folder for \(textValue(project["name"]))");Button("Locate project…"){locate(project)}}
             }
         }.font(.system(size:11)).buttonStyle(WixalButtonStyle(outlined:true)).disabled(working || engine.busy)
+    }
+    private func conflictCard(_ conflict:[String:Any])->some View {
+        let local=conflict["localRecord"] as? [String:Any] ?? [:],incoming=conflict["record"] as? [String:Any] ?? [:]
+        let stale=conflict["localChanged"] as? Bool ?? false
+        return VStack(alignment:.leading,spacing:12) {
+            Text("Review \(textValue(conflict["collection"])): \(textValue(conflict["title"]))").font(.system(size:12,weight:.medium))
+            ViewThatFits(in:.horizontal) {
+                HStack(alignment:.top,spacing:16){version("Local version",record:local,device:textValue(conflict["localDevice"]));version("Incoming version",record:incoming,device:textValue(conflict["device"]))}
+                VStack(alignment:.leading,spacing:16){version("Local version",record:local,device:textValue(conflict["localDevice"]));version("Incoming version",record:incoming,device:textValue(conflict["device"]))}
+            }
+            Text("Keep local retains this Mac’s saved version. Use incoming replaces it with the incoming version. Project folders and action permissions stay local.").foregroundStyle(theme.muted)
+            if stale {Text("Local content changed after this conflict was detected. Sync again before choosing a version.").foregroundStyle(.red)}
+            DisclosureGroup("Technical details"){Text(pretty(conflict)).font(.system(size:10,design:.monospaced)).textSelection(.enabled)}
+            HStack{Button("Keep local"){run("sync-resolve",["id":textValue(conflict["id"]),"choice":"local"])};Button("Use incoming"){run("sync-resolve",["id":textValue(conflict["id"]),"choice":"remote"])}}.disabled(stale)
+        }.wixalCard()
+    }
+    private func version(_ title:String,record:[String:Any],device:String)->some View {
+        VStack(alignment:.leading,spacing:7) {
+            Text(title).fontWeight(.medium)
+            Text("Device: \(device.isEmpty ? "Not recorded" : device)").font(.system(size:10)).foregroundStyle(theme.muted)
+            if let stamp=(record["updated"] ?? record["created"]) as? NSNumber {Text("Saved: \(Date(timeIntervalSince1970:stamp.doubleValue/1000).formatted())").font(.system(size:10)).foregroundStyle(theme.muted)}
+            if !textValue(record["content"]).isEmpty {Text(textValue(record["content"])).textSelection(.enabled)}
+            else if record["messages"] != nil {
+                Text(textValue(record["title"])).fontWeight(.medium)
+                Text("\(records(record["messages"]).count) messages").foregroundStyle(theme.muted)
+                ScrollView{VStack(alignment:.leading,spacing:8){ForEach(Array(records(record["messages"]).enumerated()),id:\.offset){_,message in
+                    Text(textValue(message["role"]).capitalized).fontWeight(.medium)
+                    Text(textValue(message["content"])).textSelection(.enabled)
+                }}}.frame(maxHeight:200)
+            } else {Text(textValue(record["name"])).textSelection(.enabled);Text("Memory scope: \(textValue(record["memoryMode"])) · Note budget: \(record["memorySize"] as? Int ?? 24000) characters").foregroundStyle(theme.muted)}
+        }.frame(minWidth:150,maxWidth:.infinity,alignment:.leading)
     }
     private func chooseFolder(){let panel=NSOpenPanel();panel.canChooseDirectories=true;panel.canChooseFiles=false;panel.allowsMultipleSelection=false;panel.begin{answer in if answer == .OK {folder=panel.url?.path ?? ""}}}
     private func locate(_ project:[String:Any]){let panel=NSOpenPanel();panel.canChooseDirectories=true;panel.canChooseFiles=false;panel.begin{answer in if answer == .OK,let url=panel.url{run("project-relocate",["id":textValue(project["id"]),"root":url.path])}}}

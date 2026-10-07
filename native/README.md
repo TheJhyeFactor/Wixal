@@ -113,7 +113,7 @@ Helper requests have deadlines and connection-owned cancellation. Restart engine
 | Cloud inference providers | Deliberately deferred | Inference currently uses local Ollama |
 | Companion pairing / external gateway | Implemented, local fixture validated | Explicit scoped local server and MCP client; external tunnel not activated |
 | macOS/Linux/Windows release coverage | Partial | This package targets Apple Silicon macOS; other platforms are not packaged |
-| Developer ID, notarisation and public release | Deferred by user | Local development package only; nothing pushed or published |
+| Native Developer ID, notarisation and public release | Deferred by user | Native local development package only; published v0.7.9 downloads contain Electron |
 | Comparative performance benchmark | Pending | Smoke/inference checks establish function, not a speed advantage |
 
 The current implementation and verification boundaries are recorded in [REMAINING_REVIEW.md](REMAINING_REVIEW.md). Real acceptance reports are in `artifacts/native/` at the repository root. A completed real 2.5 GB download exercised pause, helper interruption and resume. The interruption exposed an orphaned runner; the current helper's process supervisor subsequently passed an abrupt-termination cleanup check. New UI changes have installed interaction checks, but the eight-stage packaged acceptance report belongs to the earlier build in this pass, not every subsequent binary.

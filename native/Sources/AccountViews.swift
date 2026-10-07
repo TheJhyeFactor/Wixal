@@ -17,6 +17,8 @@ struct AccountView: View {
     @ViewState private var confirmDelete=""
     @ViewState private var currentPassword=""
     @ViewState private var newPassword=""
+    @ViewState private var passwordChange=false
+    @ViewState private var confirmPassword=""
     private var account: [String: Any] { engine.state["account"] as? [String: Any] ?? [:] }
     private var profile: [String: Any] { account["profile"] as? [String: Any] ?? [:] }
     private var signedIn: Bool { account["signedIn"] as? Bool ?? false }
@@ -33,8 +35,9 @@ struct AccountView: View {
                     }
                 }.wixalCard()
                 if !verified {
+                    Text("Open the verification email and follow its link, then refresh your status here. If it has not arrived, check spam or resend it.").font(.system(size:11)).foregroundStyle(theme.muted)
                     HStack {
-                        Button("I’ve verified my email") { run("account-refresh") }
+                        Button("Refresh verification status") { run("account-refresh") }
                         Button("Resend verification") { run("account-resend") }
                     }.buttonStyle(WixalButtonStyle(outlined: true))
                 }
@@ -57,12 +60,12 @@ struct AccountView: View {
                     HStack { Text("\(memory.count) / 1,200").font(.system(size: 10)).foregroundStyle(theme.muted); Spacer(); Button("Save preferences") { run("global-memory-save", ["content": memory]) }.disabled(memory.count > 1200) }
                 }.disabled(!verified)
                 WixalSection(title:"Password & account") {
-                    SecureField("Current password",text:$currentPassword).textContentType(.password).wixalField().accessibilityLabel("Current password for account changes")
-                    SecureField("New password, at least 10 characters",text:$newPassword).textContentType(.newPassword).wixalField().accessibilityLabel("New account password")
-                    Button("Change password") { run("account-password-change",["password":currentPassword,"newPassword":newPassword]);currentPassword="";newPassword="" }.disabled(currentPassword.isEmpty || newPassword.count<10)
+                    Button("Change password…") { passwordChange=true }
+                    SecureField("Current password for deletion",text:$currentPassword).textContentType(.password).wixalField().accessibilityLabel("Current password to delete your online account")
                     Button("Delete online account…",role:.destructive) { accountDelete=true }.disabled(currentPassword.isEmpty)
-                    Text("Deletion removes the online identity and cloud presets/preferences. Local projects and chats stay on this Mac.").font(.system(size:10)).foregroundStyle(theme.muted)
+                    Text("Deletion removes the online identity and cloud presets/preferences. If cloud deletion fails, the identity stays signed in so you can retry. Already removed cloud records cannot be recovered. Local projects and chats stay on this Mac.").font(.system(size:11)).foregroundStyle(theme.muted)
                 }
+
                 Button("Sign out & use guest workspace") { run("account-sign-out") }
             } else {
                 HStack {
@@ -73,8 +76,8 @@ struct AccountView: View {
                     if create { labeled("Display name") { TextField("Your name", text: $name).wixalField() } }
                     labeled("Email") { TextField("you@example.com", text: $email).textContentType(.emailAddress).wixalField() }
                     labeled("Password") { SecureField(create ? "At least 10 characters" : "Password", text: $password).textContentType(create ? .newPassword : .password).wixalField().onSubmit(authenticate) }
-                    Button(create ? "Create account" : "Sign in", action: authenticate).buttonStyle(WixalButtonStyle(outlined: false)).disabled(email.isEmpty || password.isEmpty || (create && name.isEmpty))
-                    Button("Forgot password? Send reset email") { run("account-reset", ["email": email]) }.buttonStyle(.plain).foregroundStyle(theme.muted)
+                    Button(create ? "Create account" : "Sign in", action: authenticate).buttonStyle(WixalButtonStyle(outlined: false)).disabled(email.isEmpty || password.isEmpty || (create && (name.isEmpty || password.count < 10)))
+                    Button("Forgot password? Send reset email") { run("account-reset", ["email": email]) }.buttonStyle(.plain).foregroundStyle(theme.muted).disabled(email.trimmingCharacters(in:.whitespaces).isEmpty)
                     Button("Restore saved sign-in from Keychain") { run("account-restore") }.buttonStyle(.plain).foregroundStyle(theme.muted)
                 }.wixalCard()
             }
@@ -86,6 +89,23 @@ struct AccountView: View {
             if working { HStack { ProgressView().controlSize(.small); Text("Contacting account service…") } }
             Text(status.isEmpty ? textValue(account["message"]) : status).font(.system(size: 11)).foregroundStyle(theme.muted).textSelection(.enabled).id(status.isEmpty ? textValue(account["message"]) : status)
         }.font(.system(size: 12)).disabled(working).onAppear { memory = textValue(account["globalMemory"]) }
+        .sheet(isPresented:$passwordChange) {
+            VStack(alignment:.leading,spacing:14) {
+                Text("Change account password").font(.title2)
+                Text("Confirm your current password and choose a new password of at least 10 characters. Your saved sign-in is updated after success.").font(.caption)
+                SecureField("Current password",text:$currentPassword).textContentType(.password).wixalField()
+                SecureField("New password",text:$newPassword).textContentType(.newPassword).wixalField()
+                SecureField("Confirm new password",text:$confirmPassword).textContentType(.newPassword).wixalField()
+                if !confirmPassword.isEmpty && confirmPassword != newPassword { Text("New passwords do not match.").font(.caption).foregroundStyle(.red) }
+                if working { ProgressView() }
+                Text(status).font(.caption).textSelection(.enabled)
+                HStack {
+                    Button("Cancel") { passwordChange=false;currentPassword="";newPassword="";confirmPassword="" }.keyboardShortcut(.cancelAction)
+                    Spacer()
+                    Button("Change password") { run("account-password-change",["password":currentPassword,"newPassword":newPassword]);currentPassword="";newPassword="";confirmPassword="" }.disabled(working || currentPassword.isEmpty || newPassword.count < 10 || newPassword != confirmPassword)
+                }
+            }.padding(24).frame(minWidth:320,idealWidth:440).environment(\.wixalTheme,theme)
+        }
         .alert("Delete your online Wixal account?",isPresented:$accountDelete) {
             TextField("Type DELETE",text:$confirmDelete)
             Button("Cancel",role:.cancel){confirmDelete=""}
@@ -99,7 +119,7 @@ struct AccountView: View {
     private func authenticate() { run(create ? "account-create" : "account-sign-in", ["email": email, "password": password, "name": name]); password = "" }
     private func run(_ method: String, _ params: [String: Any] = [:]) {
         guard !working else { return }; working = true; status = ""
-        Task { defer { working = false }; do { let value = try await engine.call(method, params) as? [String: Any] ?? [:]; status = textValue(value["message"]); if signedIn { memory = textValue(value["globalMemory"]) } } catch { status = error.localizedDescription } }
+        Task { defer { working = false }; do { let value = try await engine.call(method, params) as? [String: Any] ?? [:]; status = textValue(value["message"]); if method == "account-password-change" { passwordChange=false }; if signedIn { memory = textValue(value["globalMemory"]) } } catch { status = error.localizedDescription } }
     }
     private func labeled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View { VStack(alignment: .leading, spacing: 7) { Text(title).font(.system(size: 11)); content() } }
 }

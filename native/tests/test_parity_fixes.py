@@ -82,7 +82,10 @@ class ParityFixes(unittest.IsolatedAsyncioTestCase):
             await started.wait()
             self.assertTrue(any(event=='assessment-progress' and data['state']=='running' for event,data in self.events))
             await self.service.dispatch('assessment-cancel',{})
-            with self.assertRaises(asyncio.CancelledError):await task
+            result=await task
+            self.assertTrue(result['partial'])
+            self.assertEqual(result['status'],'cancelled')
+            self.assertEqual(self.store.data['assessmentResults'][-1]['result'],result)
         self.assertEqual(self.store.data['tasks'][-1]['status'],'cancelled')
 
     async def test_migration_settings_records_idempotency_and_no_secrets(self):

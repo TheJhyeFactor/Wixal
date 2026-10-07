@@ -55,15 +55,27 @@ struct WorkspaceView: View {
                             }.frame(maxWidth:.infinity,maxHeight:.infinity)
                             if terminal {
                                 VStack(spacing:0) {
-                                    HStack(spacing:8) { Text("›_").font(.system(size:12,design:.monospaced)); Text("Terminal"); Text(engine.root.isEmpty ? "Home" : engine.root).lineLimit(1).foregroundStyle(theme.muted); Spacer(); Text("Host shell").foregroundStyle(theme.muted); Button("Clear"){engine.terminalSession.clear()}.buttonStyle(.plain); Button {terminal=false} label:{Image(systemName:"xmark")}.buttonStyle(.plain).help("Hide terminal") }.font(.system(size:11)).padding(.horizontal,14).frame(height:34).background(theme.panel)
+                                    HStack(spacing:8) { Text("›_").font(.system(size:12,design:.monospaced)); Text("Terminal"); Text(engine.root.isEmpty ? "Home" : engine.root).lineLimit(1).foregroundStyle(theme.muted); Spacer(); Text("Host shell").foregroundStyle(theme.muted); Button("Clear"){engine.terminalSession.clear()}.buttonStyle(.plain); Button {terminal=false} label:{Image(systemName:"xmark")}.buttonStyle(.plain).help("Hide terminal").accessibilityLabel("Hide terminal") }.font(.system(size:11)).padding(.horizontal,14).frame(height:34).background(theme.panel)
                                     TerminalPanel(session:engine.terminalSession,root:engine.root,theme:theme,textSize:CGFloat(ui["textSize"] as? Int ?? 13)).id(engine.root)
-                                }.frame(minHeight:160,idealHeight:220,maxHeight:240)
+                                }.frame(minHeight:120,idealHeight:min(200,windowSize.height*0.28),maxHeight:windowSize.height*0.32)
                             }
                         }
-                        if let drawer {
+                        if let drawer, windowSize.width >= 1200 {
                             WorkspaceDrawer(engine:engine,kind:drawer,close:{self.drawer=nil})
-                                .frame(width:min(340,windowSize.width*0.3)).background(theme.panel).overlay(alignment:.leading){Rectangle().fill(theme.line).frame(width:1)}
+                                .frame(width:340).background(theme.panel).overlay(alignment:.leading){Rectangle().fill(theme.line).frame(width:1)}
                                 .shadow(color:.black.opacity(theme.light ? 0.06 : 0.15),radius:14,x:-5).transition(.move(edge:.trailing).combined(with:.opacity))
+                        }
+                    }
+                    .overlay(alignment:.trailing) {
+                        if let drawer, windowSize.width < 1200 {
+                            ZStack(alignment:.trailing) {
+                                theme.background.opacity(0.45).contentShape(Rectangle()).onTapGesture{self.drawer=nil}
+                                    .accessibilityHidden(true)
+                                WorkspaceDrawer(engine:engine,kind:drawer,close:{self.drawer=nil})
+                                    .frame(width:min(380,windowSize.width-(collapsed ? 56 : 260)-24))
+                                    .background(theme.panel).overlay(alignment:.leading){Rectangle().fill(theme.line).frame(width:1)}
+                                    .shadow(color:.black.opacity(theme.light ? 0.06 : 0.15),radius:14,x:-5)
+                            }
                         }
                     }
                     if !engine.connected {

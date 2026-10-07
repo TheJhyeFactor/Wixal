@@ -5,7 +5,7 @@ This records current implementation and acceptance separately. `PARITY_REVIEW_20
 
 ## Feature completion pass and current priority
 
-The user asked to finish capabilities first and explicitly deferred store/release distribution. Cloud inference and the external ChatGPT companion remain deferred. No public release was requested or published.
+The user asked to finish native capabilities first and deferred native store/release distribution. Cloud inference and the external ChatGPT companion remain deferred. The public v0.7.9 DMG and ZIP are Electron builds. The native capabilities described here are in the source tree and local development package; no public native release has been published.
 
 | Area | Current implementation | Acceptance boundary |
 | --- | --- | --- |
@@ -81,3 +81,10 @@ The brief project greeting used 3 schemas and 1235 estimated input tokens in a 4
 The baseline directory-error stage allowed the model to stop voluntarily before three failures. `native/scripts/real-failure-guard.py` separately requests a bounded three-attempt diagnostic on the real directory and requires three actual tool errors, the controller stop marker, and a conclusion generated without tool schemas. Its report passed with three actual failures and a conclusion without tool schemas on the same final helper.
 
 Remaining acceptance includes complete fresh account creation/verification and the user-completed password change, an exhaustive four-theme/minimum-window/keyboard/spoken-VoiceOver/composer pass, and signed/notarised distribution plus another-machine/update delivery. Existing focused successes do not prove all of those paths. The external ChatGPT tunnel remains explicitly deferred.
+
+
+## Everyday workflow completion pass (7 October, evening)
+
+See [the workflow tracker](WORKFLOW_TRACKER_2026-10-07.md) for final changes, build hashes, retained failures and open acceptance. Three section agents implemented compact activity/layout, memory/schedule/sync review, and browser/account/migration workflows. The combined supporting suite passed 103 tests; actual source and packaged local-model suites passed, and final installed WebKit download completion/cancellation/failure/repeated-transfer cases passed. Assessment cancellation persists partial evidence and stops actual scanner children. Memory workload now measures state saving/reopening and 30,000-passage semantic scoring, with generated workload data explicitly distinguished from live embeddings.
+
+Disposable-account and two-Mac checks are blocked at the user's request. The full minimum-window/four-theme/larger-text/keyboard/spoken-VoiceOver matrix remains unverified. A prior isolated SQLite startup hang and the long Unix socket path limit remain logged, not claimed fixed. This is an installed local native development preview; published v0.7.9 downloads remain Electron.

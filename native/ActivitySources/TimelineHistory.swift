@@ -25,9 +25,10 @@ public enum TimelineHistory {
     }
     public static func resultStatus(_ text:String)->String {
         let value=decode(text),state=textValue(value["state"])
+        if state=="cancelled" || textValue(value["status"])=="cancelled" {return "cancelled"}
         if text.hasPrefix("User declined") {return "declined"}
         if text.hasPrefix("Execution interrupted") {return "interrupted"}
-        if text.hasPrefix("Error:") || value["error"] != nil || state=="failed" || (value["exitCode"] as? Int ?? 0) != 0 || (value["status"] as? Int ?? 0)>=400 {return "failed"}
+        if text.hasPrefix("Error:") || value["error"] != nil || state=="failed" || textValue(value["status"])=="failed" || (value["exitCode"] as? Int ?? 0) != 0 || (value["status"] as? Int ?? 0)>=400 {return "failed"}
         if value["stopped"] as? Bool == true || state=="stopped" {return "stopped"}
         return state=="running" ? "running" : "completed"
     }
@@ -35,6 +36,8 @@ public enum TimelineHistory {
         var rows:[TimelineMilestone]=[],turn=0,updates:[String]=[],sessions:[String:Int]=[:],pending:[String:[Int]]=[:]
         let related=tasks.filter{textValue($0["sessionId"])==sessionID}
         let checkpoints=related.flatMap{records($0["checkpoints"])}
+        let checkpointsByID=Dictionary(checkpoints.map{(textValue($0["id"]),$0)},uniquingKeysWith:{_,latest in latest})
+        let finalTurn=messages.reduce(0){$0 + (textValue($1["role"])=="user" ? 1 : 0)}
         for (index,message) in messages.enumerated() {
             let role=textValue(message["role"]),content=textValue(message["content"])
             if role=="user" {turn+=1;updates=[];sessions=[:];pending=[:];rows.append(TimelineMilestone(id:"\(sessionID):request:\(index)",title:"Request \(turn)",subtitle:String(content.prefix(70)),status:busy && index==messages.indices.last ? "running" : "completed",command:content,output:"",turn:turn));continue}
@@ -46,11 +49,11 @@ public enum TimelineHistory {
                 for (offset,call) in records(message["tool_calls"]).enumerated() {
                     let function=decode(call["function"]),args=decode(function["arguments"]),name=textValue(function["name"])
                     let callID=textValue(call["id"]),id=callID.isEmpty ? "\(sessionID):\(index):\(offset)" : callID
-                    let checkpoint=checkpoints.first{textValue($0["id"])==id}
+                    let checkpoint=checkpointsByID[id]
                     let checkpointStatus=textValue(checkpoint?["status"])
-                    let awaiting=review != nil && textValue(review?["name"])==name && turn==messages.filter{textValue($0["role"])=="user"}.count
-                    let running=busy && textValue(activeTool["name"])==name && turn==messages.filter{textValue($0["role"])=="user"}.count
-                    let status=awaiting ? "awaiting review" : running ? "running" : checkpointStatus=="error" ? "failed" : checkpointStatus=="interrupted" ? "interrupted" : checkpointStatus=="started" ? (busy ? "running" : "interrupted") : busy && turn==messages.filter{textValue($0["role"])=="user"}.count ? "pending" : "no result"
+                    let awaiting=review != nil && textValue(review?["name"])==name && turn==finalTurn
+                    let running=busy && textValue(activeTool["name"])==name && turn==finalTurn
+                    let status=awaiting ? "awaiting review" : running ? "running" : checkpointStatus=="error" ? "failed" : checkpointStatus=="cancelled" ? "cancelled" : checkpointStatus=="interrupted" ? "interrupted" : checkpointStatus=="started" ? (busy ? "running" : "interrupted") : busy && turn==finalTurn ? "pending" : "no result"
                     let title=textValue(args["path"]).isEmpty ? name.replacingOccurrences(of:"_",with:" ").capitalized : "\(name.replacingOccurrences(of:"_",with:" ").capitalized) · \(textValue(args["path"]))"
                     pending[name,default:[]].append(rows.count)
                     rows.append(TimelineMilestone(id:id,title:title,subtitle:"Request \(turn)",status:status,command:textValue(args["command"]).isEmpty ? pretty(args) : textValue(args["command"]),output:"",turn:turn,rawEvents:[pretty(call)],updates:updates,name:name))

@@ -66,7 +66,17 @@ struct SettingsView:View {
             WixalSection(title:"Existing Wixal workspace",detail:"Import projects, conversations with images, notes, tasks, appearance, summary preferences, skills, paused schedules and MCP commands. Sign in and pair companion connections again."){
                 Button("Import existing workspace ↗"){engine.action("legacy-import")}.buttonStyle(WixalButtonStyle(outlined:true)).font(.system(size:11))
                 let migration=engine.state["migration"] as? [String:Any] ?? [:]
-                ForEach(migration["warnings"] as? [String] ?? [],id:\.self){warning in Text(warning).font(.system(size:11)).foregroundStyle(colours.muted)}
+                if !migration.isEmpty {
+                    Text("Last import: \(textValue(migration["source"]))").font(.system(size:11)).textSelection(.enabled)
+                    let counts=migration["counts"] as? [String:Int] ?? [:]
+                    let skipped=migration["skippedExisting"] as? [String:Int] ?? [:]
+                    ForEach(counts.keys.sorted(),id:\.self) { key in
+                        Text("\(key): \(counts[key] ?? 0) imported · \(skipped[key] ?? 0) already present").font(.system(size:11))
+                    }
+                    Text("Repeated imports keep records with existing IDs. Original files are retained. Imported schedules are paused; MCP credentials are excluded and servers require reconnecting.").font(.system(size:11)).foregroundStyle(colours.muted)
+                    HStack { Button("Review recurring tasks") { navigate("Tasks") }; Button("Review skills") { navigate("Settings") } }.font(.system(size:11))
+                }
+                ForEach(Array((migration["warnings"] as? [String] ?? []).enumerated()),id:\.offset){_,warning in Text(warning).font(.system(size:11)).foregroundStyle(colours.muted)}
             }
             Text(engine.busy ? "Preferences are available when the current task finishes." : "Changes are saved automatically.").font(.system(size:10)).foregroundStyle(colours.muted)
         }.disabled(engine.busy).onAppear{notes=engine.activeMemory}.onChange(of:engine.activeMemory){_,value in notes=value}.task{await refreshMCP()}

@@ -205,7 +205,12 @@ async def execute_website(tools,name,args,session_id):
         if set(args)-{'report_prefix','browser'}: raise ValueError('Simulations accept no target. They use disposable loopback fixtures only')
     else: raise ValueError('Unknown website workflow')
     if not await tools.approve(dict(name=name,**args)): return 'User declined this website assessment.'
-    on_case=lambda case: tools.emit('assessment-case',dict(sessionId=session_id,name=name,case=case))
+    def observe(kind, value):
+        observer = getattr(tools, 'assessment_observer', None)
+        if observer: observer(session_id, kind, value)
+    def on_case(case):
+        observe('case', case)
+        tools.emit('assessment-case',dict(sessionId=session_id,name=name,case=case))
     if name=='website_simulate':
         from .simulation import simulate_website,simulation_markdown
         async def browser_probe(url):
@@ -216,6 +221,8 @@ async def execute_website(tools,name,args,session_id):
         markdown=simulation_markdown(report);prefix=args.get('report_prefix','website-simulation')
     else:
         report=await assess_website(args,on_case);markdown=markdown_report(report);prefix=args.get('report_prefix','website-assessment')
+    # Preserve completed observations even if Stop is pressed during save review.
+    observe('report', report)
     root=(tools.store.project() or {}).get('root')
     if root: root=str(Path(root).resolve(strict=True))
     if not isinstance(prefix,str) or not prefix.strip(): raise ValueError('Choose an unused report prefix')

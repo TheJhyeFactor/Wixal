@@ -4,7 +4,7 @@ struct WorkspaceDrawer:View{
     @ObservedObject var engine:EngineClient
     let kind:String
     var close:()->Void
-    var body:some View{Group{if kind=="Tools"{ToolsDrawer(engine:engine,close:close)}else{MemoryDrawer(engine:engine,close:close).id(textValue(engine.state["activeProject"]))}}}
+    var body:some View{Group{if kind=="Tools"{ToolsDrawer(engine:engine,close:close)}else{MemoryDrawer(engine:engine,close:close).id(textValue(engine.state["activeProject"]))}}.onExitCommand(perform:close)}
 }
 struct CommandPalette:View{
     let action:(String)->Void

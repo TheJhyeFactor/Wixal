@@ -19,10 +19,41 @@ struct TasksView:View {
                 Picker("After missed intervals",selection:$missedPolicy){Text("Run once for the latest interval").tag("latest");Text("Skip missed intervals").tag("skip")}.font(.system(size:11))
                 VStack(alignment:.leading,spacing:12){TextField("Describe the task…",text:$schedulePrompt).wixalField();HStack{Text("Every");TextField("Minutes",text:$minutes).wixalField().frame(width:80);Text("minutes");Spacer();Button("Schedule",action:addSchedule).buttonStyle(WixalButtonStyle(outlined:true)).disabled(schedulePrompt.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || (Int(minutes) ?? 0)<1 || (Int(minutes) ?? 0)>44640 || engine.busy)}}.font(.system(size:11)).wixalCard()
                 ForEach(Array(records(engine.state["schedules"]).enumerated()),id:\.offset){_,item in
-                    HStack{VStack(alignment:.leading,spacing:6){Text(textValue(item["prompt"]));Text("Every \((item["intervalSeconds"] as? Int ?? 0)/60) minutes · \((item["enabled"] as? Bool ?? false) ? "Enabled" : "Paused")").font(.system(size:10)).foregroundStyle(theme.muted);if let last=item["lastRun"] as? [String:Any]{Text("Last run: \(textValue(last["status"])) · \(last["missed"] as? Int ?? 0) missed intervals").font(.system(size:10)).foregroundStyle(theme.muted)}};Spacer();Button((item["enabled"] as? Bool ?? false) ? "Pause" : "Enable"){engine.action("schedule-toggle",["id":textValue(item["id"]),"enabled":!(item["enabled"] as? Bool ?? false)])};Button("Remove",role:.destructive){engine.action("schedule-delete",["id":textValue(item["id"])])}}.font(.system(size:12)).buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy).wixalCard()
+                    scheduleCard(item)
                 }
             }
         }
+    }
+    private func scheduleCard(_ item:[String:Any])->some View {
+        let project=records(engine.state["projects"]).first{textValue($0["id"])==textValue(item["projectId"])}
+        let last=item["lastRun"] as? [String:Any] ?? [:]
+        let task=records(engine.state["tasks"]).first{textValue($0["id"])==textValue(last["taskId"])}
+        let background=(engine.state["backgroundScheduler"] as? [String:Any])?["enabled"] as? Bool ?? false
+        return VStack(alignment:.leading,spacing:10) {
+            Text(textValue(item["prompt"])).textSelection(.enabled)
+            Text("\(textValue(project?["name"]).isEmpty ? "Personal workspace" : textValue(project?["name"])) · Model: \(textValue(item["model"]).isEmpty ? "Current model at run time" : textValue(item["model"]))").foregroundStyle(theme.muted)
+            Text("Every \((item["intervalSeconds"] as? Int ?? 0)/60) minutes · \((item["enabled"] as? Bool ?? false) ? "Enabled" : "Paused") · Next: \(scheduleDate(item["nextRun"]))").foregroundStyle(theme.muted)
+            Text("Missed intervals: \(textValue(item["missedRunPolicy"])=="skip" ? "Skip" : "Run once for latest") · \(background ? "Can run while closed, when Mac is awake" : "Runs while Wixal is open")").foregroundStyle(theme.muted)
+            if !last.isEmpty {
+                Text("Last result: \(textValue(last["status"]).capitalized) · \(scheduleDate(last["finished"] ?? last["started"])) · \(last["missed"] as? Int ?? 0) missed intervals").foregroundStyle(theme.muted)
+                if !textValue(last["error"] ?? task?["error"]).isEmpty {Text(textValue(last["error"] ?? task?["error"])).foregroundStyle(.red).textSelection(.enabled)}
+                let reviews=last["reviewsRequired"] as? [String] ?? []
+                if !reviews.isEmpty {Text("Needs your review: \(reviews.joined(separator:", ")). Open the run and retry to review actions.").foregroundStyle(theme.muted)}
+            }
+            ViewThatFits(in:.horizontal) {
+                HStack{scheduleActions(item,task:task)}
+                VStack(alignment:.leading){scheduleActions(item,task:task)}
+            }
+        }.font(.system(size:11)).buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy).wixalCard()
+    }
+    @ViewBuilder private func scheduleActions(_ item:[String:Any],task:[String:Any]?)->some View {
+        if let task,!textValue(task["sessionId"]).isEmpty {Button("Open last run ↗"){open(task)}}
+        Button((item["enabled"] as? Bool ?? false) ? "Pause" : "Enable"){engine.action("schedule-toggle",["id":textValue(item["id"]),"enabled":!(item["enabled"] as? Bool ?? false)])}
+        Button("Remove",role:.destructive){engine.action("schedule-delete",["id":textValue(item["id"])])}
+    }
+    private func scheduleDate(_ value:Any?)->String {
+        guard let stamp=value as? NSNumber else{return "Not recorded"}
+        return Date(timeIntervalSince1970:stamp.doubleValue/1000).formatted(date:.abbreviated,time:.shortened)
     }
     private func taskCard(_ task:[String:Any])->some View {
         let status=textValue(task["status"]),project=records(engine.state["projects"]).first{textValue($0["id"])==textValue(task["projectId"])}

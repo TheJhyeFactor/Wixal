@@ -14,17 +14,18 @@ def import_workspace(store, source):
     if not isinstance(legacy,dict) or not all(isinstance(legacy.get(k),list) for k in ("projects","sessions","memories")):
         raise ValueError("This is not a Wixal workspace file")
     candidate=copy.deepcopy(store.data)
-    counts,warnings={},[]
+    counts,warnings,skipped={},[],{}
     def warn(key,index,reason): warnings.append(f"{key} record {index+1}: {reason}")
     for key in ("projects","sessions","memories","tasks","skills","schedules","mcpServers"):
         records=legacy.get(key,[])
         if not isinstance(records,list): raise ValueError(f"Invalid {key} collection")
         seen={v["id"] for v in candidate[key]}
-        counts[key]=0
+        counts[key]=0;skipped[key]=0
         for index,raw in enumerate(records):
             if not isinstance(raw,dict) or not isinstance(raw.get("id"),str) or not 1<=len(raw["id"])<=200:
                 warn(key,index,"invalid identifier; skipped");continue
-            if raw["id"] in seen: continue
+            if raw["id"] in seen:
+                skipped[key]+=1;continue
             value=copy.deepcopy(raw)
             try:
                 projects={p["id"] for p in candidate["projects"]}
@@ -69,7 +70,7 @@ def import_workspace(store, source):
                     value={k:v for k,v in value.items() if k in ("id","name","description","content","source")}
                 elif key=="schedules":
                     if not isinstance(value.get("prompt"),str) or type(value.get("intervalSeconds")) is not int or not 60<=value["intervalSeconds"]<=31*86400:raise ValueError("invalid schedule")
-                    value=dict(id=value["id"],prompt=value["prompt"],intervalSeconds=value["intervalSeconds"],nextRun=now()+value["intervalSeconds"]*1000,enabled=False,projectId=value.get("projectId"),importedPaused=True)
+                    value=dict(id=value["id"],prompt=value["prompt"],intervalSeconds=value["intervalSeconds"],nextRun=now()+value["intervalSeconds"]*1000,enabled=False,projectId=value.get("projectId"),importedPaused=True,model=str(value.get("model", ""))[:200],missedRunPolicy=value.get("missedRunPolicy") if value.get("missedRunPolicy") in ("latest","skip") else "latest",owner="guest")
                 elif key=="mcpServers":
                     if not isinstance(value.get("command"),str) or not isinstance(value.get("args",[]),list) or any(not isinstance(a,str) for a in value.get("args",[])):raise ValueError("invalid server command")
                     # Do not turn a credential-bearing invocation into a different command.
@@ -77,6 +78,8 @@ def import_workspace(store, source):
                     if re.search(r"(?i)(token|password|secret|api[-_]?key|authorization|bearer|://[^/\s]+:[^/\s]+@)",invocation):
                         raise ValueError("credential-bearing invocation excluded; add this server again")
                     value=dict(id=value["id"],name=str(value.get("name","Imported server")),command=value["command"],args=value.get("args",[]),credentialsExcluded=bool(raw.get("env") or raw.get("oauth") or raw.get("headers")))
+                if key=="schedules":warn(key,index,"imported paused; review its model and enable it in Recurring tasks")
+                if key=="mcpServers":warn(key,index,"imported disconnected; reconnect in Settings"+(" and add excluded credentials" if value["credentialsExcluded"] else ""))
                 candidate[key].append(value);seen.add(value["id"]);counts[key]+=1
             except (ValueError,TypeError,KeyError) as error:warn(key,index,str(error)+"; skipped")
     if candidate.get("migration",{}).get("settingsVersion",0)<3:
@@ -103,8 +106,8 @@ def import_workspace(store, source):
             candidate["enabledTools"]=[name for name in legacy["enabledTools"] if isinstance(name,str) and name in supported]
     if candidate["projects"] or candidate["sessions"]:
         candidate["setup"].update(entryCompleted=True,completed=True)
-    candidate["migration"]=dict(source=str(source),imported=now(),counts=counts,warnings=warnings,settingsVersion=3)
+    candidate["migration"]=dict(source=str(source),imported=now(),counts=counts,skippedExisting=skipped,warnings=warnings,settingsVersion=3)
     previous=store.data
     try:store.data=candidate;store.save()
     except BaseException:store.data=previous;raise
-    return dict(counts=counts,warnings=warnings,note="Original workspace retained. Credentials and pairing excluded. Schedules imported paused; MCP servers require explicit connection.")
+    return dict(counts=counts,skippedExisting=skipped,warnings=warnings,note="Original workspace retained. Credentials and pairing excluded. Schedules imported paused; MCP servers require explicit connection.")

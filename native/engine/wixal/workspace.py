@@ -8,7 +8,7 @@ from .storage import identity, now
 async def dispatch(service, method, params):
     store = service.store
     if method == "assessment-cancel":
-        if service.active and not service.active.done():
+        if getattr(service, 'assessment_task', None) is service.active and service.active and not service.active.done():
             service.active.cancel()
             await asyncio.gather(service.active, return_exceptions=True)
         return True, True
@@ -90,6 +90,7 @@ async def dispatch(service, method, params):
         if name not in ("network_scan", "website_assess", "website_simulate"):
             raise ValueError("Unknown assessment")
         service.active = asyncio.create_task(run_assessment(service, name, params.get("arguments", {})))
+        service.assessment_task = service.active
         return True, await service.active
     store.save()
     return True, store.data
@@ -104,6 +105,27 @@ async def run_assessment(service, name, arguments):
     store.data["tasks"].append(task)
     store.save();service.emit("state", store.data)
     result = None
+    evidence = dict(cases=[])
+    job = None
+    previous_observer = getattr(service.tools, 'assessment_observer', None)
+    def observe(owner, kind, value):
+        if owner != session['id']: return
+        if kind == 'case': evidence['cases'].append(copy.deepcopy(value))
+        elif kind == 'report': evidence['report'] = copy.deepcopy(value)
+    service.tools.assessment_observer = observe
+    def persist(value, status):
+        task['result'] = value
+        task['checkpoints'].append(dict(tool=name, arguments=copy.deepcopy(arguments), status=status, result=copy.deepcopy(value)))
+        session['messages'].extend([dict(role='user', content=task['prompt'], created=now()),
+                                   dict(role='tool', tool_name=name, content=json.dumps(value, ensure_ascii=False), created=now())])
+        store.data.setdefault('assessmentResults', []).append(dict(id=task['id'], name=name, arguments=copy.deepcopy(arguments), result=copy.deepcopy(value), status=task['status'], created=now(), sessionId=session['id'], projectId=session.get('projectId')))
+        store.data['assessmentResults'] = store.data['assessmentResults'][-30:]
+    def partial(reason):
+        value = dict(partial=True, status=task['status'], interrupted=reason, **evidence)
+        if job:
+            value.update(output=job['output'], scannerState=job['state'], exitCode=job.get('exitCode'))
+        persist(value, task['status'])
+        return value
     service.emit("assessment-progress", dict(taskId=task["id"], name=name, state="running"))
     try:
         result = await service.tools.execute(name, arguments, session["id"])
@@ -114,21 +136,21 @@ async def run_assessment(service, name, arguments):
                 await asyncio.sleep(.25)
             result = await service.tools.read_job(dict(session_id=job["id"], wait_ms=0, max_chars=100000), session["id"])
         if isinstance(result,str) and "declined" in result.lower():task["status"]="cancelled"
+        elif job and (job['state'] != 'completed' or job.get('exitCode') != 0):
+            task['status'] = 'cancelled' if job.get('reason') == 'user_stop' else 'failed'
+            result.update(partial=True, status=task['status'], interrupted=job.get('reason') or 'Scanner exited without successful completion')
         else:task["status"]="completed"
-        checkpoint = dict(tool=name, arguments=copy.deepcopy(arguments), status="finished", result=result)
-        task["checkpoints"].append(checkpoint);task["result"]=result
-        session["messages"].extend([dict(role="user", content=task["prompt"], created=now()),
-                                     dict(role="tool", tool_name=name, content=json.dumps(result, ensure_ascii=False), created=now())])
-        store.data.setdefault("assessmentResults", []).append(dict(id=task["id"], name=name, arguments=arguments, result=result, created=now(), sessionId=session["id"], projectId=session.get("projectId")))
-        store.data["assessmentResults"] = store.data["assessmentResults"][-30:]
+        persist(result, 'finished')
         return result
     except asyncio.CancelledError:
         task["status"]="cancelled"
         await service.tools.close(session["id"])
-        raise
+        return partial('Stopped by user or request cancellation. Remaining checks and report delivery were interrupted; completed observations are retained locally.')
     except Exception as error:
         task.update(status="failed", error=str(error))
+        partial(str(error))
         raise
     finally:
+        service.tools.assessment_observer = previous_observer
         task["updated"]=now();store.save();service.emit("state",store.data)
         service.emit("assessment-progress",dict(taskId=task["id"],name=name,state=task["status"]))

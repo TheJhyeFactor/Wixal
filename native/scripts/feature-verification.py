@@ -43,28 +43,33 @@ def main():
         ('broader-small-model', 'real-acceptance.py', ['--model', args.model]),
         ('packaged-workflows', 'smoke.py', []),
     ]
+    report['checks']=[dict(name=name,status='pending',log=name+'-final-run.log') for name,_,_ in checks]
     save()
     try:
-        for name, script, arguments in checks:
+        for index,(name, script, arguments) in enumerate(checks):
             if digest(HELPER) != expected or digest(INSTALLED) != expected:
                 raise RuntimeError('The installed/package helper changed during acceptance')
             print('START', name, flush=True)
             log = ART / (name + '-final-run.log')
+            report['checks'][index]['status']='running';save()
             with log.open('w') as output:
-                subprocess.run([sys.executable, str(ROOT / 'native/scripts' / script), *arguments],
-                               stdout=output, stderr=subprocess.STDOUT, check=True)
+                result=subprocess.run([sys.executable, str(ROOT / 'native/scripts' / script), *arguments],
+                                      stdout=output, stderr=subprocess.STDOUT)
             if digest(HELPER) != expected or digest(INSTALLED) != expected:
                 raise RuntimeError('The installed/package helper changed during acceptance')
-            report['checks'].append(dict(name=name, status='passed', log=log.name))
+            report['checks'][index].update(status='passed' if result.returncode==0 else 'failed',exitCode=result.returncode)
             save()
-            print('PASS', name, flush=True)
-        report['status'] = 'passed'
+            print('PASS' if result.returncode==0 else 'FAIL', name, flush=True)
+        report['status'] = 'passed' if all(c['status']=='passed' for c in report['checks']) else 'failed'
     except BaseException as error:
         report.update(status='failed', error=str(error))
+        for check in report['checks']:
+            if check['status'] in ('pending','running'):check.update(status='blocked',error=str(error))
         raise
     finally:
         report['finished'] = time.time()
         save()
+    if report['status']!='passed':raise SystemExit(1)
 
 
 if __name__ == '__main__':

@@ -32,6 +32,32 @@ class MemoryQualityTests(unittest.TestCase):
         suggestion=self.store.memory.snapshot()['suggestions'][0];self.assertEqual(suggestion['relatedId'],old['id'])
         self.store.memory.dispatch('memory-suggestion',dict(id=suggestion['id'],accept=True,consolidate=True))
         self.assertEqual(len(self.store.memories()),1);self.assertIn('SQLite',old['content'])
+    def test_review_correction_rejects_stale_evidence_and_retains_pending(self):
+        old=self.store.memory.save('We decided to use PostgreSQL for invoices')
+        session=self.store.session();session['messages']=[dict(role='user',content='We decided to use SQLite for invoices instead')];self.store.save()
+        self.store.memory.suggest(session['messages'][0]['content'],session)
+        suggestion=self.store.memory.snapshot()['suggestions'][0]
+        self.assertEqual(suggestion['previousContent'],old['content'])
+        self.assertEqual(suggestion['sourceMessage'],session['messages'][0]['id'])
+        self.store.memory.save('We decided to use MariaDB for invoices',replace=old['id'])
+        with self.assertRaisesRegex(ValueError,'related note changed'):
+            self.store.memory.dispatch('memory-suggestion',dict(id=suggestion['id'],accept=True,consolidate=True,operation='replace'))
+        self.assertIn('MariaDB',self.store.memories()[0]['content'])
+        self.assertEqual(self.store.memory.snapshot()['suggestions'][0]['id'],suggestion['id'])
+
+    def test_review_combine_preserves_both_texts_and_original_source_after_restart(self):
+        old=self.store.memory.save('We decided to use PostgreSQL for invoices')
+        session=self.store.session();session['messages']=[dict(role='user',content='We decided to use SQLite for invoices instead')];self.store.save()
+        self.store.memory.suggest(session['messages'][0]['content'],session)
+        suggestion=self.store.memory.snapshot()['suggestions'][0]
+        self.store.memory.dispatch('memory-suggestion',dict(id=suggestion['id'],accept=True,consolidate=True,operation='merge'))
+        directory=self.store.directory;self.store.close();self.store=Store(directory)
+        saved=self.store.memories()[0]
+        self.assertEqual(len(self.store.memories()),1)
+        self.assertEqual(saved['content'],'We decided to use PostgreSQL for invoices\nWe decided to use SQLite for invoices instead')
+        self.assertEqual(saved['sourceSession'],session['id']);self.assertEqual(saved['sourceMessage'],session['messages'][0]['id'])
+        self.assertEqual(self.store.memory.snapshot()['suggestions'],[])
+
     def test_replacement_excludes_derived_answer_and_restart_keeps_index(self):
         note=self.store.memory.save('Invoices use PostgreSQL')
         s=self.store.session();s['messages']=[dict(role='assistant',content='Billing data is stored in PostgreSQL',memoryReferences=[note['id']])];self.store.save()

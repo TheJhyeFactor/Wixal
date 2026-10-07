@@ -40,7 +40,13 @@ class Sync:
         self.vault=Keychain(store.directory/'sync');self.vault.account=b'folder-sync'
     def snapshot(self):
         state=self.store.data['syncState']
-        return {k:state.get(k) for k in ('enabled','folder','lastSync','conflicts','warnings','lastResult')}
+        result={k:copy.deepcopy(state.get(k)) for k in ('enabled','folder','lastSync','conflicts','warnings','lastResult')}
+        for conflict in result['conflicts']:
+            current=next((record for record in self.store.data[conflict['collection']] if record['id']==conflict['record']['id']),None)
+            conflict['localRecord']=copy.deepcopy(current)
+            conflict['localDevice']=state['device']
+            conflict['localChanged']=current is None or fingerprint(current)!=conflict['localDigest']
+        return result
     def payload(self):
         d=self.store.data;who=owner(self.store);selected={k:[] for k in COLLECTIONS}
         # Project notes belong to a local project; project sessions must match the active identity.
@@ -129,9 +135,11 @@ class Sync:
                                 replacement=copy.deepcopy(record)
                                 if collection=='projects':replacement.update(root=current.get('root',''),syncRootRequired=current.get('syncRootRequired',False),approvalMode=current.get('approvalMode','review'))
                                 self.store.data[collection][self.store.data[collection].index(current)]=replacement;state['bases'][key]=fingerprint(incoming);merged+=1
+                            elif state.get('resolutions',{}).get(key+':'+str(remote.get('device')))==dict(incoming=hash_remote,local=fingerprint(current)):
+                                continue  # An unchanged incoming snapshot must not reopen a reviewed choice.
                             elif not any(c['key']==key and c['digest']==hash_remote and c['localDigest']==fingerprint(current) for c in state['conflicts']):
                                 state['conflicts']=[c for c in state['conflicts'] if c['key']!=key or c.get('device')!=remote.get('device')]
-                                state['conflicts'].append(dict(id=identity(),key=key,collection=collection,record=record,digest=hash_remote,localDigest=fingerprint(current),title=record.get('title') or record.get('name') or record.get('content','')[:100],device=remote.get('device')))
+                                state['conflicts'].append(dict(id=identity(),key=key,collection=collection,record=record,digest=hash_remote,localDigest=fingerprint(current),title=record.get('title') or record.get('name') or record.get('content','')[:100],device=remote.get('device'),received=now()))
                 for image_id,encoded in remote.get('images',{}).items():
                     import re
                     if not re.fullmatch('[a-f0-9]{64}',image_id) or not isinstance(encoded,str) or len(encoded)>8*1024*1024:raise ValueError('Invalid synced image')
@@ -179,5 +187,7 @@ class Sync:
             if collection=='projects':replacement.update(root=current.get('root',''),syncRootRequired=current.get('syncRootRequired',False),approvalMode=current.get('approvalMode','review'))
             self.store.data[collection][self.store.data[collection].index(current)]=replacement
         elif params.get('choice')!='local':raise ValueError('Choose local or incoming')
+        chosen=next(n for n in self.store.data[collection] if n['id']==conflict['record']['id'])
+        state.setdefault('resolutions',{})[conflict['key']+':'+str(conflict.get('device'))]=dict(incoming=conflict['digest'],local=fingerprint(chosen))
         state['bases'][conflict['key']]=fingerprint(self.comparable(collection,conflict['record']))
         state['conflicts']=[c for c in state['conflicts'] if c['key']!=conflict['key']];self.store.save();return self.snapshot()

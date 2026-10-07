@@ -194,19 +194,31 @@ class Accounts:
                     replacement=params.get('newPassword','')
                     if not isinstance(replacement,str) or not 10<=len(replacement)<=256:raise ValueError('Use a new password of at least 10 characters.')
                     changed=await self.auth('update',dict(idToken=await self.token(),password=replacement,returnSecureToken=True))
-                    await self.persist(dict(self.user,idToken=changed['idToken'],refreshToken=changed['refreshToken'],expiresAt=time.time()+float(changed['expiresIn'])))
+                    updated=dict(self.user,idToken=changed['idToken'],refreshToken=changed['refreshToken'],expiresAt=time.time()+float(changed['expiresIn']))
+                    try:await self.persist(updated)
+                    except ValueError as error:
+                        self.user=updated
+                        self.message='Password changed online, but saved sign-in could not be updated in Keychain. Sign out and sign in with your new password to repair it.'
+                        raise ValueError(self.message) from error
                     self.message='Password changed. Your saved sign-in was updated.'
                 else:
                     # Delete owned cloud documents before deleting the identity; never claim atomic deletion.
-                    if self.user.get('emailVerified'):
-                        while True:
-                            docs=(await self.cloud('presets')).get('documents',[])
-                            if not docs:break
-                            for doc in docs:await self.cloud('presets','DELETE',id=doc['name'].split('/')[-1])
-                        try:await self.cloud('memory','DELETE')
-                        except AccountError as error:
-                            if error.status!=404:raise
-                    await self.auth('delete',dict(idToken=await self.token()))
+                    removed=0
+                    try:
+                        if self.user.get('emailVerified'):
+                            while True:
+                                docs=(await self.cloud('presets')).get('documents',[])
+                                if not docs:break
+                                for doc in docs:
+                                    await self.cloud('presets','DELETE',id=doc['name'].split('/')[-1]);removed+=1
+                                    self.presets=[preset for preset in self.presets if preset['id']!=doc['name'].split('/')[-1]]
+                            try:await self.cloud('memory','DELETE')
+                            except AccountError as error:
+                                if error.status!=404:raise
+                        await self.auth('delete',dict(idToken=await self.token()))
+                    except (AccountError, ValueError) as error:
+                        self.message=f"Deletion incomplete. The online identity is still signed in; {removed} cloud preset(s) were removed. Retry deletion with your current password. Already deleted cloud records cannot be recovered. Local projects and chats are unchanged."
+                        raise ValueError(self.message+" Service reported: "+str(error)) from error
                     self.ready=False;self.presets=[];self.global_memory='';self.user=None
                     try:await self.persist(None)
                     except ValueError:self.message='Online account deleted. Keychain cleanup failed; remove the saved Wixal sign-in in Keychain Access.'

@@ -239,7 +239,9 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         case "runtime": activity = "Local models: \(textValue(data["status"]))"
         case "activity":activity=textValue(data["text"]).isEmpty ? textValue(data["message"]) : textValue(data["text"])
         case "model-manager":modelStatus=data;models=records(data["installed"]);refreshContext()
-        case "assessment-progress":assessmentProgress.merge(data) { _, new in new }
+        case "assessment-progress":
+            if let taskId=data["taskId"] as? String,taskId != textValue(assessmentProgress["taskId"]) { assessmentProgress=[:] }
+            assessmentProgress.merge(data) { _, new in new }
         case "assessment-case":
             assessmentProgress.merge(data) { _, new in new }
             assessmentProgress["state"] = "running"

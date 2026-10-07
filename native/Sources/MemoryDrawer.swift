@@ -27,9 +27,9 @@ struct MemoryDrawer:View {
             HStack{VStack(alignment:.leading,spacing:6){Text(scope == "Project" ? "PROJECT CONTEXT" : "LOCAL MEMORY").font(.system(size:9,design:.monospaced)).tracking(1).foregroundStyle(theme.muted);Text(scope == "Project" ? "Project memory" : "Global memory").font(.system(size:21,weight:.medium))};Spacer();Button(action:close){Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel("Close memory")}
             Picker("Memory",selection:$scope){Text("Project").tag("Project");Text("Global").tag("Global")}.pickerStyle(.segmented)
             ScrollView{VStack(alignment:.leading,spacing:16){
-                if scope=="Project"{projectContent}else{globalContent}
-                recallControls
                 if !suggestions.isEmpty{suggestedMemories}
+                if scope=="Project"{projectContent}else{globalContent}
+                DisclosureGroup("Recall and indexing settings"){recallControls}
                 if !sources.isEmpty{DisclosureGroup("Memory used for this conversation"){ForEach(Array(sources.enumerated()),id:\.offset){_,item in memorySource(item)}}.font(.system(size:11)).wixalCard()}
                 if let summary=engine.session?["summary"] as? [String:Any]{DisclosureGroup("Saved conversation summary"){Text(textValue(summary["content"])).font(.system(size:11)).textSelection(.enabled);Text("\(summary["messageCount"] as? Int ?? 0) messages · \(textValue(summary["method"]))").foregroundStyle(theme.muted);Button("Clear summary"){engine.action("summary-clear",["sessionId":textValue(engine.state["activeSession"])])}.disabled(engine.busy)}.font(.system(size:11)).wixalCard()}
             }}
@@ -100,14 +100,27 @@ struct MemoryDrawer:View {
     }
     private var suggestedMemories:some View {
         VStack(alignment:.leading,spacing:12) {
-            Text("Suggested memories").font(.system(size:12,weight:.medium))
+            Text("Review suggestions · \(suggestions.count)").font(.system(size:12,weight:.medium))
             ForEach(Array(suggestions.enumerated()),id: \.offset) { _,item in
                 VStack(alignment:.leading,spacing:8) {
+                    Text(textValue(item["relatedId"]).isEmpty ? "Proposed note" : "Proposed correction").fontWeight(.medium)
+                    Text("Scope: \(textValue(item["scope"]).capitalized)").foregroundStyle(theme.muted)
+                    if !textValue(item["relatedId"]).isEmpty {
+                        Text("Current note").fontWeight(.medium)
+                        Text(textValue(item["previousContent"])).textSelection(.enabled)
+                        Text("Proposed note").fontWeight(.medium)
+                    }
                     Text(textValue(item["content"])).textSelection(.enabled)
+                    if !textValue(item["sourceSession"]).isEmpty {
+                        DisclosureGroup("Original conversation evidence") {
+                            Text(sourceQuote(item)).textSelection(.enabled)
+                            Button("Open source conversation ↗"){engine.openMemorySource(textValue(item["sourceSession"]))}
+                        }
+                    }
                     if item["quoteVerified"] as? Bool == true { Text("Exact user quote · \(textValue(item["classification"])) · \(textValue(item["reviewModel"]))").foregroundStyle(theme.muted) }
                     if !textValue(item["relatedId"]).isEmpty {
                         Text(textValue(item["reason"])).foregroundStyle(theme.muted)
-                        Text(textValue(item["previousContent"])).foregroundStyle(theme.muted).textSelection(.enabled)
+                        Text("Replace updates the current note. Combine keeps both texts in one note. Saving separately keeps both notes.").foregroundStyle(theme.muted)
                         HStack {
                             Button("Replace earlier decision") { engine.action("memory-suggestion",["id":textValue(item["id"]),"accept":true,"consolidate":true,"operation":"replace"]) }
                             Button("Combine notes") { engine.action("memory-suggestion",["id":textValue(item["id"]),"accept":true,"consolidate":true,"operation":"merge"]) }
@@ -127,6 +140,11 @@ struct MemoryDrawer:View {
     }
     private func memorySource(_ item:[String:Any])->some View {
         VStack(alignment:.leading,spacing:7){Text(textValue(item["title"]).isEmpty ? "\(textValue(item["scope"]).capitalized) saved memory" : textValue(item["title"])).font(.system(size:11,weight:.medium));Text("Source: \(textValue(item["sourceRole"]))").font(.system(size:10)).foregroundStyle(theme.muted);Text(textValue(item["excerpt"] ?? item["content"])).font(.system(size:11)).textSelection(.enabled);if !textValue(item["sourceSession"]).isEmpty{Button("Open source conversation ↗"){engine.openMemorySource(textValue(item["sourceSession"]))}.font(.system(size:10)).buttonStyle(.plain)}}.padding(.vertical,6)
+    }
+    private func sourceQuote(_ item:[String:Any])->String {
+        let session=records(engine.state["sessions"]).first{textValue($0["id"])==textValue(item["sourceSession"])}
+        let message=records(session?["messages"]).first{textValue($0["id"])==textValue(item["sourceMessage"])}
+        return textValue(message?["content"]).isEmpty ? "Original quote unavailable locally. Open the source conversation to inspect the evidence." : textValue(message?["content"])
     }
     private func search(){Task{do{found=records(try await engine.call("memory-recall",["query":query,"scope":scope=="Project" ? "project" : "global"]))}catch{engine.error=error.localizedDescription}}}
 }

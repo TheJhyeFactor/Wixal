@@ -1,26 +1,18 @@
 # Wixal website
 
-The Wixal marketing website. Six static pages: Home, Products, Tools, Models, Resources, and Download. Shared navigation, footer, keyboard-accessible screenshot tabs, mobile navigation, and persistent light/dark appearance controls.
+A restrained static website that follows the native workspace’s Paper appearance: warm neutral surfaces, quiet dividers, the monospace Wixal wordmark and one actual workspace screenshot. Dark appearance is available in the footer.
 
-## Develop
+Eight pages cover Home, Workspace, Tools, Models, Guides, Download, Privacy and Download stats. Existing routes and product section anchors remain available. The homepage screenshot is labelled **native local development preview**; downloads explicitly identify the released **Electron app**. Update the version in `scripts/build.mjs` only after checking the actual release assets.
 
-Requires Node 22 or newer. No additional website dependencies or install step.
+## Develop and check
+
+Requires Node 22 or newer. No website dependencies or install step.
 
 ```sh
-cd website
 npm run dev
 ```
 
-Open http://127.0.0.1:4173. The dev command builds once; after editing, run `npm run build` and reload the browser.
-
-## Build and check
-
-```sh
-npm run build
-npm run check
-```
-
-For the GitHub Pages project URL:
+Open http://127.0.0.1:4173. The server does not watch sources; rebuild and reload after changes.
 
 ```sh
 BASE_PATH=/Wixal/ npm run build
@@ -28,56 +20,22 @@ BASE_PATH=/Wixal/ npm run check
 BASE_PATH=/Wixal/ npm run dev
 ```
 
-The output is `dist/`. Deploy only that folder. `BASE_PATH` sets a subdirectory prefix. `SITE_ORIGIN` sets the origin for canonical URLs, sharing metadata, and the sitemap. Change both for a custom domain deployment.
+Deploy only `dist/`. `BASE_PATH` sets the project URL prefix, and `SITE_ORIGIN` controls canonical URLs and the sitemap. Checks cover JavaScript syntax, local page/asset/fragment links, opt-in analytics and aggregate report validation.
 
-## Version control and deployment
+## Presentation
 
-Source lives on `codex/wixal-website`. The website workflow checks pull requests and publishes pushes on `main` and `codex/wixal-website` to GitHub Pages. The initial site publishes from the website branch so the existing app work on `main` can remain independent. Once the website is merged, remove the feature branch from the workflow's publishing branches.
+`scripts/build.mjs` owns templates and copy. `src/styles.css` defines the responsive layout; `src/site.js` handles persistent appearance and the keyboard-accessible image dialog. Escape closes the dialog and focus returns to its trigger. Reduced-motion preferences disable entrance and hover animation.
 
-GitHub Pages must use GitHub Actions as its build source. The published URL is https://thejhyefactor.github.io/Wixal/.
+`public/assets/native-workspace.png` is an actual installed native app capture from a disposable project named Wixal, with no fabricated messages or results. It is the only content image displayed by the site. Older captures remain as source assets but are not displayed. `social-card.svg` is the source for the matching typographic sharing card, rendered to `social-card.png`. Styles, scripts and displayed assets have content-derived cache versions.
 
-## Content and assets
+The README on GitHub is text focused: current downloads, a capability table, getting-started steps, the native preview distinction and guide links.
 
-`scripts/build.mjs` contains the shared templates and page content. `src/styles.css` defines the responsive design system; `src/site.js` handles navigation, screenshot tabs, and appearance. Wixal 0.7.2 workspace, model manager, tool kit and performance captures are saved as WebP. Files, memory, terminal, connections, explicit tool selection, command tools, web tool cards and MCP setup previews are captured from 0.7.2, and the existing folded W mark is used in the header and favicon.
+## Deployment
 
-The Cursor homepage and product page informed the neutral palette, quiet navigation, typography, whitespace, product previews, and download buttons. Wixal uses its own content and assets. No Cursor fonts, logo, screenshots, customer endorsements, or product claims are shipped.
+The GitHub Pages workflow builds and checks website changes. The published URL is https://thejhyefactor.github.io/Wixal/. Pages uses GitHub Actions rather than a committed `dist/` directory.
 
-Download links target the verified v0.7.2 release. Update the release version and copy in `scripts/build.mjs` when shipping a new release. Provider features follow the current published Wixal docs. The companion illustration is labelled as an illustration, not a screenshot. All site pages and download links work without JavaScript. Mobile navigation, screenshot switching, and appearance controls use JavaScript.
+## Privacy and public counts
 
-Design concepts in `design/` were created with the built-in image generation tool. They are development references and are not part of the published site. Their brief was to retain the Cursor product page's #f7f7f4 / #26251e palette, understated regular grotesk type, open spacing, existing Wixal folded W branding, four source-grounded product areas, and the download/footer continuation. Actual Wixal screenshots intentionally replace generated app mockups. See `design/verification.md` for comparison notes.
+See [metrics setup](../docs/download-metrics.md). Google Analytics loads only after explicit opt-in; decline, revocation and cross-tab changes remain supported. The desktop app is unaffected. Counters live on the stats page, keeping the homepage quiet.
 
-## Refresh the screenshots
-
-With the desktop app dependencies installed, run:
-
-```sh
-node website/scripts/capture-features.cjs /absolute/path/to/Wixal
-```
-
-The feature capture script opens the actual desktop app using temporary project and app data, previews real files and tool controls, saves a project note, and executes the sample project's test in its terminal. It uses external-runtime mode and requires an already-running local Ollama connection; it does not download, import or run a model. It also captures the empty MCP configuration dialog, not a connected service. It removes only this temporary fixture after capture. Capture from the release version used by the site. No model response is fabricated and no provider credential is configured. The example terminal output is an actual passing test run.
-
-The build reads intrinsic WebP dimensions directly and uses them in each image's HTML. Preview frames reserve the same proportions before lazy loading, keeping section links stable. The check validates image attributes against their source dimensions. Header and footer theme controls share a saved preference, which is applied before the stylesheet loads to avoid a flash of the opposite theme.
-
-Styles, scripts, and screenshots use content-derived asset versions so browsers fetch updated files after a deployment.
-
-The 0.7.2 update uses the actual release app captures in `docs/screenshots`, including reported usage and a completed real benchmark. The local engine, tool defaults, model manager and macOS minimum match this release.
-
-The Tools page explains explicit tool selection, reviewed file edits, command sessions, rendered web inspection, search, JSON APIs and external MCP setup. Product memory includes notes, prior-chat search and inspectable summaries. The dark appearance uses neutral #101010 black and #191919 charcoal surfaces, neutral grey text, subtle borders and restrained orange link accents; it also styles the navigation, footer, screenshot frames, gallery, buttons and enlarged viewer. Light appearance retains the original neutral palette.
-
-## Capability overview
-
-The “One app. More ways to work.” section is shared by Home and Products. Its six capability links jump to a larger Desktop feature, paired Models/Memory panels, a wide Commands feature, and paired Web/Companion panels. Each real UI preview supports full-size viewing. Mobile uses a single column and a two-column capability index. The optional companion remains a labelled illustration.
-
-For only the overview's focused memory and browser-control captures, run:
-
-```sh
-node website/scripts/capture-features.cjs /absolute/path/to/release-checkout --showcase
-```
-
-Use a clean checkout of the release with the desktop dependencies installed. This mode captures actual project-memory controls, a saved sample note and the browser-inspection control. It uses a disposable project/state and does not run a model or a web request. The memory capture frames the drawer through its actual saved-note element; no UI or result is fabricated.
-
-The 0.7.2 refresh uses genuine packaged app captures of the Models page and verified download queue. Download links target v0.7.2. The local provider is Wixal Local; Ollama is credited as the underlying engine.
-
-## Download and visitor tracking
-
-See [metrics setup](../docs/download-metrics.md). The site has opt-in GA4 page views and release download click events, a persistent footer privacy control, and a public /stats/ page using current GitHub release asset counts. /privacy/ explains the collection. The desktop app is unaffected.
+GitHub counts DMG/ZIP downloads, including repeat downloads. These are separate from opted-in website visitors and do not establish installations or active app users.

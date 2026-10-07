@@ -14,6 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.9/Wixal-0.7.9-macOS-arm64.dmg"><strong>Download for Mac ↓</strong></a> &nbsp;·&nbsp;
+  <a href="https://thejhyefactor.github.io/Wixal/">Website</a> &nbsp;·&nbsp;
   <a href="#see-wixal-in-action">Watch the demo</a> &nbsp;·&nbsp;
   <a href="docs/user-guide.md">User guide</a> &nbsp;·&nbsp;
   <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.9">Release notes</a>

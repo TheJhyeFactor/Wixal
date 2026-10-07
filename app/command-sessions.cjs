@@ -21,11 +21,11 @@ async function executeCommandSession(name, args, context) {
     const seconds = args.timeout_seconds ?? 600;
     if (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600) throw new Error('Timeout must be 1–3600 seconds.');
     if ([...jobs.values()].filter(j => j.state === 'running').length >= 8) throw new Error('Stop a command before starting another (8 running maximum).');
-    if (!await approve({ name, command: args.command, root, timeout_seconds: seconds })) return 'User declined this command.';
+    if (!await approve({ name: context.approvalName || name, command: args.command, root, timeout_seconds: seconds })) return 'User declined this command.';
     if (signal?.aborted) throw new Error('Stopped');
     for (const [id, job] of jobs) if (jobs.size >= 32 && job.state !== 'running') jobs.delete(id);
-    const child = spawn('/bin/zsh', ['-l', '-c', args.command], { cwd: root, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    const job = { id: randomUUID(), owner: owner(context), root, child, state: 'running', output: '', base: 0, exitCode: null, reason: null };
+    const child = spawn(context.executable || '/bin/zsh', context.executable ? context.argv : ['-l', '-c', args.command], { cwd: root, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const job = { command: args.command, started: Date.now(), timeout_seconds: seconds, ...(context.assessment ? { assessment: context.assessment } : {}), id: randomUUID(), owner: owner(context), root, child, state: 'running', output: '', base: 0, exitCode: null, reason: null };
     jobs.set(job.id, job);
     const append = text => { job.output += text; if (job.output.length > MAX) { const removed = job.output.length - MAX; job.base += removed; job.output = job.output.slice(removed); } };
     for (const stream of [child.stdout, child.stderr]) { stream.setEncoding('utf8'); stream.on('data', append); }
@@ -35,7 +35,7 @@ async function executeCommandSession(name, args, context) {
     signal?.addEventListener('abort', abort, { once: true });
     const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); };
     child.on('error', error => { append(error.message); job.state = 'failed'; cleanup(); });
-    child.on('close', (code, exitSignal) => { job.state = job.reason ? 'stopped' : job.state === 'failed' ? 'failed' : 'completed'; job.exitCode = code; job.exitSignal = exitSignal; cleanup(); });
+    child.on('close', (code, exitSignal) => { job.state = job.reason ? 'stopped' : job.state === 'failed' ? 'failed' : 'completed'; job.finished = Date.now(); job.exitCode = code; job.exitSignal = exitSignal; cleanup(); });
     return JSON.stringify({ session_id: job.id, state: job.state, timeout_seconds: seconds, message: 'Use command_read to inspect output and exit status. This is a piped process, not a PTY.' });
   }
   const job = get(args.session_id, context);
@@ -46,7 +46,7 @@ async function executeCommandSession(name, args, context) {
     const offset = args.offset ?? job.base;
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > job.base + job.output.length) throw new Error('Invalid output offset.');
     const start = Math.max(offset, job.base), output = job.output.slice(start - job.base, start - job.base + 24000);
-    return JSON.stringify({ session_id: job.id, state: job.state, exitCode: job.exitCode, signal: job.exitSignal, reason: job.reason, output, offset: start, next_offset: start + output.length, earliest_offset: job.base, discarded: offset < job.base, more: start + output.length < job.base + job.output.length });
+    return JSON.stringify({ session_id: job.id, command: job.command, started: job.started, finished: job.finished, timeout_seconds: job.timeout_seconds, assessment: job.assessment, state: job.state, exitCode: job.exitCode, signal: job.exitSignal, reason: job.reason, output, offset: start, next_offset: start + output.length, earliest_offset: job.base, discarded: offset < job.base, more: start + output.length < job.base + job.output.length });
   }
   if (name === 'command_stop') { stop(job); return JSON.stringify({ session_id: job.id, state: job.state, cancellationRequested: job.state === 'running' }); }
   if (name === 'command_write') {

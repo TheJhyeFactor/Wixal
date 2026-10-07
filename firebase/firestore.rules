@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/profile/memory {
+      function owner() {
+        return request.auth != null && request.auth.uid == userId && request.auth.token.email_verified == true;
+      }
+      allow read, delete: if owner();
+      allow create, update: if owner() && request.resource.data.keys().hasOnly(['content'])
+        && request.resource.data.content is string && request.resource.data.content.size() <= 1200;
+    }
+    match /users/{userId}/presets/{presetId} {
+      function owner() {
+        return request.auth != null && request.auth.uid == userId && request.auth.token.email_verified == true;
+      }
+      function validPreset() {
+        return request.resource.data.keys().hasOnly(['name', 'preferences'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+          && request.resource.data.preferences is string && request.resource.data.preferences.size() <= 4096;
+      }
+      allow read, delete: if owner();
+      allow create, update: if owner() && validPreset();
+    }
+  }
+}

@@ -1,0 +1,40 @@
+const { _electron: electron } = require('playwright');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const os = require('node:os');
+const assert = require('node:assert/strict');
+(async () => {
+  const root = path.resolve(__dirname, '..'), temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-picker-'));
+  const base = path.join(temp, 'Projects'); await fs.mkdir(base); await fs.mkdir(path.join(base, 'Existing')); await fs.mkdir(path.join(base, '.hidden')); await fs.writeFile(path.join(base, 'file.txt'), 'preserve');
+  const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: path.join(temp, 'data') }; delete env.ELECTRON_RUN_AS_NODE;
+  let app;
+  try {
+    app = await electron.launch({ args: [root], env, ...(process.env.WIXAL_APP_PATH ? { executablePath: process.env.WIXAL_APP_PATH } : {}) });
+    await app.evaluate(({ dialog }) => { dialog.showOpenDialog = () => { throw new Error('Native picker should not open'); }; });
+    const page = await app.firstWindow(), errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.click('#open-project'); await page.locator('#project-dialog[open]').waitFor();
+    const navigate = async value => { await page.fill('#folder-path', value); await page.locator('#folder-path-form button[type="submit"]').click(); await page.waitForFunction(p => folderBrowser?.path === p && !folderLoading, await fs.realpath(value)); };
+    await navigate(base); assert.equal(await page.locator('.folder-row').count(), 1);
+    await page.check('#folder-hidden'); await page.waitForFunction(() => folderBrowser?.folders.length === 2);
+    await page.fill('#folder-filter', 'Existing'); assert.equal(await page.locator('.folder-row').count(), 1); await page.fill('#folder-filter', '');
+    await page.locator('.folder-row').filter({ hasText: 'Existing' }).click();
+    await page.waitForFunction(() => folderBrowser?.path.endsWith('/Existing'));
+    await page.click('#folder-open'); await page.waitForFunction(() => state.projects.some(p => p.name === 'Existing'));
+    await page.click('#open-project'); await navigate(base); await page.click('#folder-new-toggle');
+    await page.fill('#folder-new-name', 'Existing'); await page.click('#folder-create'); await page.locator('#folder-status').filter({ hasText: 'already exists' }).waitFor();
+    await page.fill('#folder-new-name', '../escape'); await page.click('#folder-create'); await page.locator('#folder-status').filter({ hasText: 'without slashes' }).waitFor();
+    await page.fill('#folder-new-name', 'New project'); await page.click('#folder-create'); await page.waitForFunction(() => folderBrowser?.path.endsWith('/New project') && !folderLoading);
+    assert.ok((await fs.stat(path.join(base, 'New project'))).isDirectory()); await page.click('#folder-open'); await page.waitForFunction(() => state.projects.some(p => p.name === 'New project'));
+    assert.equal(await page.locator('.project-item.active').textContent(), '▱New project');
+    await page.reload(); await page.locator('.project-item.active').filter({ hasText: 'New project' }).waitFor();
+    await page.click('#open-project'); await navigate(base);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 800));
+    await page.screenshot({ path: path.join(root, 'artifacts/project-picker.png'), animations: 'disabled' });
+    await page.fill('#folder-path', path.join(base, 'missing')); await page.locator('#folder-path-form button[type="submit"]').click(); await page.locator('#folder-status').filter({ hasText: 'could not be found' }).waitFor();
+    assert.equal(await page.locator('#folder-open').isDisabled(), true);
+    await navigate(base); await page.locator('[data-close="project-dialog"]').first().click();
+    const count = await page.evaluate(() => state.projects.length); assert.equal(count, 2);
+    assert.deepEqual(errors, []);
+    console.log('PASS: in-app existing folder selection, paths/filter/hidden folders, create/duplicate/invalid errors, project persistence, missing-path recovery and no native picker');
+  } finally { if (app) await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
+})().catch(e => { console.error(e); process.exitCode = 1; });

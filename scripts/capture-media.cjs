@@ -37,7 +37,7 @@ const root = path.resolve(__dirname, '..');
       await page.locator('#toast').waitFor({ state: 'hidden' });
       await page.mouse.move(1250, 25);
       const screenshot = await page.screenshot({ path: path.join(shots, `${name}.png`) });
-      const image = await sharp(screenshot).resize(990, 720).toBuffer();
+      const image = await sharp(screenshot).resize(990, 720, { fit: 'contain', background: '#191a20' }).toBuffer();
       const label = Buffer.from(`<svg width="990" height="52"><rect width="990" height="52" fill="#191a20"/><text x="24" y="32" font-family="Helvetica,Arial,sans-serif" font-size="16" fill="#f1eee9">${caption}</text><text x="966" y="32" text-anchor="end" font-family="Menlo,monospace" font-size="11" fill="#e9a5bd">WIXAL</text></svg>`);
       const raw = await sharp({ create: { width: 990, height: 772, channels: 3, background: '#191a20' } }).composite([{ input: label, top: 0, left: 0 }, { input: image, top: 52, left: 0 }]).removeAlpha().raw().toBuffer();
       frames.push(raw); delays.push(delay);
@@ -47,6 +47,38 @@ const root = path.resolve(__dirname, '..');
       await page.locator(id).click();
     }
     await capture('workspace', 'Open a project and make yourself at home.', 3000);
+    // Capture the actual renderer's collapse/reversal frames, rather than tweening still images.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 880));
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.waitForFunction(() => document.querySelector('.welcome-wordmark').getAnimations({ subtree: true }).every(animation => animation.playState !== 'running'));
+    const cdp = await page.context().newCDPSession(page), motionFrames = [];
+    cdp.on('Page.screencastFrame', event => {
+      motionFrames.push({ data: Buffer.from(event.data, 'base64'), timestamp: event.metadata.timestamp });
+      void cdp.send('Page.screencastFrameAck', { sessionId: event.sessionId });
+    });
+    await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 90, maxWidth: 1360, maxHeight: 880, everyNthFrame: 1 });
+    await page.evaluate(() => toggleSidebar(true));
+    await page.waitForFunction(() => document.querySelector('#sidebar').getBoundingClientRect().width === 62);
+    await new Promise(resolve => setTimeout(resolve, 650));
+    await page.evaluate(() => toggleSidebar(false));
+    await page.waitForFunction(() => document.querySelector('#sidebar').getBoundingClientRect().width === 260);
+    await new Promise(resolve => setTimeout(resolve, 650));
+    await cdp.send('Page.stopScreencast'); await cdp.detach();
+    if (motionFrames.length < 6) throw new Error('Too few real sidebar animation frames');
+    // Downsample real high-refresh frames to about 25 fps, retaining their actual timings.
+    const sampledMotion = [motionFrames[0]];
+    for (const frame of motionFrames.slice(1)) if (frame.timestamp - sampledMotion.at(-1).timestamp >= .035) sampledMotion.push(frame);
+    if (sampledMotion.at(-1) !== motionFrames.at(-1)) sampledMotion.push(motionFrames.at(-1));
+    const motionRaw = [], motionDelays = [];
+    for (let i = 0; i < sampledMotion.length; i++) {
+      motionRaw.push(await sharp(sampledMotion[i].data).resize(990, 640, { fit: 'contain', background: '#191a20' }).removeAlpha().raw().toBuffer());
+      motionDelays.push(i === sampledMotion.length - 1 ? 1200 : Math.max(20, Math.min(1200, Math.round((sampledMotion[i + 1].timestamp - sampledMotion[i].timestamp) * 1000))));
+    }
+    await fs.mkdir(path.join(root, 'docs/media'), { recursive: true });
+    await sharp(Buffer.concat(motionRaw), { raw: { width: 990, height: 640 * motionRaw.length, channels: 3, pageHeight: 640 } }).gif({ delay: motionDelays, loop: 0, colours: 128, dither: .3 }).toFile(path.join(root, 'docs/media/sidebar-motion.gif'));
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1680, 1080));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    if (process.env.WIXAL_MEDIA_SIDEBAR_ONLY) { console.log('Saved actual sidebar motion frames.'); return; }
     await page.click('#model-button');
     await page.locator('.model-row').first().waitFor();
     await page.locator('#models-dialog').evaluate(el => { el.scrollTop = 0; });
@@ -55,6 +87,22 @@ const root = path.resolve(__dirname, '..');
     const deadline = Date.now() + 180000;
     while (Date.now() < deadline) { const current = await page.evaluate(() => window.wixal.state()); if (current.benchmarks.length && !current.benchmarkProgress) break; await new Promise(r => setTimeout(r, 200)); }
     await page.click('[data-close="models-dialog"]');
+    await page.click('#models-page-button');
+    await capture('models-page', 'Models: your library, context settings and measured performance.');
+    await page.click('#model-downloads-tab');
+    await page.locator('[data-catalog-download="gemma3:270m"]').click();
+    const downloadDeadline = Date.now() + 300000;
+    let downloaded = false;
+    while (Date.now() < downloadDeadline) {
+      const current = await page.evaluate(() => window.wixal.state());
+      const job = current.modelDownloads.find(j => j.name === 'gemma3:270m');
+      if (job?.state === 'failed') throw new Error(job.error);
+      if (job?.state === 'completed') { downloaded = true; break; }
+      await new Promise(r => setTimeout(r, 200));
+    }
+    if (!downloaded) throw new Error('Media download timed out');
+    await capture('model-downloads', 'Download in Wixal, then choose the installed model.');
+    await page.click('#models-page-back');
     await page.evaluate(() => { window.mediaReplyDone = false; window.wixal.onEvent(e => { if (e.type === 'done') window.mediaReplyDone = true; }); });
     await page.fill('#prompt', 'Explain what a local AI model is in one short sentence.'); await page.click('#send'); await page.waitForFunction(() => window.mediaReplyDone, null, { timeout: 180000 });
     await page.click('#response-stats'); await capture('performance', 'Measure real model throughput and memory on your Mac.'); await page.click('[data-close="performance-dialog"]');
@@ -82,6 +130,7 @@ const root = path.resolve(__dirname, '..');
     await capture('terminal', 'Use a real zsh terminal, right beside your conversation.', 3000);
     const media = path.join(root, 'docs/media'); await fs.mkdir(media, { recursive: true });
     await sharp(Buffer.concat(frames), { raw: { width: 990, height: 772 * frames.length, channels: 3, pageHeight: 772 } }).gif({ delay: delays, loop: 1, colours: 128, dither: .4 }).toFile(path.join(media, 'workspace-tour.gif'));
-    console.log('Saved eight real app screenshots and docs/media/workspace-tour.gif.');
+    await sharp(Buffer.concat(frames.slice(0, 4)), { raw: { width: 990, height: 772 * 4, channels: 3, pageHeight: 772 } }).gif({ delay: delays.slice(0, 4), loop: 1, colours: 128, dither: .4 }).toFile(path.join(media, 'choose-model.gif'));
+    console.log('Saved current app screenshots and model/workspace tours.');
   } finally { if (app) await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

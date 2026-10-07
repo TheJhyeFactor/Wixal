@@ -11,6 +11,7 @@ async function poll(page, predicate) {
 (async () => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-performance-ui-')), project = path.join(temp, 'Benchmark demo');
   await fs.mkdir(project); await fs.writeFile(path.join(project, 'README.md'), 'REAL_TOOL_READ_VERIFIED');
+  const seed = new (require('../app/store.cjs').Store)(path.join(temp, 'state')); seed.data.setup = { completed: true, entryCompleted: true }; seed.data.ui.launchAnimation = false; seed.data.ui.launchSound = false; seed.save();
   const env = { ...process.env, WIXAL_RUNTIME_MODE: 'external', WIXAL_DATA_DIR: path.join(temp, 'state'), WIXAL_TEST_PROJECT: project }; delete env.ELECTRON_RUN_AS_NODE;
   let app;
   try {
@@ -18,7 +19,7 @@ async function poll(page, predicate) {
     const page = await app.firstWindow(), errors = []; page.on('pageerror', e => errors.push(e.message)); await page.locator('#prompt').waitFor();
     await app.evaluate(() => {
       const real = globalThis.fetch;
-      globalThis.perfFixture = { catalog: [{ name: 'tiny:test', digest: 'tiny', size: 1e9 }, { name: 'huge:test', digest: 'huge', size: 96e9 }], bodies: [], skip: true, block: false };
+      globalThis.perfFixture = { catalog: [{ name: 'tiny:test', digest: 'tiny', size: 1e9 }, { name: 'huge:test', digest: 'huge', size: 96e9 }], bodies: [], block: false };
       globalThis.fetch = async (target, request) => {
         if (!String(target).startsWith('http://127.0.0.1:11434')) return real(target, request);
         const f = globalThis.perfFixture, json = data => new Response(JSON.stringify(data));
@@ -32,7 +33,6 @@ async function poll(page, predicate) {
         if (f.block && body.options?.num_predict === 128) return new Promise((_resolve, reject) => request.signal.addEventListener('abort', () => reject(new Error('Stopped')), { once: true }));
         let message;
         if (body.options?.num_predict === 128) message = { content: '1 one\n2 two' };
-        else if (f.skip) { f.skip = false; message = { content: 'Skipped the explicit tool.' }; }
         else if (body.messages.at(-1).role === 'tool') message = { content: `Read result: ${body.messages.at(-1).content}` };
         else message = { content: '', tool_calls: [{ function: { name: 'read_file', arguments: { path: 'README.md' } } }] };
         return json({ message, done: true, prompt_eval_count: 40, eval_count: 64, eval_duration: 2e9, total_duration: 3e9, load_duration: .1e9 });
@@ -44,21 +44,21 @@ async function poll(page, predicate) {
     assert.equal(await page.inputValue('#prompt'), '@read_file '); await page.type('#prompt', 'read README.md'); await page.click('#send');
     await page.waitForFunction(() => document.querySelector('#messages').textContent.includes('Read result: REAL_TOOL_READ_VERIFIED'));
     assert.ok(!(await page.textContent('#messages')).includes('Skipped the explicit tool.'));
-    const bodies = await app.evaluate(() => globalThis.perfFixture.bodies); assert.deepEqual(bodies[0].tools.map(t => t.function.name), ['read_file']);
-    await page.click('#response-stats'); assert.match(await page.textContent('#performance-totals'), /120/); assert.match(await page.textContent('#performance-totals'), /192/);
+    const bodies = await app.evaluate(() => globalThis.perfFixture.bodies); assert.ok(bodies[0].tools.some(t => t.function.name === 'read_file')); assert.ok(!bodies[0].tools.some(t => t.function.name === 'network_scan')); assert.ok(bodies[0].tools.some(t => t.function.name === 'workspace_info'));
+    await page.click('#response-stats'); assert.match(await page.textContent('#performance-totals'), /80/); assert.match(await page.textContent('#performance-totals'), /128/);
     await page.click('[data-close="performance-dialog"]'); await page.click('#model-button');
-    await page.selectOption('#model-size-filter', '4'); assert.equal(await page.locator('.model-row').count(), 1); await page.selectOption('#model-size-filter', '0');
+    await page.locator('#model-filter-panel > summary').click(); await page.selectOption('#model-size-filter', '4'); assert.equal(await page.locator('.model-row').count(), 1); await page.selectOption('#model-size-filter', '0');
     await page.selectOption('#model-fit-filter', 'estimated'); assert.equal(await page.locator('.model-row').count(), 1); await page.selectOption('#model-fit-filter', 'all');
     await page.click('[data-benchmark="tiny:test"]'); await poll(page, s => s.benchmarks.length === 1 && !s.benchmarkProgress);
     await page.selectOption('#model-fit-filter', 'tested'); assert.equal(await page.locator('.model-row').count(), 1); assert.match(await page.textContent('.model-actions'), /32 tok\/s/);
     await page.selectOption('#model-fit-filter', 'fast'); assert.equal(await page.locator('.model-row').count(), 1);
     await app.evaluate(() => { globalThis.perfFixture.block = true; }); await page.click('[data-benchmark="tiny:test"]'); await page.locator('#benchmark-progress').waitFor(); await page.click('#benchmark-cancel'); await poll(page, s => !s.benchmarkProgress); await app.evaluate(() => { globalThis.perfFixture.block = false; });
-    await page.click('[data-model-delete="tiny:test"]'); await page.click('[data-close="model-delete-dialog"]'); assert.equal((await app.evaluate(() => globalThis.perfFixture.catalog)).length, 2);
-    await page.click('#model-button'); await page.click('[data-model-delete="tiny:test"]'); await page.click('#confirm-model-delete'); await poll(page, s => s.model === 'huge:test');
+    await page.locator('.model-entry').filter({ has: page.locator('[data-model="tiny:test"]') }).locator('.model-manage summary').click(); await page.click('[data-model-delete="tiny:test"]'); await page.click('[data-close="model-delete-dialog"]'); assert.equal((await app.evaluate(() => globalThis.perfFixture.catalog)).length, 2);
+    await page.click('#model-button'); await page.locator('.model-entry').filter({ has: page.locator('[data-model="tiny:test"]') }).locator('.model-manage summary').click(); await page.click('[data-model-delete="tiny:test"]'); await page.click('#confirm-model-delete'); await poll(page, s => s.model === 'huge:test');
     await page.selectOption('#model-fit-filter', 'all'); await page.locator('[data-model="huge:test"]').waitFor(); assert.equal(await page.locator('.model-row').count(), 1); await page.click('[data-close="models-dialog"]');
     await page.click('#workspace-menu-toggle'); await page.click('#toolkit-button'); await page.fill('#tool-search', 'read_file'); assert.equal(await page.locator('[data-tool]').count(), 1); await page.locator('[data-tool="read_file"]').uncheck(); await poll(page, s => !s.enabledTools.includes('read_file')); await page.click('#tools-enable-all'); await poll(page, s => s.enabledTools.length === require('../app/tools.cjs').definitions.length); await page.fill('#tool-search', '');
     await fs.mkdir(path.join(root, 'artifacts'), { recursive: true }); await page.screenshot({ path: path.join(root, 'artifacts/wixal-toolkit-v07.png') }); await page.click('#close-toolkit'); await page.click('#response-stats'); await page.screenshot({ path: path.join(root, 'artifacts/wixal-performance-v07.png') });
-    await page.reload(); const state = await poll(page, s => s.benchmarks.length === 1); assert.equal(state.usage.length, 3); assert.deepEqual(errors, []);
-    console.log('PASS: @tool keyboard selection and enforced real file read in Chat, reported usage, fit/size/benchmark filters, benchmark cancel, delete cancel/confirm, searchable toolkit/all-enabled and persistence');
+    await page.reload(); const state = await poll(page, s => s.benchmarks.length === 1); assert.equal(state.usage.length, 2); assert.deepEqual(errors, []);
+    console.log('PASS: @tool keyboard selection and real file read in Chat, reported usage, fit/size/benchmark filters, benchmark cancel, delete cancel/confirm, searchable toolkit/all-enabled and persistence');
   } finally { if (app) await app.close(); await fs.rm(temp, { recursive: true, force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

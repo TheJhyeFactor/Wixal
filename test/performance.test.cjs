@@ -28,22 +28,37 @@ test('benchmarks score actual reported tokens in two bounded runs and retain mem
   assert.equal(result.tokensPerSecond, 32); assert.equal(result.totalTokens, 256); assert.equal(result.loadedBytes, 100); assert.equal(result.digest, 'one'); assert.ok(progress.length >= 4);
   await assert.rejects(benchmark({ name: 'fixture' }, 8192, new AbortController().signal, () => {}, async () => new Response('{"message":{"content":"none"},"done":true}')), /no generated tokens/);
 });
-test('explicit tool selection constrains tools, retries skipped calls, records usage and respects declined actions', async t => {
+test('mentions keep enabled preparation tools available and respect declined actions', async t => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-mentions-')); t.after(() => fs.rm(temp, { recursive: true, force: true }));
   const store = new Store(temp); store.addProject(temp); store.data.model = 'fixture'; store.data.mode = 'chat';
-  assert.equal(store.data.enabledTools.length, definitions.length);
+  store.data.enabledTools = ['read_file', 'write_file'];
+  await fs.writeFile(path.join(temp, 'README.md'), 'Read before proposing an edit.');
   assert.deepEqual(requestedTools('@write_file create a file', definitions, store.data.enabledTools, store.project()), ['write_file']);
   assert.throws(() => requestedTools('@read_file read it', definitions, [], store.project()), /switched off/);
   assert.throws(() => requestedTools('@read_file read it', definitions, store.data.enabledTools), /Open a project/);
   let calls = 0, reviews = 0; const requests = [];
-  await runAgent({ store, prompt: '@write_file create declined.txt', details: { capabilities: ['tools'] }, signal: new AbortController().signal,
+  await runAgent({ store, prompt: '@write_file create declined.txt after reading README.md', details: { capabilities: ['tools'] }, signal: new AbortController().signal,
     emit: () => {}, approve: async () => { reviews++; return false; }, fetcher: async (_url, request) => {
       requests.push(JSON.parse(request.body)); calls++;
-      const message = calls === 1 ? { content: 'I did it without a tool.' } : calls === 2 ? { content: '', tool_calls: [{ function: { name: 'write_file', arguments: { path: 'declined.txt', content: 'no' } } }] } : { content: 'The edit was declined.' };
+      const message = calls === 1 ? { content: '', tool_calls: [{ function: { name: 'read_file', arguments: { path: 'README.md' } } }] } : calls === 2 ? { content: '', tool_calls: [{ function: { name: 'write_file', arguments: { path: 'declined.txt', content: 'no' } } }] } : { content: 'The edit was declined.' };
       return new Response(JSON.stringify({ message, done: true, eval_count: 10, prompt_eval_count: 20, eval_duration: 1e9 }));
     } });
-  assert.equal(calls, 3); assert.equal(reviews, 1); assert.deepEqual(requests[0].tools.map(t => t.function.name), ['write_file']);
+  assert.equal(calls, 3); assert.equal(reviews, 1); assert.deepEqual(requests[0].tools.map(t => t.function.name), ['read_file', 'write_file']);
+  assert.match(requests[1].messages.at(-1).content, /Read before/);
   assert.equal(store.data.usage.length, 3); assert.equal(store.data.usage.reduce((n, r) => n + r.inputTokens, 0), 60);
-  assert.ok(!store.session().messages.some(m => m.content?.includes('without a tool'))); await assert.rejects(fs.access(path.join(temp, 'declined.txt')));
-  await assert.rejects(runAgent({ store, prompt: '@list_files inspect', details: { capabilities: ['tools'] }, signal: new AbortController().signal, emit: () => {}, approve: async () => true, fetcher: async () => new Response('{"message":{"content":"No"},"done":true}') }), /did not call/);
+  await assert.rejects(fs.access(path.join(temp, 'declined.txt')));
+});
+test('a missing browser target produces a visible clarification without model inference', async t => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'wixal-clarify-')); t.after(() => fs.rm(temp, { recursive: true, force: true }));
+  const store = new Store(temp); store.data.model = 'fixture'; store.data.mode = 'chat';
+  const events = []; let requests = 0;
+  await runAgent({ store, prompt: '@browser_inspect use this', details: { capabilities: ['tools'] }, signal: new AbortController().signal, emit: e => events.push(e), approve: async () => { assert.fail('No URL was supplied'); }, fetcher: async (_url, request) => {
+    requests++; const body = JSON.parse(request.body);
+    assert.ok(body.tools.some(t => t.function.name === 'browser_inspect'));
+    assert.ok(!body.tools.some(t => t.function.name === 'command_start'));
+    assert.match(body.messages[0].content, /ask one concise question/);
+    return new Response(JSON.stringify({ message: { content: 'Which website URL should I inspect?' }, done: true }));
+  } });
+  assert.equal(requests, 0); assert.equal(store.session().messages.at(-1).content, 'Which website URL should I inspect?');
+  assert.equal(events.filter(e => e.type === 'token').map(e => e.text).join(''), 'Which website URL should I inspect?');
 });

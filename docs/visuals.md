@@ -21,7 +21,7 @@ The README uses the existing GIF for playback on GitHub. A picture source suppli
 
 ## App screenshots and tour
 
-The [screenshots](screenshots) and [app tour](media/workspace-tour.gif) show Wixal 0.6.0 running with a disposable demo project. The tour covers model selection, project files, tool controls, external MCP setup, notes, and the terminal. Captions are added after recording; the tour does not stage model replies or approval results.
+The [screenshots](screenshots) and [app tour](media/workspace-tour.gif) show Wixal 0.7.2 running with a disposable demo project. The tour covers model selection, project files, tool controls, external MCP setup, notes, and the terminal. Captions are added after recording; the tour does not stage model replies or approval results.
 
 To record updated screenshots and a tour:
 
@@ -29,7 +29,7 @@ To record updated screenshots and a tour:
 npm run media
 ```
 
-The capture script needs Ollama running with a model installed. It uses temporary app data and leaves your saved projects and conversations alone.
+The capture script imports an existing Gemma 3 12B model into a disposable Wixal Local library, measures it, and downloads Gemma 3 270M through the app. It uses temporary app data and leaves your saved projects, conversations and original model files alone. Set WIXAL_APP_PATH to the packaged executable to capture the release app.
 
 Keep screenshots current when the interface changes. Check them for private paths, credentials, and personal conversations before publishing.
 

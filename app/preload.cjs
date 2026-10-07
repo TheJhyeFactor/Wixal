@@ -1,9 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const names = ['state', 'copy-text', 'models', 'settings', 'project-open', 'project-select', 'project-files', 'project-read', 'images-open', 'image-remove', 'session-new', 'session-select', 'session-rename', 'memory-add', 'memory-delete', 'chat', 'stop', 'approval', 'terminal-open', 'terminal-write', 'terminal-resize', 'terminal-close', 'reveal-project'];
+const names = ['context-preview', 'memory-update', 'project-memory-settings', 'global-memory-save', 'global-memory-refresh', 'session-handoff', 'state', 'copy-text', 'models', 'settings', 'project-open', 'project-select', 'project-files', 'project-read', 'images-open', 'image-remove', 'session-new', 'session-select', 'session-rename', 'memory-add', 'memory-delete', 'chat', 'stop', 'approval', 'terminal-open', 'terminal-write', 'terminal-resize', 'terminal-close', 'reveal-project'];
+names.push('legal-link', 'legal-document', 'entry-complete', 'account-refresh', 'account-resend', 'account-reset', 'preset-sync', 'setup-complete', 'account-create', 'account-sign-in', 'account-sign-out', 'preset-save', 'preset-apply', 'preset-delete');
 const api = {};
-names.push('layout');
-names.push('model-delete', 'benchmark-start', 'benchmark-cancel', 'runtime-mode', 'runtime-start', 'runtime-stop', 'runtime-imports', 'runtime-import', 'runtime-reveal',
-  'model-pull', 'model-pull-cancel', 'mcp-save', 'mcp-connect', 'mcp-disconnect', 'mcp-delete', 'summary-clear');
+names.push('session-draft', 'layout', 'project-browse', 'project-create-folder');
+names.push('website-plan', 'security-plan', 'security-tools', 'approval-mode', 'model-select', 'model-library', 'model-unload', 'model-delete', 'benchmark-start', 'benchmark-cancel', 'runtime-mode', 'runtime-start', 'runtime-stop', 'runtime-imports', 'runtime-import', 'runtime-reveal',
+  'model-pull', 'model-pull-cancel', 'model-download-action', 'mcp-save', 'mcp-connect', 'mcp-disconnect', 'mcp-delete', 'summary-clear');
 names.push('session-archive', 'session-restore', 'session-delete');
 names.push('provider-key-save', 'provider-key-remove', 'custom-provider-save', 'connections', 'api-key-save', 'api-key-remove', 'chatgpt-sign-in', 'chatgpt-cancel', 'chatgpt-select', 'chatgpt-sign-out', 'chatgpt-plan-notice', 'sharing', 'connection-link', 'task-start', 'task-cancel');
 for (const name of names) api[name] = (...args) => ipcRenderer.invoke(`wixal:${name}`, ...args);

@@ -48,6 +48,7 @@ class Extensions {
     const tool = entry.tools.find(t => t.function.name === name);
     if (signal?.aborted) throw new Error('Stopped');
     if (!args || typeof args !== 'object' || Array.isArray(args) || JSON.stringify(args).length > 100000) throw new Error('Invalid external tool arguments.');
+    require('./tool-validation.cjs').validate(args, tool.function.parameters);
     if (!(await approve({ name: 'external_tool', server: entry.config.name, tool: tool.original, arguments: args }))) return 'User declined this external tool call.';
     if (signal?.aborted) throw new Error('Stopped');
     const result = await entry.client.callTool({ name: tool.original, arguments: args }, undefined, { signal, timeout: 60000 });

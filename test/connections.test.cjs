@@ -41,18 +41,11 @@ test('Responses handles byte-split SSE, preserves reasoning and tool IDs, reject
   await assert.rejects(streamResponses({ ...base, fetcher: async () => new Response('data: {"type":"response.failed","response":{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}}\n\n') }), /usage limit/);
   await assert.rejects(streamResponses({ ...base, fetcher: async () => new Response('data: {"type":"response.incomplete"}\n\n') }), /incomplete/);
 });
-test('cloud agent retains review enforcement and stateless tool history for both providers', async t => {
+test('local agent rejects cloud inference even when historical cloud sharing was enabled', async t => {
   for (const provider of ['openai', 'chatgpt']) {
-    const { store, root } = await setup(t); store.data.provider = provider; store.data.model = 'fixture'; store.data.cloudProjects = [store.data.activeProject];
-    const requests = []; let approvals = 0;
-    await runAgent({ store, prompt: 'Write a file', details: { capabilities: ['tools', 'vision'] }, signal: new AbortController().signal, emit: () => {}, approve: async () => { approvals++; return false; }, cloudToken: async () => 'fixture', fetcher: async (_url, request) => {
-      const body = JSON.parse(request.body); requests.push(body);
-      return events(requests.length === 1 ? [{ type: 'function_call', name: 'write_file', call_id: 'call_write', namespace: provider === 'chatgpt' ? 'wixal' : undefined, arguments: JSON.stringify({ path: 'denied.txt', content: 'no' }) }] : [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Declined.' }] }]);
-    } });
-    assert.equal(approvals, 1); await assert.rejects(fs.access(path.join(root, 'denied.txt')));
-    assert.equal(requests[1].input.find(i => i.type === 'function_call_output').output, 'User declined this file edit.');
-    assert.equal(requests[0].tools[0].type, provider === 'chatgpt' ? 'namespace' : 'function');
-    store.data.cloudProjects = []; await assert.rejects(runAgent({ store, prompt: 'Do it', emit: () => {} }), /cloud context/);
+    const { store } = await setup(t); store.data.provider = provider; store.data.model = 'fixture'; store.data.cloudProjects = [store.data.activeProject];
+    await assert.rejects(runAgent({ store, prompt: 'Do it', emit: () => {}, fetcher: async () => assert.fail('No provider request is allowed') }), /only with its local engine/);
+    assert.equal(store.session().messages.length, 0);
   }
 });
 test('ChatGPT account model catalogs preserve visibility, slugs and ordering', async () => {

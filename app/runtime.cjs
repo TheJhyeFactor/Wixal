@@ -116,6 +116,7 @@ class LocalRuntime {
             const descriptors = [manifest.config, ...(manifest.layers || [])];
             if (!descriptors.length || descriptors.length > 100 || descriptors.some(d => !/^sha256:[a-f0-9]{64}$/.test(d?.digest) || !Number.isSafeInteger(d.size) || d.size < 0)) continue;
             const name = `${parts[1] === 'library' ? '' : parts[1] + '/'}${parts[2]}:${entry.name}`;
+            if (/(?:^|[:.-])cloud(?:$|[:.-])/i.test(name)) continue;
             results.push({ name, bytes: descriptors.reduce((n, d) => n + d.size, 0), components, descriptors, manifest });
           } catch {}
         }

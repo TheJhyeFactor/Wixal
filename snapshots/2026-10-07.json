@@ -1,14 +1,14 @@
 {
-  "collected_at": "2026-10-07T07:22:02.266Z",
+  "collected_at": "2026-10-07T23:36:22.890Z",
   "repository": "TheJhyeFactor/Wixal",
-  "total_release_file_downloads": 17,
+  "total_release_file_downloads": 18,
   "assets": [
     {
       "release": "v0.7.9",
       "prerelease": false,
       "asset_id": 617908007,
       "file": "Wixal-0.7.9-macOS-arm64.dmg",
-      "downloads": 0
+      "downloads": 1
     },
     {
       "release": "v0.7.9",

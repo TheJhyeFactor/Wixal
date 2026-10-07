@@ -1,14 +1,14 @@
 # Wixal GitHub metrics
 
-Collected 2026-10-07T07:22:02.266Z.
+Collected 2026-10-07T23:36:22.890Z.
 
-**Release file downloads: 17**
+**Release file downloads: 18**
 
 DMG and ZIP only. Includes repeated and direct downloads; does not measure unique users, installations, or active app users.
 
 | Release | File | Downloads |
 | --- | --- | ---: |
-| v0.7.9 | Wixal-0.7.9-macOS-arm64.dmg | 0 |
+| v0.7.9 | Wixal-0.7.9-macOS-arm64.dmg | 1 |
 | v0.7.9 | Wixal-0.7.9-macOS-arm64.zip | 0 |
 | v0.7.8 | Wixal-0.7.8-macOS-arm64.dmg | 3 |
 | v0.7.8 | Wixal-0.7.8-macOS-arm64.zip | 2 |

@@ -6,7 +6,7 @@ SwiftUI provides workspace screens, AppKit provides desktop integration and Swif
 
 ## Build and run
 
-Requires Apple Silicon macOS 14+, current Swift 6 command-line tools (the public alpha was built with Swift 6.4), a build-time Python and the staged runtime payload.
+Requires Apple Silicon macOS 14+, Swift 6.4 command-line tools, a build-time Python and the staged runtime payload. The public alpha and native CI use the Xcode 27 toolchain. Older Swift compilers can time out while checking the current SwiftUI views; this build-time requirement does not change the app's macOS 14 deployment target.
 
 ```sh
 python3 -m venv native/.venv

@@ -46,10 +46,13 @@ class StartupRecoveryTests(unittest.TestCase):
                 Store(data)
             elapsed = time.monotonic() - started
             self.assertGreaterEqual(elapsed, 2.5)
-            self.assertLess(elapsed, 6.0)
+            # Some SQLite versions wait twice while changing journal mode;
+            # allow both bounded waits plus shared-runner scheduling overhead.
+            self.assertLess(elapsed, 8.0)
             blocker.execute("ROLLBACK")
             blocker.close()
             restored = Store(data)
+            self.assertEqual(restored.db.execute("PRAGMA busy_timeout").fetchone()[0], 3000)
             self.assertIn("schedules", restored.data)
             restored.close()
 

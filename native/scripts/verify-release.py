@@ -36,6 +36,9 @@ assert any('ActivitySources/' in path for path in manifest)
 assert any('MarkdownSources/' in path for path in manifest)
 assert not list(app.rglob('workspace.sqlite3'))
 assert not list(app.rglob('.env'))
+for dependency in ('mcp','anyio','pydantic_core','starlette'):
+    names=[path for path in (resources/'python-licenses').iterdir() if path.name.lower().replace('-','_')==dependency]
+    assert names and any(path.is_file() for path in names[0].rglob('*')),dependency+' licence is missing'
 files=['Contents/Info.plist','Contents/MacOS/'+info['CFBundleExecutable'],'Contents/Resources/engine/wixal-engine','Contents/Resources/SOURCE_MANIFEST.json']
 hashes={relative:digest(app/relative) for relative in files}
 if args.installed:

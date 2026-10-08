@@ -57,7 +57,13 @@ try:
             agent.write_bytes(plistlib.dumps(content));agent.chmod(0o600)
             result=subprocess.run(["launchctl","bootstrap","gui/"+str(os.getuid()),str(agent)],capture_output=True)
             if result.returncode:raise RuntimeError("Installed app, but background scheduler needs re-enabling in Settings: "+agent.name)
-    report=dict(installed=str(destination),previous=str(backup) if backup.exists() else None,development=args.development,alpha=args.alpha,sha256=evidence)
+    previous=None
+    if backup.exists():
+        archive=backup.with_suffix('.zip')
+        subprocess.run(['ditto','-c','-k','--keepParent',str(backup),str(archive)],check=True)
+        shutil.rmtree(backup)
+        previous=str(archive)
+    report=dict(installed=str(destination),previous=previous,development=args.development,alpha=args.alpha,sha256=evidence)
     artifact=root/"artifacts/native/install-current.json";artifact.parent.mkdir(parents=True,exist_ok=True);artifact.write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
 finally:shutil.rmtree(staging)

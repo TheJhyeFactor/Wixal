@@ -45,4 +45,4 @@ The native engine includes an adapted Hermes duration parser with MIT attributio
 
 ## SHA-256
 
-`cd154995c10a41e5a05fe1c9ab11d4e90c33afad4b09d685cd19b32c81efa224  Wixal-0.7.10-alpha.1-macOS-arm64.zip`
+`44800c10a8a9d392b96208fd0793404a66876fbfc1efd29f8ddeb687194fae4f  Wixal-0.7.10-alpha.1-macOS-arm64.zip`

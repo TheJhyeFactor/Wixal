@@ -98,6 +98,18 @@ pyinstaller_info = importlib.metadata.distribution("pyinstaller")
 for entry in pyinstaller_info.files or []:
     if str(entry).endswith("licenses/COPYING.txt"):
         shutil.copy2(pyinstaller_info.locate_file(entry),resources/"PyInstaller-COPYING.txt")
+# Include dependency licence texts even when a freezing hook omits dist-info.
+for distribution in importlib.metadata.distributions():
+    name=distribution.metadata.get("Name", "dependency")
+    for entry in distribution.files or []:
+        relative=str(entry).partition(".dist-info/")[2]
+        if not relative or ".." in Path(relative).parts:continue
+        if not any(part.upper().startswith(("LICENSE", "COPYING", "NOTICE")) for part in Path(relative).parts):continue
+        source=Path(distribution.locate_file(entry))
+        if source.is_file():
+            target=resources/"python-licenses"/name/relative
+            target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(source,target)
 sys.path.insert(0,str(native/"engine"))
 from wixal.runtime import Runtime
 # Verify the vendor payload before any signing changes its bytes.

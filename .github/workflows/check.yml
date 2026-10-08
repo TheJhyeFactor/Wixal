@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   native:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +21,8 @@ jobs:
         env:
           PYTHONPATH: native/engine:native/tests
         run: python -m unittest discover -s native/tests -v
+      - name: Swift toolchain
+        run: swift --version
       - name: Build native UI
         run: swift build --package-path native --build-system native -c release
       - name: Markdown acceptance

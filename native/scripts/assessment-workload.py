@@ -43,7 +43,7 @@ class Client(real.Client):
 async def main():
     parser = argparse.ArgumentParser(); parser.add_argument('--source', action='store_true'); args = parser.parse_args()
     run = ART/str(time.time_ns()); run.mkdir(); real.STATE = Path(tempfile.mkdtemp(prefix='wix-assess-', dir='/tmp'))
-    helper = ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine'
+    helper = ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'
     report = dict(status='running', started=time.time(), implementation='source' if args.source else 'packaged', helperSHA256=None if args.source else hashlib.sha256(helper.read_bytes()).hexdigest(), workloads=[], scope='real loopback HTTP and production IPC; desktop Stop button excluded')
     report_path = ART/('source.json' if args.source else 'packaged.json')
     def save(): report_path.write_text(json.dumps(report, indent=2))

@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[2]
 
 async def main():
     with tempfile.TemporaryDirectory(prefix="wixal-recovery-acceptance-") as directory:
-        child=await asyncio.create_subprocess_exec(str(ROOT/"release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine"),"--data",directory,"--runtime",str(ROOT/"runtime/ollama"),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL)
+        child=await asyncio.create_subprocess_exec(str(ROOT/"release/native/Wixal.app/Contents/Resources/engine/wixal-engine"),"--data",directory,"--runtime",str(ROOT/"runtime/ollama"),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL)
         async def call(method):
             child.stdin.write((json.dumps(dict(id=method,method=method,params={}))+"\n").encode());await child.stdin.drain()
             while line:=await asyncio.wait_for(child.stdout.readline(),140):

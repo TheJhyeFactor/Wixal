@@ -1,129 +1,68 @@
 <p align="center">
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="assets/motion/logo-reveal-still.png">
-    <img src="assets/motion/logo-reveal.gif" alt="Wixal — the folded W reveals the rest of the name" width="760">
+    <img src="assets/motion/logo-reveal.gif" alt="Wixal" width="760">
   </picture>
 </p>
 
-<h3 align="center">A local AI workspace for your Mac.</h3>
+<h3 align="center">A native local AI workspace for your Mac.</h3>
+
+<p align="center">Chat with local models. Build agents and workflows. Inspect tools, actions and results.</p>
 
 <p align="center">
-  Chat with local models. Work on your project files. Review what the agent does.<br>
-  Files, tools, memory and a terminal — together in one desktop app.
-</p>
-
-<p align="center">
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.9/Wixal-0.7.9-macOS-arm64.dmg"><strong>Download for Mac ↓</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.1/Wixal-0.7.10-alpha.1-macOS-arm64.zip"><strong>Download native alpha ↓</strong></a> &nbsp;·&nbsp;
   <a href="https://thejhyefactor.github.io/Wixal/">Website</a> &nbsp;·&nbsp;
-  <a href="#see-wixal-in-action">Watch the demo</a> &nbsp;·&nbsp;
-  <a href="docs/user-guide.md">User guide</a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.9">Release notes</a>
-  <br>
-  <sub>v0.7.9 &nbsp;·&nbsp; Apple Silicon &nbsp;·&nbsp; macOS 14+</sub>
+  <a href="docs/native-alpha.md">Alpha guide</a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.1">Release notes</a>
+  <br><sub>0.7.10 Alpha 1 · Apple Silicon · macOS 14+ · Ad-hoc signed, not notarised</sub>
 </p>
 
-<p align="center">
-  <a href="#work-on-your-project">Project work</a> &nbsp;/&nbsp;
-  <a href="#run-models-on-your-mac">Local models</a> &nbsp;/&nbsp;
-  <a href="#keep-your-project-context">Memory</a> &nbsp;/&nbsp;
-  <a href="#connect-the-tools-you-need">Tools</a> &nbsp;/&nbsp;
-  <a href="#get-started">Get started</a>
-</p>
+![Native Wixal workspace](website/public/assets/native-workspace.png)
 
----
+## The current app
 
-## See Wixal in action
+The current download is **Wixal.app**, built with SwiftUI, AppKit and a persistent Python engine. The app includes its Python runtime and local Ollama inference engine. No Node, Electron or separately installed Python is required to run it. Model weights are downloaded or imported separately.
 
-From choosing a model to opening project files, reviewing tools and working in the terminal.
+| Workspace | What you can do |
+| --- | --- |
+| Chat and projects | Open a project, ask questions, work with files and inspect returned evidence. |
+| Agents | Save reusable agents, describe tasks, set authority and success criteria, and review run history. The model selects eligible tools. |
+| Workflows | Connect steps with dependencies, execute bounded parallel branches, verify artifacts and inspect failures. |
+| Recurring tasks | Save calendar or interval routines. Optional macOS background execution runs while the Mac is awake; actions requiring review pause. |
+| Skills | Load reusable procedures, save skills and compare candidate versions against explicit evaluation cases. |
+| Tools | Project file operations, command sessions, web/API access, native WebKit browser actions and trusted MCP connections. |
+| Memory | Editable notes, local recall, visible summaries, reviewed memory suggestions and optional encrypted folder sync. |
+| Cybersecurity | Authorised scope, bounded investigations, evidence and findings records. Nmap needs a local installation. |
+| Models and terminal | Local model downloads/imports, external Ollama, usage measurements and an interactive project terminal. |
 
-<p align="center">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="docs/screenshots/workspace.png">
-    <img src="docs/media/workspace-tour.gif" alt="Wixal app tour showing local model selection, project files, tool controls, notes and the terminal" width="960">
-  </picture>
-  <br>
-  <sub>Recorded in Wixal 0.7.3. The current download is 0.7.9.</sub>
-</p>
+## Install
 
-## Work on your project
+1. [Download the alpha ZIP](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.1/Wixal-0.7.10-alpha.1-macOS-arm64.zip), extract it and move **Wixal.app** to **Applications**.
+2. This alpha is **not Developer ID signed or notarised**. If macOS blocks the first launch, review the source and release notes, then use **System Settings → Privacy & Security → Open Anyway**.
+3. Open **Models** and download a tool-capable model, import compatible Ollama weights or configure an external Ollama server.
+4. Open a project with **⌘O**. Start a conversation or open **Agents** to create an agent or workflow.
 
-Open a folder and give the model the context it needs. Read and search files, review exact edits, create directories and run commands with visible output. Use **Chat** for a conversation or **Agent** to work through a task.
+Updates are manual downloads from GitHub. Existing native workspaces remain at `~/Library/Application Support/Wixal Native`. Earlier Electron data can be imported explicitly; original data is retained.
 
-Choose **Review each action** to inspect tool requests before they run, or **Approved all** for enabled tools in a workspace you trust. Stop a running task when you need to.
+## Alpha status
 
-![Wixal project files beside the conversation](docs/screenshots/files.png)
+Real local agent acceptance has passed with **gpt-oss:20b** for implemented workflows, including tools, artifact verification, schedules and reusable skills. This does not establish equal reliability across models or full Hermes parity. The alpha is intended for testing and feedback.
 
-[Project tools and workflows →](docs/tool-workflows.md)
+Remaining work includes remote/off-Mac execution, messaging and voice gateways, broader model/service acceptance, production security evaluation, actual sleep/wake/reboot acceptance, full accessibility coverage, Developer ID signing, notarisation and automatic updates. Encrypted sync still needs a real two-Mac acceptance run; service-specific OAuth and account lifecycle flows need broader live verification.
 
-## Run models on your Mac
+[Native alpha guide](docs/native-alpha.md) · [Engine and build guide](native/README.md) · [Agent acceptance and limitations](native/AGENTS_COMPLETION_ACCEPTANCE_2026-10-08.md)
 
-Download a model inside Wixal or import weights already installed in Ollama. **Wixal Local**, the included engine, runs inference on your Mac. Choose a model marked **Tools** when you want it to use the workspace tools.
+## Build from source
 
-![Wixal local model library and downloads](docs/screenshots/model-downloads.png)
+The canonical development and release source is `native/` on `main`.
 
-No separate Ollama server is required. Model publisher names, licences and capability badges remain visible. Performance depends on your model and Mac.
+```sh
+python3 -m venv native/.venv
+native/.venv/bin/python -m pip install -r native/requirements-build.txt
+./script/build_and_run.sh --package-only
+native/.venv/bin/python native/scripts/install.py --alpha
+```
 
-[Models and performance →](docs/performance.md) · [The included local engine →](docs/local-runtime.md)
+The build is `release/native/Wixal.app`. See the [native guide](native/README.md) for runtime staging, tests and signing options. Earlier Electron source and releases remain available for history and migration; they are not the current download.
 
-## Keep your project context
-
-Save project notes, recall earlier active project chats and carry a visible summary into a fresh conversation. Switch local models in the same chat while retaining readable evidence of earlier work.
-
-![Wixal project memory scopes, saved capacity and editable notes](docs/screenshots/memory-settings.png)
-
-Choose project-only memory, add a small global preference profile, or turn memory off. The optional global profile is editable and limited to 1,200 characters. Guest profiles stay on this Mac; verified account profiles sync explicitly through Firebase.
-
-[Memory, context and model switching →](docs/memory.md)
-
-## Connect the tools you need
-
-| Use Wixal to… | Available in the published app |
-| :--- | :--- |
-| **Work with files and commands** | Search project files, review edits and run commands with output, exit status and cancellation. |
-| **Explore the web** | Search with source links, read rendered pages and review navigation, clicks and ordinary form controls in isolated browser sessions. |
-| **Call APIs** | Read HTTP responses or review JSON writes, with visible results and pagination. |
-| **Add external tools** | Connect trusted local MCP servers and choose which tools the model can call. |
-| **Assess authorised targets** | Run eight Nmap assessment profiles, cancel jobs and save results as evidence. |
-| **Use a terminal** | Open a zsh terminal beside your project and conversation. |
-
-Built-in tools are available without MCP setup. Enable the tools you need in the workspace header, or request a particular tool with **@tool_name**. Browser tools support reviewed browsing and ordinary controls; authenticated computer use has additional limits.
-
-Inference, chats and project notes stay local. Web and MCP tools contact their configured services. Enabled shell commands run with your Mac user’s access.
-
-[Feature guide →](docs/features.md) · [Tool limits →](docs/tool-workflows.md) · [Assessment profiles →](docs/cyber-tools.md)
-
-## Get started
-
-1. **Install Wixal.** [Download the DMG](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.9/Wixal-0.7.9-macOS-arm64.dmg) and drag **Wixal.app** into **Applications**. A [ZIP download](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.9/Wixal-0.7.9-macOS-arm64.zip) is also available.
-2. **Choose a local model.** Open **Models** and download a model, or select **Import & use** for existing Ollama weights.
-3. **Open your project.** Press **⌘O** to choose a folder and **⌘L** to choose a model. Start chatting, or select **Agent** for a task.
-
-Start as a guest or use an optional Wixal account. Local projects, chats, models, memory and tools are available to guests. Verified accounts can explicitly save workspace presets; see [account setup and privacy](docs/accounts.md).
-
-**Installation note:** the preview is not Developer ID signed or notarised. If macOS blocks the first launch, follow the [release installation notes](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.9#install).
-
-## Release and native preview
-
-**The download above is the Electron 0.7.9 app.** It includes the local engine, project tools, browser workflows, memory, accounts and terminal described here. [Read the release notes →](docs/release-0.7.9.md)
-
-A separate **SwiftUI/AppKit app with a Python agent engine** is under development in [`native/`](native/README.md). Its semantic memory, reviewed memory suggestions, encrypted folder sync, remote HTTP MCP, awake closed-app schedules and interactive WebKit features require the native preview. They are not included in the published Electron downloads. The native preview is Apple Silicon macOS-only and development-signed.
-
-<details>
-<summary><strong>Native preview status and remaining work</strong></summary>
-
-See the [implementation status](native/IMPLEMENTATION_STATUS_2026-10-07.md) for verification evidence and the [remaining review](native/REMAINING_REVIEW.md) for limitations. Follow-up work includes fresh account creation/verification, exhaustive VoiceOver and minimum-size coverage, external OAuth providers, two-device cloud-folder delivery, sleeping-Mac wake, other platforms, comparative app performance and Developer ID/notarised distribution. Cloud inference and the external ChatGPT companion remain deferred.
-
-</details>
-
-## Explore further
-
-| Looking for… | Start here |
-| :--- | :--- |
-| Everyday use | [User guide](docs/user-guide.md) · [Feature guide](docs/features.md) |
-| Memory and tools | [Memory](docs/memory.md) · [Tool workflows](docs/tool-workflows.md) · [MCP setup](docs/features.md#external-mcp-tools) |
-| Building or contributing | [Development](docs/development.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) |
-| Native development | [Native README](native/README.md) · [Implementation status](native/IMPLEMENTATION_STATUS_2026-10-07.md) |
-| Bugs and ideas | [Report an issue](https://github.com/TheJhyeFactor/Wixal/issues) |
-| Releases and artwork | [Changelog](CHANGELOG.md) · [Logo and motion](docs/visuals.md) · [Screenshots](docs/screenshots) |
-
-Wixal Local uses pinned open-source Ollama 0.35.1. Upstream engine and model publisher licences are retained. [Third-party notices](THIRD_PARTY_NOTICES.md).
+[Report an issue](https://github.com/TheJhyeFactor/Wixal/issues) · [Contribute](CONTRIBUTING.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)

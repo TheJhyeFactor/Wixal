@@ -2,7 +2,7 @@
 
 A restrained static website that follows the native workspace’s Paper appearance: warm neutral surfaces, quiet dividers, the monospace Wixal wordmark and one actual workspace screenshot. Dark appearance is available in the footer.
 
-Eight pages cover Home, Workspace, Tools, Models, Guides, Download, Privacy and Download stats. Existing routes and product section anchors remain available. The homepage screenshot is labelled **native local development preview**; downloads explicitly identify the released **Electron app**. Update the version in `scripts/build.mjs` only after checking the actual release assets.
+Eight pages cover Home, Workspace, Tools, Models, Guides, Download, Privacy and Download stats. Existing routes and product section anchors remain available. The download is the current **native alpha**, with one ZIP asset and explicit signing/alpha limitations. The build reads the version from `native/engine/wixal/__init__.py`; publish matching GitHub assets before the Pages deployment completes.
 
 ## Develop and check
 
@@ -26,9 +26,9 @@ Deploy only `dist/`. `BASE_PATH` sets the project URL prefix, and `SITE_ORIGIN` 
 
 `scripts/build.mjs` owns templates and copy. `src/styles.css` defines the responsive layout; `src/site.js` handles persistent appearance and the keyboard-accessible image dialog. Escape closes the dialog and focus returns to its trigger. Reduced-motion preferences disable entrance and hover animation.
 
-`public/assets/native-workspace.png` is an actual installed native app capture from a disposable project named Wixal, with no fabricated messages or results. It is the only content image displayed by the site. Older captures remain as source assets but are not displayed. `social-card.svg` is the source for the matching typographic sharing card, rendered to `social-card.png`. Styles, scripts and displayed assets have content-derived cache versions.
+`public/assets/native-workspace.png` is an actual installed native app capture from a disposable project named Wixal, with no fabricated messages or results. It is the only content image displayed by the site. Older Electron captures are retained in Git history. `social-card.svg` is the source for the matching typographic sharing card, rendered to `social-card.png`. Styles, scripts and displayed assets have content-derived cache versions.
 
-The README on GitHub is text focused: current downloads, a capability table, getting-started steps, the native preview distinction and guide links.
+The README on GitHub is text focused: current downloads, a capability table, getting-started steps, native alpha scope and limitations and guide links.
 
 ## Deployment
 

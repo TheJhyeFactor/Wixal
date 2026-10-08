@@ -13,7 +13,7 @@ from pathlib import Path
 native=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(native/"tests"))
 from fixture_server import Fixture
-app=native.parent/"release/native/Wixal Native.app"
+app=native.parent/"release/native/Wixal.app"
 artifact=native.parent/"artifacts/native"
 artifact.mkdir(parents=True,exist_ok=True)
 with tempfile.TemporaryDirectory(prefix="wixal-native-smoke-") as temporary, Fixture() as fixture:

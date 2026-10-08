@@ -12,10 +12,10 @@ spec=importlib.util.spec_from_file_location('real',ROOT/'native/scripts/real-acc
 real.ART=ART;real.STATE=Path.home()/'Library/Application Support/Wixal Native Acceptance/background-workspace'
 MODEL_SOURCE=ROOT/'artifacts/native/real-acceptance/workspace/local-runtime/models'
 async def main():
-    app=Path.home()/'Applications/Wixal Native.app'
+    app=Path.home()/'Applications/Wixal.app'
     helper=app/'Contents/Resources/engine/wixal-engine'
     digest=hashlib.sha256(helper.read_bytes()).hexdigest()
-    assert digest==hashlib.sha256((ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest(),'Install the current local package before running launchd acceptance'
+    assert digest==hashlib.sha256((ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest(),'Install the current local package before running launchd acceptance'
     report=dict(status='running',checks=[],workspace=str(real.STATE),helperSHA256=digest);path=ART/'packaged.json'
     def save():path.write_text(json.dumps(report,indent=2))
     save()

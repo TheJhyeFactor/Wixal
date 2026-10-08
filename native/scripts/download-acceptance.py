@@ -11,7 +11,7 @@ ARTIFACT=ROOT/"artifacts/native/download-acceptance.json"
 
 class Client:
     async def start(self,directory):
-        self.child=await asyncio.create_subprocess_exec(str(ROOT/"release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine"),"--data",str(directory),"--runtime",str(ROOT/"runtime/ollama"),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=16*1024*1024)
+        self.child=await asyncio.create_subprocess_exec(str(ROOT/"release/native/Wixal.app/Contents/Resources/engine/wixal-engine"),"--data",str(directory),"--runtime",str(ROOT/"runtime/ollama"),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=16*1024*1024)
         self.counter=0;self.pending={}
         self.reading=asyncio.create_task(self.read())
         await self.call("hello")

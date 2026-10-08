@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var engine = EngineClient()
     var body: some Scene {
-        WindowGroup("Wixal Native") {
+        WindowGroup("Wixal") {
             WorkspaceView(engine: engine)
                 .frame(minWidth: 920, minHeight: 640)
                 .onAppear {
@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // A deterministic packaged acceptance window, with the same
                     // production minimum and no change to normal saved geometry.
                     if ProcessInfo.processInfo.environment["WIXAL_NATIVE_ACCEPTANCE"] == "1" {
-                        DispatchQueue.main.async { NSApp.windows.first(where:{$0.title=="Wixal Native"})?.setContentSize(NSSize(width:920,height:640)) }
+                        DispatchQueue.main.async { NSApp.windows.first(where:{$0.title=="Wixal"})?.setContentSize(NSSize(width:920,height:640)) }
                     }
                 }
         }

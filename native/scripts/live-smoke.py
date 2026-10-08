@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 root=Path(__file__).resolve().parents[2]
-app=root/'release/native/Wixal Native.app'
+app=root/'release/native/Wixal.app'
 artifact=root/'artifacts/native';artifact.mkdir(parents=True,exist_ok=True)
 
 async def main():

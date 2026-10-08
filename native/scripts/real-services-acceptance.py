@@ -16,7 +16,7 @@ async def main():
  parser=argparse.ArgumentParser();parser.add_argument('--reset-email');parser.add_argument('--target',help='Explicitly authorised public domain; checks only TCP 443 and public GET baseline');args=parser.parse_args()
  # Independent durable acceptance storage, without competing with the model suite.
  module.STATE=ROOT/'artifacts/native/real-services/workspace';module.ART=module.STATE.parent;module.ART.mkdir(parents=True,exist_ok=True)
- helper=ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine'
+ helper=ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'
  report=dict(status='running',helperSHA256=hashlib.sha256(helper.read_bytes()).hexdigest(),started=time.time(),cases={},chatGPTTunnel='Deferred by user; no credential created and no external connection claimed')
  destination=module.ART/'packaged.json'
  def record(name,data):
@@ -54,7 +54,7 @@ async def main():
   state=await client.state();project=next(p for p in state['projects'] if p['root']==str(ROOT))
   await client.call('companion-settings',dict(sharedProjects=[project['id']],shareMemory=False))
   companion=await client.call('companion-start')
-  child=await asyncio.create_subprocess_exec(str(ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine'),'--companion',companion['connectionFile'],stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=4*1024*1024)
+  child=await asyncio.create_subprocess_exec(str(ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'),'--companion',companion['connectionFile'],stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=4*1024*1024)
   counter=0
   async def mcp(method,params):
    nonlocal counter

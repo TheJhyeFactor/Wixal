@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.10 Alpha 1 — 2026-10-08
+
+- Publish the native SwiftUI/AppKit app as the canonical Wixal download, with a bundled Python engine and local inference runner.
+- Add reusable agents, model-selected tools, workflows, recurring tasks, run history, artifact verification and skill evaluation.
+- Include native memory, settings and cybersecurity workspace improvements.
+- Consolidate the local app/build path, preserve native storage and update the website, source guide and native CI.
+- This is an ad-hoc signed, non-notarised alpha. Updates are manual; see docs/native-alpha.md for acceptance scope and known limitations.
+
+
 ## 0.7.8 — 6 October 2026
 
 - Added isolated Chromium browser sessions with reviewed navigation, fresh control refs, ordinary clicks/text/select actions, delayed-content waits, pagination and cleanup.

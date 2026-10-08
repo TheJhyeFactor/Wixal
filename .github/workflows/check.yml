@@ -1,32 +1,28 @@
-name: Check
+name: Native alpha checks
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
 jobs:
-  core:
-    runs-on: macos-latest
-    timeout-minutes: 5
+  native:
+    runs-on: macos-14
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run check
-      - run: npm test
-  browser:
-    runs-on: macos-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: node node_modules/electron/install.js
-      - run: npm run test:browser
-      - run: npm run test:browser-regression
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: native/requirements-build.txt
+      - run: python -m pip install -r native/requirements-build.txt
+      - name: Engine regression tests
+        env:
+          PYTHONPATH: native/engine:native/tests
+        run: python -m unittest discover -s native/tests -v
+      - name: Build native UI
+        run: swift build --package-path native --build-system native -c release
+      - name: Markdown acceptance
+        run: |
+          swift run --package-path native --build-system native -c release MarkdownAcceptance

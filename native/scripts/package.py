@@ -1,4 +1,4 @@
-"""Build an independent Finder-launchable arm64 app; never replace Electron."""
+"""Build the canonical native macOS app, with explicit alpha or distribution signing."""
 import argparse
 import hashlib
 import json
@@ -12,35 +12,40 @@ from pathlib import Path
 
 native = Path(__file__).resolve().parents[1]
 root = native.parent
-app = root/"release/native/Wixal Native.app"
+app = root/"release/native/Wixal.app"
 
 parser=argparse.ArgumentParser(description="Build a native app; distribution requires Developer ID and notarisation.")
 parser.add_argument("--development",action="store_true",help="Explicit local preview with development signing; not distributable")
+parser.add_argument("--alpha",action="store_true",help="Public alpha with ad-hoc signing and explicit non-notarised release metadata")
 parser.add_argument("--identity",help="Developer ID Application identity")
 parser.add_argument("--notary-profile",help="Stored notarytool Keychain profile")
 parser.add_argument("--output",type=Path,help="Independent app destination for isolated validation")
-parser.add_argument("--display-name",default="Wixal Native")
-parser.add_argument("--bundle-identifier",default="app.wixal.native.preview")
+parser.add_argument("--display-name",default="Wixal")
+parser.add_argument("--bundle-identifier",default="app.wixal.native.preview",help="Retains the native preview identity and saved macOS preferences")
 parser.add_argument("--executable-name",default="WixalNative")
 parser.add_argument("--preview-data",type=Path,help="Development preview workspace retained across Finder launches")
 parser.add_argument("--preview-endpoint",help="Loopback model endpoint for an isolated preview")
 options=parser.parse_args()
+sys.path.insert(0,str(native/"engine"))
+from wixal import VERSION
+if options.alpha and options.development:parser.error("Choose --alpha or --development")
+if options.alpha and "-alpha." not in VERSION:parser.error("--alpha requires an alpha engine version")
 if not options.executable_name.isalnum():parser.error("Use an alphanumeric executable name")
 if (options.preview_data or options.preview_endpoint) and not options.development:parser.error("Preview configuration requires --development")
 if options.preview_endpoint and not options.preview_endpoint.startswith(("http://127.0.0.1:","http://localhost:")):parser.error("Preview endpoint must use loopback")
 if options.output:app=options.output.expanduser().resolve()
-if not options.development:
+if not (options.development or options.alpha):
     if not options.identity or not options.identity.startswith("Developer ID Application:") or not options.notary_profile:
-        parser.error("Distribution requires --identity 'Developer ID Application: …' and --notary-profile. Use --development only for local validation.")
+        parser.error("Notarised distribution requires --identity and --notary-profile. Choose --alpha for an explicitly non-notarised alpha, or --development for local validation.")
     identities=subprocess.check_output(["security","find-identity","-v","-p","codesigning"],text=True)
     if options.identity not in identities:parser.error("The requested Developer ID identity is not available in this Mac's Keychain")
-elif options.identity or options.notary_profile:parser.error("Development and distribution options cannot be combined")
+elif options.identity or options.notary_profile:parser.error("Ad-hoc and Developer ID signing options cannot be combined")
 destination=app
 destination.parent.mkdir(parents=True,exist_ok=True)
 staging=Path(tempfile.mkdtemp(prefix="wixal-native-package-",dir=destination.parent))
 app=staging/app.name
 
-source_paths=list((native/"Sources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))
+source_paths=sorted(list((native/"Sources").rglob("*.swift"))+list((native/"ActivitySources").rglob("*.swift"))+list((native/"MarkdownSources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))+list((native/"engine/wixal/resources").rglob("*.json"))+[native/"Package.swift",native/"Package.resolved",native/"requirements-build.txt",Path(__file__).resolve()])
 source_hashes={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
 
 def run(*args):
@@ -65,7 +70,7 @@ shutil.copytree(root/"assets/audio",resources/"audio",symlinks=True)
 if (root/"assets/Wixal.icns").exists():shutil.copy2(root/"assets/Wixal.icns",resources/"Wixal.icns")
 with (app/"Contents/Info.plist").open("wb") as file:
     plistlib.dump(dict(CFBundleExecutable=options.executable_name,CFBundleIdentifier=options.bundle_identifier,CFBundleName=options.display_name,
-        CFBundleDisplayName=options.display_name,CFBundlePackageType="APPL",CFBundleShortVersionString="0.7.8",CFBundleVersion="1",
+        CFBundleDisplayName=options.display_name,CFBundlePackageType="APPL",CFBundleShortVersionString=VERSION.split("-")[0],CFBundleVersion="1",WixalReleaseVersion=VERSION,WixalReleaseChannel="alpha" if options.alpha else "development" if options.development else "release",
         CFBundleIconFile="Wixal.icns",LSMinimumSystemVersion="14.0",LSApplicationCategoryType="public.app-category.developer-tools",
         NSHighResolutionCapable=True,NSAppTransportSecurity=dict(NSAllowsArbitraryLoads=True),
         NSHumanReadableCopyright="Wixal. Includes SwiftTerm and Ollama; see bundled notices."),file)
@@ -98,8 +103,9 @@ from wixal.runtime import Runtime
 # Verify the vendor payload before any signing changes its bytes.
 with tempfile.TemporaryDirectory() as directory:
     Runtime(directory,resources/"ollama").verify()
-if options.development:
-    (resources/"BUILD_MODE.txt").write_text("Local development preview. Not Developer ID signed or notarised.\n")
+if options.development or options.alpha:
+    (resources/"BUILD_MODE.txt").write_text("Public native alpha. Ad-hoc signed; not Developer ID signed or notarised.\n" if options.alpha else "Local development preview. Not Developer ID signed or notarised.\n")
+    (resources/"RELEASE.json").write_text(json.dumps(dict(version=VERSION,channel="alpha" if options.alpha else "development",architecture="arm64",minimumMacOS="14.0",developerIDSigned=False,notarised=False),indent=2))
     run("codesign","--force","--deep","--sign","-",app)
 else:
     magic={bytes.fromhex(h) for h in ("feedface","cefaedfe","feedfacf","cffaedfe","cafebabe","bebafeca","cafebabf","bfbafeca")}
@@ -118,7 +124,7 @@ else:
     run("codesign","--force","--options","runtime","--timestamp","--sign",options.identity,app)
 run("codesign","--verify","--deep","--strict",app)
 with tempfile.TemporaryDirectory() as directory:Runtime(directory,resources/"ollama").verify()
-if not options.development:
+if not (options.development or options.alpha):
     archive=staging/"Wixal-Native.zip"
     run("ditto","-c","-k","--keepParent",app,archive)
     notarisation=json.loads(subprocess.check_output(["xcrun","notarytool","submit",str(archive),"--keychain-profile",options.notary_profile,"--wait","--output-format","json"],text=True))

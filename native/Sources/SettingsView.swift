@@ -256,8 +256,9 @@ struct SettingsView: View {
                 SettingsCard { ForEach([("New conversation","⌘ N"),("Open project","⌘ O"),("Settings","⌘ ,"),("Find a command","⌘ K"),("Models","⌘ L"),("Project files","⌘ ⇧ F"),("Tool kit","⌘ ⇧ T"),("Terminal","⌘ J")],id:\.0) { shortcut in HStack { Text(shortcut.0); Spacer(); Text(shortcut.1).foregroundStyle(colours.muted) }.wixalFont(size:11).padding(.vertical,7) } }
             }
             WixalSection(title:"About Wixal") {
-                Text("Wixal Native · \(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "Local preview")").wixalFont(size:12)
-                Text("Local development preview. Public update delivery is not configured.").wixalFont(size:11).foregroundStyle(colours.muted)
+                Text("Wixal · \(Bundle.main.object(forInfoDictionaryKey:"WixalReleaseVersion") as? String ?? "Local preview")").wixalFont(size:12)
+                Text("Native alpha. Updates are available from GitHub; install them manually.").wixalFont(size:11).foregroundStyle(colours.muted)
+                Link("Releases ↗",destination:URL(string:"https://github.com/TheJhyeFactor/Wixal/releases")!).wixalFont(size:11)
                 ViewThatFits(in:.horizontal) { HStack { aboutButtons }; VStack(alignment:.leading) { aboutButtons } }
             }
         }

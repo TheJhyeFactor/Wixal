@@ -16,7 +16,7 @@ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 async def main():
     client=module.Client(False)
-    report=dict(status='running',helperSHA256=hashlib.sha256((module.ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest())
+    report=dict(status='running',helperSHA256=hashlib.sha256((module.ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest())
     try:
         await client.start();await client.call('project-add',dict(root=str(module.ROOT)))
         model=await client.model('qwen3:1.7b');await client.call('session-new')

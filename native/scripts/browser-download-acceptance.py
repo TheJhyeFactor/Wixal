@@ -43,7 +43,7 @@ async def main(args):
         raise RuntimeError('Engine disconnected')
     async def tool(name,arguments):return await call('tool',dict(name=name,arguments=arguments))
     report=dict(status='running',scope='actual installed WebKit HTTP downloads with visible destination and cancellation controls',checks=[])
-    app=Path.home()/'Applications/Wixal Native.app'
+    app=Path.home()/'Applications/Wixal.app'
     report['appSHA256']=hashlib.sha256((app/'Contents/MacOS/WixalNative').read_bytes()).hexdigest()
     report['helperSHA256']=hashlib.sha256((app/'Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest()
     original=None;page=None

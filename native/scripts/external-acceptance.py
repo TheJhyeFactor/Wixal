@@ -30,7 +30,7 @@ async def main():
         print(name+': '+json.dumps(value),flush=True)
     with tempfile.TemporaryDirectory(prefix='wixal-external-acceptance-') as directory:
         project=Path(directory)/'project';project.mkdir()
-        child=await asyncio.create_subprocess_exec(str(ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine'),'--data',str(Path(directory)/'data'),'--runtime',str(ROOT/'runtime/ollama'),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=16*1024*1024)
+        child=await asyncio.create_subprocess_exec(str(ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'),'--data',str(Path(directory)/'data'),'--runtime',str(ROOT/'runtime/ollama'),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=16*1024*1024)
         counter=0;events=[]
         async def call(method,params=None):
             nonlocal counter

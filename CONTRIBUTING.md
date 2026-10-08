@@ -1,28 +1,23 @@
 # Working on Wixal
 
-Keep it focused. Fix a real problem, show what changed and include how you checked it.
+The current app is the native alpha in `native/` on `main`. Build and validate that app when changing the interface or engine. Earlier Electron source is retained for history and migration.
 
 ## Before opening a PR
 
-Run `npm test` and `npm run check`. If you touch the interface, terminal or agent loop, run the app smoke check too. Changes to native modules need a packaged app check; a successful build alone won’t tell you whether the terminal works.
+Run the engine regression suite and the Markdown/activity acceptance commands in [the native guide](native/README.md). Native engine and UI changes need a packaged app check: a successful compile alone does not establish runtime behaviour. Real model acceptance needs an actual local model and isolated workspace; keep that evidence separate from fixtures.
 
-Add a test when behaviour or permissions change. Small wording and styling changes just need a real visual check.
+For website changes run `BASE_PATH=/Wixal/ npm --prefix website run build` and `BASE_PATH=/Wixal/ npm --prefix website run check`. Keep optional analytics behind consent.
+
+Add meaningful regression tests when behaviour or permissions change. Small wording and styling changes need an actual visual check.
 
 ## Interface and copy
 
-Use plain wording. Say what the control does. Keep the dark workspace, restrained pink accents and W identity consistent. Screens should help someone do the next thing, without slogans or pretend features.
+Use plain wording. Describe what a control does. Preserve the workspace’s themes, restrained accents and W identity. Use screenshots from the running app with a safe project; exclude personal files, credentials and private conversations.
 
-Screenshots should come from the running app with a test project. Keep personal files, credentials and private conversations out of them.
+## Engine boundaries
 
-## Boundaries to keep
+Validate IPC and scope in the controller. File tools retain selected-project, credential and symlink checks. Agents choose eligible tools under their authority policy; review decisions are enforced in the engine. Do not claim a command ran or a file changed without returned evidence. Keep memories visible and editable. Do not automatically replay uncertain side effects.
 
-- Privileged work stays in the main process, behind validated IPC.
-- Read and write tools stay inside the selected project and keep credential and symlink checks.
-- Writes and agent commands need review every time.
-- Tool preferences are enforced in the controller, not just in the UI.
-- Don’t claim a command ran or a file changed unless its result proves it.
-- Keep saved memories explicit and visible.
+## Reports
 
-## Bug reports
-
-Include your macOS version, machine architecture, Wixal version, Ollama version and model name. Tell us what you did, what you expected and what actually happened. A small reproduction is useful. Remove private paths and content before sharing logs.
+Include macOS, machine architecture, alpha version, model name, expected behaviour and a small reproduction. Remove private content and credentials from logs.

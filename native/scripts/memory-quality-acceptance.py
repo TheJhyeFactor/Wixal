@@ -14,7 +14,7 @@ async def main():
     options=argparse.ArgumentParser();options.add_argument('--packaged',action='store_true');opts=options.parse_args()
     client=real.Client(not opts.packaged);report=dict(status='running',cases=[]);path=ART/('packaged.json' if opts.packaged else 'source.json')
     report['implementation']='packaged' if opts.packaged else 'source'
-    report['helperSHA256']=hashlib.sha256((ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest() if opts.packaged else None
+    report['helperSHA256']=hashlib.sha256((ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest() if opts.packaged else None
     def save():path.write_text(json.dumps(report,indent=2))
     save()
     try:

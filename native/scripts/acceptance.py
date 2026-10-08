@@ -30,7 +30,7 @@ async def main():
     with tempfile.TemporaryDirectory(prefix="wixal-acceptance-") as directory:
         project=Path(directory)/"project";project.mkdir()
         runtime=ROOT/"runtime/ollama"
-        command=[sys.executable,str(ROOT/"native/engine/engine_main.py")] if args.source else [str(ROOT/"release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine")]
+        command=[sys.executable,str(ROOT/"native/engine/engine_main.py")] if args.source else [str(ROOT/"release/native/Wixal.app/Contents/Resources/engine/wixal-engine")]
         stderr=(ROOT/"artifacts/native/acceptance-stderr.log").open("w")
         child=await asyncio.create_subprocess_exec(*command,"--data",str(Path(directory)/"data"),"--runtime",str(runtime),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=stderr,limit=16*1024*1024)
         pending={};counter=0;events=[]

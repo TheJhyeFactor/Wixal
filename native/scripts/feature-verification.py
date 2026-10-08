@@ -9,8 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ART = ROOT / 'artifacts/native'
-HELPER = ROOT / 'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine'
-INSTALLED = Path.home() / 'Applications/Wixal Native.app/Contents/Resources/engine/wixal-engine'
+HELPER = ROOT / 'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'
+INSTALLED = Path.home() / 'Applications/Wixal.app/Contents/Resources/engine/wixal-engine'
 
 
 def digest(path):

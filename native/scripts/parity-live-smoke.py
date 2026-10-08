@@ -2,7 +2,7 @@
 import asyncio, base64, json, os, struct, tempfile, time, zlib
 from pathlib import Path
 root=Path(__file__).resolve().parents[2]
-app=root/'release/native/Wixal Native.app'
+app=root/'release/native/Wixal.app'
 artifact=root/'artifacts/native/parity-live.json'
 
 def red_image():

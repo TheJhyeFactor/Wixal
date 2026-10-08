@@ -6,6 +6,10 @@ The payload includes native inference and supporting libraries from llama.cpp, M
 
 The Wixal Local name refers to Wixal's app-managed experience. Upstream software remains attributed to its authors. Model weights are separate downloads or explicit local imports and are not bundled into Wixal's app releases. Every model retains its publisher's name and license; Ollama's software license does not replace a model's license.
 
-Electron, node-pty, xterm, the MCP SDK and other npm dependencies retain the license files supplied in their distributed packages. See `package-lock.json` for the dependency versions used by the app.
+The current native app includes SwiftTerm (MIT), Swift Markdown (Apache 2.0 with Swift runtime exception), swift-cmark and a bundled Python runtime (PSF), with their notices in Contents/Resources. Build-time PyInstaller carries its licence and bootloader exception. The Python MCP SDK and cryptography dependencies retain their distributed licence files. Native versions are pinned in native/Package.resolved and native/requirements-build.txt.
+
+An adapted Hermes `parse_duration` function is included under the Nous Research MIT licence. See [the attribution and pinned source revision](native/third_party/hermes/NOTICE.md) and [the licence](native/third_party/hermes/LICENSE). Both are included in the app.
+
+Earlier Electron releases include Electron, node-pty, xterm and npm dependencies with their distributed notices. Their versions remain recorded in package-lock.json.
 
 Supplemental JSON and Metal C++ notices from the Ollama 0.35.1 macOS application are retained in `resources/notices` and copied into each staged payload. They accompany the corresponding upstream components; the verified CLI archive already includes the aggregate llama.cpp vendor notices.

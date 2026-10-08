@@ -20,7 +20,7 @@ STATE=ART/'workspace'
 
 class Client:
     def __init__(self,source,helper=None,payload=None):
-        self.helper=helper or ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine'
+        self.helper=helper or ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'
         self.payload=payload or ROOT/'runtime/ollama'
         self.source=source;self.pending={};self.counter=0;self.events=[];self.reviews=[];self.allowed={'read_file','run_command','command_start','command_read','save_memory','forget_memory'}
     async def start(self):
@@ -100,7 +100,7 @@ async def main():
     parser=argparse.ArgumentParser();parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='qwen3:1.7b');parser.add_argument('--plain-model',default='gemma3:1b');options=parser.parse_args()
     ART.mkdir(parents=True,exist_ok=True)
     report_path=ART/('source.json' if options.source else 'packaged.json')
-    helper=ROOT/'release/native/Wixal Native.app/Contents/Resources/engine/wixal-engine'
+    helper=ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'
     report=dict(status='running',helperSHA256=hashlib.sha256(helper.read_bytes()).hexdigest() if not options.source else None,implementation='source' if options.source else 'packaged',started=time.time(),cases={},sources={})
     for relative in ('native/README.md','native/Package.swift','native/engine/wixal/agent.py','native/engine/wixal/service.py','package.json'):
         report['sources'][relative]=hashlib.sha256((ROOT/relative).read_bytes()).hexdigest()

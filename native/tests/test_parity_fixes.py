@@ -57,17 +57,17 @@ class ParityFixes(unittest.IsolatedAsyncioTestCase):
             execute.assert_not_awaited()
 
     async def test_mentions_validate_and_keep_followup_tools(self):
-        # Chat keeps explicit legacy capabilities; Agent mode discovers tools automatically.
+        # Chat discovers tools automatically; model and project prerequisites still apply.
         self.store.data['mode']='chat'
         self.store.data['enabledTools']=['workspace_info','load_skill']
         with patch.object(self.service.runtime,'catalog',AsyncMock(return_value=[dict(name='plain',capabilities=[])])):
             with self.assertRaisesRegex(ValueError,'conversation only'):await self.service.dispatch('chat',dict(text='Use @workspace_info.'))
-            with self.assertRaisesRegex(ValueError,'switched off'):await self.service.dispatch('chat',dict(text='Use @read_file'))
+            with self.assertRaisesRegex(ValueError,'Open a project folder'):await self.service.dispatch('chat',dict(text='Use @read_file'))
         captured=[]
         async def stream(endpoint,body,emit):captured.append(body);return dict(role='assistant',content='Done')
         with patch.object(self.service.runtime,'catalog',AsyncMock(return_value=[dict(name='plain',capabilities=['tools'])])),patch.object(self.service.runtime,'endpoint',AsyncMock(return_value='http://127.0.0.1:1')),patch('wixal.agent.stream_chat',stream):
             await self.service.dispatch('chat',dict(text='Use @workspace_info, please @someone'))
-        self.assertEqual({t['function']['name'] for t in captured[0]['tools']},{'workspace_info','load_skill'})
+        self.assertEqual({t['function']['name'] for t in captured[0]['tools']},{'workspace_info','load_skill','recall_memory'})
         self.assertIn('explicitly requested',captured[0]['messages'][0]['content'])
 
     async def test_readiness_does_not_depend_on_discovery_permission(self):

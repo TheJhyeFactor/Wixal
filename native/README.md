@@ -1,6 +1,6 @@
 # Wixal native alpha
 
-**0.7.10 Alpha 1** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.1); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
+**0.7.10 Alpha 2** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.2); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 

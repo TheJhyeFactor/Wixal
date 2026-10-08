@@ -18,7 +18,7 @@ struct ToolsDrawer:View {
     @ViewState<String> private var prefix="website-assessment"
     @ViewState<Bool?> private var nmap=nil
     @ViewState<String> private var readinessError=""
-    private var automaticSelection:Bool{textValue(engine.state["mode"])=="agent" && !cybersecurity}
+    private var automaticSelection:Bool{!cybersecurity}
     private func enabled(_ name:String)->Bool { (engine.state["enabledTools"] as? [String] ?? []).contains(name) }
     private var readinessLabel:String { if !readinessError.isEmpty { return "Readiness unavailable: " + readinessError }; guard let nmap else { return "Checking Nmap…" }; return nmap ? (enabled("security_tools") ? "Nmap ready · results return to this chat" : "Nmap ready · discovery tool disabled") : "Nmap missing · install with brew install nmap" }
     private func refreshReadiness() async { nmap=nil; readinessError=""; do { let result=try await engine.call("security-readiness") as? [String:Any] ?? [:]; nmap=result["installed"] as? Bool } catch { readinessError=error.localizedDescription } }
@@ -26,7 +26,7 @@ struct ToolsDrawer:View {
     private var filtered:[[String:Any]]{engine.tools.filter{let function=$0["function"] as? [String:Any] ?? [:],name=textValue(function["name"]);return (category=="All" || group(name)==category) && (query.isEmpty || name.localizedCaseInsensitiveContains(query) || textValue(function["description"]).localizedCaseInsensitiveContains(query))}}
     var body:some View {
         VStack(alignment:.leading,spacing:16){
-            HStack{VStack(alignment:.leading,spacing:6){Text(cybersecurity ? "SECURITY" : "AGENTS").wixalFont(size:9,design:.monospaced).tracking(1).foregroundStyle(theme.muted);Text(cybersecurity ? "Cybersecurity" : automaticSelection ? "Agent capabilities" : "Tool permissions").wixalFont(size:21,weight:.medium)};Spacer();if !cybersecurity{Button(action:close){Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel("Close tools")}}
+            HStack{VStack(alignment:.leading,spacing:6){Text(cybersecurity ? "SECURITY" : textValue(engine.state["mode"]) == "chat" ? "CHAT" : "AGENTS").wixalFont(size:9,design:.monospaced).tracking(1).foregroundStyle(theme.muted);Text(cybersecurity ? "Cybersecurity" : "Available tools").wixalFont(size:21,weight:.medium)};Spacer();if !cybersecurity{Button(action:close){Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel("Close tools")}}
             if engine.busy && !engine.assessmentProgress.isEmpty {
                 HStack(alignment:.top){ProgressView().controlSize(.small);VStack(alignment:.leading,spacing:4){Text(textValue(engine.assessmentProgress["state"]).capitalized);if let completed=engine.assessmentProgress["completed"] as? Int{Text("\(completed) checks completed").foregroundStyle(theme.muted)}};Spacer();Button(textValue(engine.assessmentProgress["state"]) == "stopping" ? "Stopping…" : "Stop assessment"){engine.cancelAssessment()}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(textValue(engine.assessmentProgress["state"]) == "stopping")}.wixalFont(size:11).accessibilityElement(children:.contain).accessibilityLabel("Assessment progress")
             }
@@ -35,7 +35,7 @@ struct ToolsDrawer:View {
                 if !cybersecurity{Text(automaticSelection ? "The model discovers these tools and chooses how to use them. Task scope and action review control effects." : "Enabled tools are available to models marked Tools. Manual assessments run without model inference. Each action uses its workspace’s review setting.").wixalFont(size:11).foregroundStyle(theme.muted).lineSpacing(4)
                 TextField("Find a tool…",text:$query).wixalField()
                 Picker("Category",selection:$category){ForEach(["All","Project","Commands","Network","Web","Memory & skills","Connected"],id:\.self){Text($0)}}.wixalFont(size:11)
-                if automaticSelection{Text("\(engine.tools.count) discovered capabilities · model chooses tools").wixalFont(size:10).foregroundStyle(theme.muted)}else{HStack{Text("\((engine.state["enabledTools"] as? [String] ?? []).count) enabled").wixalFont(size:10).foregroundStyle(theme.muted);Spacer();Button("Disable all"){engine.action("settings",["enabledTools":[]])}.buttonStyle(.plain).wixalFont(size:10).disabled(engine.busy);Button("Enable all"){engine.action("settings",["enabledTools":engine.tools.compactMap{($0["function"] as? [String:Any])?["name"] as? String}])}.buttonStyle(.plain).wixalFont(size:10).disabled(engine.busy)}}
+                Text("\(engine.tools.count) discovered capabilities · model chooses tools").wixalFont(size:10).foregroundStyle(theme.muted)
                 ForEach(Array(filtered.enumerated()),id:\.offset){_,tool in toolRow(tool)}
                 if filtered.isEmpty{Text("No matching tools.").wixalFont(size:11).foregroundStyle(theme.muted)}
                 }

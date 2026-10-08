@@ -25,7 +25,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
     if load_name and load_name not in names: raise ValueError('That tool is not enabled or available in this workspace')
     if load_category and load_category not in CATEGORIES: raise ValueError('Choose a supported tool category')
     if len(available) <= 8 and not load_name and not load_category: return available
-    chosen = {'workspace_info', 'recall_memory', 'save_memory', 'load_skill', *requested}
+    chosen = {'workspace_info', 'recall_memory', 'load_skill', *requested}
     if re.search(r'\b(workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('workflow_manage')
     if re.search(r'\b(schedule|scheduled|recurring|routine|routines|calendar)\b',prompt,re.I):chosen.add('schedule_manage')
     if re.search(r'\b(skill|skills|procedure|procedures)\b',prompt,re.I):
@@ -122,5 +122,5 @@ def fit_request(messages, definitions, limit, output_reserve=None):
         if count()<=ceiling:break
         for index in tools:messages[index]['content']=bounded_evidence(messages[index].get('content',''),allowance if index==tools[-1] else max(250,allowance//3))
     if count()>ceiling:
-        raise ValueError('This message, images, memory and selected tools exceed the safe context budget. Shorten the message, remove attachments, disable unused tools or choose a larger supported context.')
+        raise ValueError('This message, images, memory and selected tools exceed the safe context budget. Shorten the message, remove attachments or choose a larger supported context.')
     return messages,reserve,omitted

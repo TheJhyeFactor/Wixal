@@ -25,7 +25,7 @@ struct ChatView: View {
     @ViewState<String> private var draftSession=""
     @ViewState<Task<Void,Never>?> private var draftTask=nil
     private var sessionID:String{textValue(engine.state["activeSession"])}
-    private var enabledToolNames:[String]{engine.state["enabledTools"] as? [String] ?? []}
+    private var availableToolNames:[String]{engine.tools.compactMap{($0["function"] as? [String:Any])?["name"] as? String}}
     @ViewState private var caret=NSRange(location:0,length:0)
     @ViewState private var mentionIndex=0
     @ViewState private var mentionsDismissed=false
@@ -35,7 +35,7 @@ struct ChatView: View {
         return (try? NSRegularExpression(pattern:"(?:^|\\s)(@[a-zA-Z0-9_]*)$")).flatMap{$0.firstMatch(in:prefix,range:NSRange(location:0,length:(prefix as NSString).length))?.range(at:1)}
     }
     private var mentionQuery:String?{guard let range=mentionRange else{return nil};return String((prompt as NSString).substring(with:range).dropFirst()).lowercased()}
-    private var mentionNames:[String]{guard let query=mentionQuery,engine.supportsTools else{return []};return enabledToolNames.filter{(engine.project != nil || !($0.hasPrefix("website_") || $0.hasPrefix("network_") || $0.hasPrefix("command_") || ["list_files","read_file","search_files","write_file","edit_file","make_directory","run_command"].contains($0))) && (query.isEmpty || $0.lowercased().contains(query))}.sorted()}
+    private var mentionNames:[String]{guard let query=mentionQuery,engine.supportsTools else{return []};return availableToolNames.filter{(engine.project != nil || !($0.hasPrefix("website_") || $0.hasPrefix("network_") || $0.hasPrefix("command_") || ["list_files","read_file","search_files","write_file","edit_file","make_directory","run_command","delegate_task"].contains($0))) && (query.isEmpty || $0.lowercased().contains(query))}.sorted()}
     private func insertMention(_ name:String){guard let range=mentionRange else{return};let value="@\(name) ";prompt=(prompt as NSString).replacingCharacters(in:range,with:value);caret=NSRange(location:range.location+(value as NSString).length,length:0);mentionIndex=0}
     private func handleMentionKey(_ code:UInt16)->Bool {
         guard mentionQuery != nil,!mentionNames.isEmpty else{return false}
@@ -73,7 +73,7 @@ struct ChatView: View {
                             welcome.frame(maxWidth:776).padding(.horizontal,32)
                             composer(compact:geometry.size.width<780).padding(.top,24).frame(maxWidth:840)
                             starters.frame(maxWidth:776).padding(.horizontal,32).padding(.top,18)
-                            HStack(spacing:9){Button("Open a project folder ↗",action:engine.pickProject);if agentMode{Text("·")};if agentMode{Button("Tool permissions ↗",action:openTools)}}.buttonStyle(.plain).wixalFont(size:10).foregroundStyle(theme.muted).padding(.top,18)
+                            HStack(spacing:9){Button("Open a project folder ↗",action:engine.pickProject);Text("·");Button("Available tools ↗",action:openTools)}.buttonStyle(.plain).wixalFont(size:10).foregroundStyle(theme.muted).padding(.top,18)
                             Spacer(minLength:20)
                         }.frame(minHeight:geometry.size.height).frame(maxWidth:.infinity)
                     }
@@ -160,13 +160,13 @@ struct ChatView: View {
                     Button(action:engine.busy ? engine.stop : send){Image(systemName:engine.busy ? "stop.fill" : "arrow.up").wixalFont(size:19,weight:.medium).foregroundStyle(theme.light ? theme.raised : theme.background).frame(width:32,height:32).background(theme.accent,in:RoundedRectangle(cornerRadius:10))}.buttonStyle(.plain).disabled(!engine.busy && ((prompt.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty && attachments.isEmpty) || !engine.connected || incompatibleImages)).accessibilityLabel(engine.busy ? "Stop response" : "Send message").keyboardShortcut(.return,modifiers:.command)
                 }.padding(.horizontal,18).padding(.top,18).padding(.bottom,6)
                 HStack(spacing:8){
-                    if !compact {Button(action:attachFile){Image(systemName:"folder").wixalFont(size:15).frame(width:24,height:26)}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Add file excerpt").accessibilityLabel("Add file excerpt");Button(action:attachImage){Image(systemName:"photo").wixalFont(size:15).frame(width:24,height:26)}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Attach image").accessibilityLabel("Attach image")}else{Menu{Button("Add file excerpt",action:attachFile);Button("Attach image",action:attachImage);Button("Browse project files",action:openFiles);if agentMode{Button("Insert tool mention"){prompt += prompt.isEmpty ? "@" : " @"};Button("Tool permissions",action:openTools);Menu("Skills"){Button("No selected skill"){skill=""};ForEach(Array(records(engine.state["skills"]).enumerated()),id:\.offset){_,item in Button(textValue(item["name"])){skill=textValue(item["name"])}}}}}label:{Image(systemName:"plus.circle").wixalFont(size:15)}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width:24).accessibilityLabel("Composer attachments and tools")}
+                    if !compact {Button(action:attachFile){Image(systemName:"folder").wixalFont(size:15).frame(width:24,height:26)}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Add file excerpt").accessibilityLabel("Add file excerpt");Button(action:attachImage){Image(systemName:"photo").wixalFont(size:15).frame(width:24,height:26)}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Attach image").accessibilityLabel("Attach image")}else{Menu{Button("Add file excerpt",action:attachFile);Button("Attach image",action:attachImage);Button("Browse project files",action:openFiles);Button("Available tools",action:openTools);Button("Insert tool mention"){prompt += prompt.isEmpty ? "@" : " @"};if agentMode{Menu("Skills"){Button("No selected skill"){skill=""};ForEach(Array(records(engine.state["skills"]).enumerated()),id:\.offset){_,item in Button(textValue(item["name"])){skill=textValue(item["name"])}}}}}label:{Image(systemName:"plus.circle").wixalFont(size:15)}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width:24).accessibilityLabel("Composer attachments and tools")}
                     Button(action:openModels){HStack(spacing:7){Image(systemName:"diamond");Text(displayModel.isEmpty ? "Choose model" : displayModel).lineLimit(1).frame(maxWidth:compact ? 100 : 200);Image(systemName:"chevron.down").wixalFont(size:8)}.wixalFont(size:11).fixedSize(horizontal:true,vertical:false)}.buttonStyle(WixalButtonStyle(outlined:true)).help("Choose model")
 
                     if agentMode && !compact && !records(engine.state["skills"]).isEmpty{Menu{Button("No selected skill"){skill=""};ForEach(Array(records(engine.state["skills"]).enumerated()),id:\.offset){_,item in Button(textValue(item["name"])){skill=textValue(item["name"])}}}label:{Text(skill.isEmpty ? "Skills" : skill).wixalFont(size:11)}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(maxWidth:90)}
                     Spacer(minLength:4)
-                    if agentMode{WixalChoiceMenu(title:textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"]) == "bypass" ? (compact ? "Approved" : "Approved all") : (compact ? "Review" : "Review each action"),outlined:false,choices:[("Review each action",{engine.action("settings",["approvalMode":"review"])}),("Approved all",{engine.action("settings",["approvalMode":"bypass"])})]).disabled(engine.busy)}
-                    if agentMode && !compact{Button("@ Tools"){prompt += prompt.isEmpty ? "@" : " @"}.buttonStyle(.plain).wixalFont(size:10).foregroundStyle(theme.muted)
+                    WixalChoiceMenu(title:textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"]) == "bypass" ? "Allow actions" : (compact ? "Review" : "Review each action"),outlined:false,choices:[("Review each action",{engine.action("settings",["approvalMode":"review"])}),("Allow without individual review",{engine.action("settings",["approvalMode":"bypass"])})]).disabled(engine.busy)
+                    if !compact{Button("Tools",action:openTools).buttonStyle(.plain).wixalFont(size:10).foregroundStyle(theme.muted);Button("@"){prompt += prompt.isEmpty ? "@" : " @"}.buttonStyle(.plain).wixalFont(size:10).foregroundStyle(theme.muted).help("Optionally name a tool; the model can also choose tools automatically")
                     Text("↵ send · ⇧↵ new line").wixalFont(size:9,design:.monospaced).foregroundStyle(theme.muted).lineLimit(1)}
                 }.padding(.horizontal,16).padding(.bottom,14)
             }.background(theme.raised,in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).stroke(theme.line,lineWidth:1)).shadow(color:.black.opacity(theme.light ? 0.06 : 0.16),radius:12,x:0,y:5)
@@ -178,7 +178,7 @@ struct ChatView: View {
     }
     private var starters: some View {
         LazyVGrid(columns:[GridItem(.adaptive(minimum:280),spacing:8)],spacing:8){
-            starter("How does this project work?",detail:"Understand the structure",icon:"folder",prompt:agentMode ? "Read this project's main docs and explain how it works." : "Help me understand this project. Ask which files or documentation I can share.")
+            starter("How does this project work?",detail:"Understand the structure",icon:"folder",prompt:"Read this project's main docs and explain how it works. Ask me to choose a project folder if one is needed.")
             starter("Can you help solve a problem?",detail:"Work through it together",icon:"magnifyingglass",prompt:"Help me work through a problem. Ask what is happening, what I expected, and what I have tried.")
             starter("Can you explain this code?",detail:"Make unfamiliar code clearer",icon:"curlybraces",prompt:"Help me understand some code. Ask me for the snippet and what I want to learn.")
             starter("Where should I start?",detail:"Turn an idea into a next step",icon:"lightbulb",prompt:"Help me turn an idea into a practical plan. Ask what I have in mind and help me work out where to start.")
@@ -193,8 +193,8 @@ struct ChatView: View {
     private var contextLabel:String{engine.contextAvailable ? "~\(contextTokens.formatted()) / \(contextLimit.formatted()) context" : "Calculating context…"}
     private func mentionSuggestions(_ query:String)->some View{
         let names=mentionNames
-        return VStack(alignment:.leading,spacing:3){Text("ENABLED TOOLS · ↑ ↓ choose · Tab insert").wixalFont(size:9,design:.monospaced).foregroundStyle(theme.muted)
-            ScrollViewReader{proxy in ScrollView(.horizontal){HStack{ForEach(Array(names.enumerated()),id:\.element){index,name in Button(name){insertMention(name)}.buttonStyle(WixalButtonStyle(outlined:true)).background(index==mentionIndex ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6)).accessibilityAddTraits(index==mentionIndex ? [.isSelected] : []).id(index)};if names.isEmpty{Text(engine.supportsTools ? "No enabled tools match." : "Choose a model marked Tools to use tool mentions.").wixalFont(size:10)}}}.frame(maxHeight:34).onChange(of:mentionIndex){_,index in proxy.scrollTo(index)}}
+        return VStack(alignment:.leading,spacing:3){Text("AVAILABLE TOOLS · ↑ ↓ choose · Tab insert").wixalFont(size:9,design:.monospaced).foregroundStyle(theme.muted)
+            ScrollViewReader{proxy in ScrollView(.horizontal){HStack{ForEach(Array(names.enumerated()),id:\.element){index,name in Button(name){insertMention(name)}.buttonStyle(WixalButtonStyle(outlined:true)).background(index==mentionIndex ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6)).accessibilityAddTraits(index==mentionIndex ? [.isSelected] : []).id(index)};if names.isEmpty{Text(engine.supportsTools ? "No available tools match." : "Choose a model marked Tools to use tool mentions.").wixalFont(size:10)}}}.frame(maxHeight:34).onChange(of:mentionIndex){_,index in proxy.scrollTo(index)}}
         }
     }
 

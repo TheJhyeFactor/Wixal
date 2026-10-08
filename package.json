@@ -1,6 +1,6 @@
 {
   "name": "wixal",
-  "version": "0.7.10-alpha.1",
+  "version": "0.7.10-alpha.2",
   "description": "Native local AI workspace for Mac, with agents, workflows and project tools.",
   "main": "app/main.cjs",
   "private": true,

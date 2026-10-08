@@ -47,7 +47,7 @@
     "type": "function",
     "function": {
       "name": "workspace_info",
-      "description": "Discover eligible enabled tools and current workspace/memory scope. Load more schemas using category or tool. Discovery never enables disabled tools.",
+      "description": "Discover tools available within the current workspace and task scope. Load more schemas using category or tool. The model chooses tools; discovery does not expand task authority.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -655,13 +655,19 @@
     "type": "function",
     "function": {
       "name": "run_command",
-      "description": "Run a non-interactive shell command after user approval. Starts in project directory; host shell is not sandboxed. 60 second timeout.",
+      "description": "Run a non-interactive shell command after user approval. Starts in project directory; host shell is not sandboxed. 60 second default timeout.",
       "parameters": {
         "type": "object",
         "properties": {
           "command": {
             "type": "string",
             "description": "Shell command"
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600,
+            "description": "Optional execution limit in seconds; default 60. Use command_start and command_read for long-running work."
           }
         },
         "required": [

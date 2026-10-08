@@ -10,11 +10,11 @@
 <p align="center">Chat with local models. Build agents and workflows. Inspect tools, actions and results.</p>
 
 <p align="center">
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.1/Wixal-0.7.10-alpha.1-macOS-arm64.zip"><strong>Download native alpha ↓</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.2/Wixal-0.7.10-alpha.2-macOS-arm64.zip"><strong>Download native alpha ↓</strong></a> &nbsp;·&nbsp;
   <a href="https://thejhyefactor.github.io/Wixal/">Website</a> &nbsp;·&nbsp;
   <a href="docs/native-alpha.md">Alpha guide</a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.1">Release notes</a>
-  <br><sub>0.7.10 Alpha 1 · Apple Silicon · macOS 14+ · Ad-hoc signed, not notarised</sub>
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.2">Release notes</a>
+  <br><sub>0.7.10 Alpha 2 · Apple Silicon · macOS 14+ · Ad-hoc signed, not notarised</sub>
 </p>
 
 ![Native Wixal workspace](website/public/assets/native-workspace.png)
@@ -37,7 +37,7 @@ The current download is **Wixal.app**, built with SwiftUI, AppKit and a persiste
 
 ## Install
 
-1. [Download the alpha ZIP](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.1/Wixal-0.7.10-alpha.1-macOS-arm64.zip), extract it and move **Wixal.app** to **Applications**.
+1. [Download the alpha ZIP](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.2/Wixal-0.7.10-alpha.2-macOS-arm64.zip), extract it and move **Wixal.app** to **Applications**.
 2. This alpha is **not Developer ID signed or notarised**. If macOS blocks the first launch, review the source and release notes, then use **System Settings → Privacy & Security → Open Anyway**.
 3. Open **Models** and download a tool-capable model, import compatible Ollama weights or configure an external Ollama server.
 4. Open a project with **⌘O**. Start a conversation or open **Agents** to create an agent or workflow.

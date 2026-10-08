@@ -94,6 +94,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
             async def catalog(self):return [dict(name="fixture",capabilities=["tools"])]
         class Tools:
             def catalog(self):return []
+            def environment(self):return dict(shell='/bin/zsh -l',executables={})
         self.store.data.update(model="fixture",contextSize=4096,autoSummary=True)
         self.store.session()["messages"]=[dict(role="user" if i%2==0 else "assistant",content="Old evidence "*1000) for i in range(6)]
         agent=Agent(self.store,Runtime(),Tools(),lambda *_:None)

@@ -224,13 +224,13 @@ struct SettingsView: View {
     private var permissions: some View {
         Group {
             WixalSection(title:"Action review") {
-                SettingsRow(title:"Review policy",detail:"Enabled edits, commands and network actions follow this workspace’s policy.",scope:projectScope) {
+                SettingsRow(title:"Review policy",detail:"Edits, commands and network actions follow this workspace’s policy.",scope:projectScope) {
                     Picker("Review policy",selection:Binding(get:{textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"]).isEmpty ? "review" : textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"])},set:{save("settings",["approvalMode":$0])})) { Text("Review each action").tag("review"); Text("Allow without individual review").tag("bypass") }.labelsHidden()
                 }.wixalCard().disabled(locked)
-                Text(textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"]) == "bypass" ? "Enabled actions can run without individual review in this workspace." : "Applicable actions pause for your review. Tool availability is shared across workspaces.").wixalFont(size:11).foregroundStyle(colours.muted)
+                Text(textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"]) == "bypass" ? "Actions can run without individual review in this workspace." : "Applicable actions pause for your review. The model chooses available tools within the current task scope.").wixalFont(size:11).foregroundStyle(colours.muted)
             }
             WixalSection(title:"Available tools") {
-                SettingsRow(title:"Tool permissions",detail:"\((engine.state["enabledTools"] as? [String] ?? []).count) enabled. Read files, edit files, commands, web and connected tools.",scope:"All workspaces") { Button("Manage tools →") { settings.detail="Tools" }.buttonStyle(WixalButtonStyle(outlined:true)) }.wixalCard()
+                SettingsRow(title:"Available tools",detail:"The model discovers and chooses project, command, web, memory and connected tools. No tool switches are needed for Chat or Agents.",scope:"Current workspace") { Button("Inspect tools →") { settings.detail="Tools" }.buttonStyle(WixalButtonStyle(outlined:true)) }.wixalCard()
             }
             WixalSection(title:"Skills",detail:"Import Markdown instructions, then select a skill in the composer to use it.") {
                 Button("Import Markdown skill…",action:engine.importSkill).buttonStyle(WixalButtonStyle(outlined:true)).disabled(locked)

@@ -17,7 +17,7 @@ struct SettingsConnectionsView: View {
     @ViewState private var removing: String?
     private var locked: Bool { engine.busy || settings.saving || !engine.connected }
     var body: some View {
-        WixalSection(title:"External tools",detail:"Connect trusted local executables or remote HTTPS MCP servers. Connect starts the executable or contacts the endpoint; advertised tools still need enabling separately.") {
+        WixalSection(title:"External tools",detail:"Connect trusted local executables or remote HTTPS MCP servers. Connect starts the executable or contacts the endpoint; Chat and Agents discover advertised tools automatically and choose them within the task scope.") {
             HStack { Button("Add MCP server…") { clear(); editor=true }.disabled(locked); Spacer(); Button("Refresh status") { Task { await refresh() } }.disabled(!engine.connected || settings.saving) }.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:11)
             if !statusError.isEmpty { Text(statusError).foregroundStyle(.red).wixalFont(size:11) }
             if records(engine.state["mcpServers"]).isEmpty { Text("No servers configured. Add a local executable or HTTPS endpoint to connect external tools.").wixalFont(size:11).foregroundStyle(theme.muted) }
@@ -64,11 +64,11 @@ struct SettingsConnectionsView: View {
     }
     @ViewBuilder private func serverActions(_ server: [String:Any], connected: Bool) -> some View {
         let id=textValue(server["id"])
-        Button(connected ? "Disconnect" : "Connect & discover") { action(connected ? "mcp-disconnect" : "mcp-connect",id,success:connected ? "Server disconnected" : "Server connected; review its tools before enabling") }.disabled(locked)
+        Button(connected ? "Disconnect" : "Connect & discover") { action(connected ? "mcp-disconnect" : "mcp-connect",id,success:connected ? "Server disconnected" : "Server connected; its tools are available to Chat and Agents") }.disabled(locked)
         Button("Edit…") { edit(server) }.disabled(locked)
         if server["oauth"] as? Bool == true { Button("Forget sign-in") { action("mcp-oauth-clear",id,success:"Saved sign-in forgotten") }.disabled(locked) }
         Button("Remove…",role:.destructive) { removing=id }.disabled(locked)
-        if connected { Button("Tool permissions →") { settings.open("Tools & permissions",detail:"Tools") } }
+        if connected { Button("Inspect tools →") { settings.open("Tools & permissions",detail:"Tools") } }
     }
     private var form: some View {
         VStack(alignment:.leading,spacing:12) {

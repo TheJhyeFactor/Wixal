@@ -9,7 +9,7 @@ struct SettingsCategory: Identifiable {
         .init(id:"Appearance",symbol:"paintpalette",detail:"Make your workspace comfortable and familiar.",terms:"theme sakura midnight forest paper text font size motion animation icon launch sound"),
         .init(id:"Models & performance",symbol:"cpu",detail:"Manage local models and understand their resource use.",terms:"model library downloads import benchmark engine memory ram usage tokens speed"),
         .init(id:"Context & memory",symbol:"brain",detail:"Choose what Wixal includes when it responds.",terms:"context window summary summarise instructions global project recall history semantic indexing notes"),
-        .init(id:"Tools & permissions",symbol:"checkmark.shield",detail:"Choose available tools and how their actions are reviewed.",terms:"tools permissions review approval commands skills markdown"),
+        .init(id:"Tools & permissions",symbol:"checkmark.shield",detail:"Inspect model-selected tools and choose how actions are reviewed.",terms:"tools permissions review approval commands skills markdown"),
         .init(id:"Connections & sharing",symbol:"point.3.connected.trianglepath.dotted",detail:"Connect external tools and control project access.",terms:"mcp server executable arguments https oauth companion tunnel sharing"),
         .init(id:"Data & sync",symbol:"externaldrive",detail:"Manage saved data, recovery and device sync.",terms:"encrypted sync folder passphrase backup restore import migration storage"),
         .init(id:"Account",symbol:"person.crop.circle",detail:"Manage your identity and cloud presets.",terms:"account guest sign in email verification password cloud presets"),

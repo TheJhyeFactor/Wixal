@@ -1,6 +1,6 @@
 # Wixal website
 
-A restrained static website that follows the native workspace’s Paper appearance: warm neutral surfaces, quiet dividers, the monospace Wixal wordmark and one actual workspace screenshot. Dark appearance is available in the footer.
+A restrained static website that follows the native workspace’s Paper appearance: warm neutral surfaces, quiet dividers, the monospace Wixal wordmark and pink Wixal accents and one actual workspace screenshot. Dark appearance is available in the footer.
 
 Eight pages cover Home, Workspace, Tools, Models, Guides, Download, Privacy and Download stats. Existing routes and product section anchors remain available. The download is the current **native alpha**, with one ZIP asset and explicit signing/alpha limitations. The build reads the version from `native/engine/wixal/__init__.py`; publish matching GitHub assets before the Pages deployment completes.
 

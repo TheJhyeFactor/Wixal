@@ -3,6 +3,7 @@ import SwiftUI
 // Use the property-wrapper type explicitly; SDK 27 also exports a State macro.
 typealias ViewState<Value> = SwiftUI.State<Value>
 import AppKit
+import OSLog
 
 func textValue(_ value: Any?) -> String { value as? String ?? "" }
 func records(_ value: Any?) -> [[String: Any]] { value as? [[String: Any]] ?? [] }
@@ -21,6 +22,8 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     @Published var busy = false
     @Published var connected = false
     @Published var streaming = ""
+    @Published var thinking = ""
+    @Published var runStarted:Date?
     @Published var activity = "Starting Python engine…"
     @Published var error = ""
     @Published var commandOutput = ""
@@ -37,6 +40,9 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     let terminalSession=TerminalSession()
     let browser = BrowserController()
     private var process: Process?
+    private let startupLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.wixal.native", category: "EngineStartup")
+    private var startupDeadline: Task<Void, Never>?
+    private var startupTimedOut = false
     private var input: FileHandle?
     private var pending: [String: CheckedContinuation<Any, Error>] = [:]
     private var smokeStarted = false
@@ -56,6 +62,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     private var hostRequests:[String:Task<Void,Never>]=[:]
     private var flushTask: Task<Void, Never>?
     private var tokenBuffer = ""
+    private var thinkingBuffer = ""
     var project: [String: Any]? { records(state["projects"]).first { textValue($0["id"]) == textValue(state["activeProject"]) } }
     var session: [String: Any]? { records(state["sessions"]).first { textValue($0["id"]) == textValue(state["activeSession"]) } }
     var messages: [[String: Any]] { records(session?["messages"]) }
@@ -65,6 +72,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     func start() {
         guard process == nil else { return }
         generation = UUID(); let currentGeneration = generation
+        startupTimedOut = false
         let child = Process(), stdinPipe = Pipe(), stdoutPipe = Pipe(), stderrPipe = Pipe()
         let bundle = Bundle.main.resourceURL!
         let packaged = bundle.appendingPathComponent("engine/wixal-engine")
@@ -77,49 +85,65 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
             child.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["WIXAL_NATIVE_PYTHON"] ?? "/opt/homebrew/bin/python3")
             arguments = [directory + "/engine/engine_main.py", "--runtime", URL(fileURLWithPath: directory).deletingLastPathComponent().appendingPathComponent("runtime/ollama").path]
         }
-        if let data = ProcessInfo.processInfo.environment["WIXAL_NATIVE_DATA"] { arguments += ["--data", data] }
-        if let endpoint = ProcessInfo.processInfo.environment["WIXAL_NATIVE_ENDPOINT"] { arguments += ["--endpoint", endpoint] }
+        if let data = ProcessInfo.processInfo.environment["WIXAL_NATIVE_DATA"] ?? Bundle.main.object(forInfoDictionaryKey:"WixalPreviewData") as? String { arguments += ["--data", data] }
+        if let endpoint = ProcessInfo.processInfo.environment["WIXAL_NATIVE_ENDPOINT"] ?? Bundle.main.object(forInfoDictionaryKey:"WixalPreviewEndpoint") as? String { arguments += ["--endpoint", endpoint] }
         child.arguments = arguments
         child.standardInput = stdinPipe; child.standardOutput = stdoutPipe; child.standardError = stderrPipe
         input = stdinPipe.fileHandleForWriting
         child.terminationHandler = { [weak self] child in Task { @MainActor in
             guard let self, self.generation == currentGeneration else { return }
+            self.startupDeadline?.cancel(); self.startupDeadline = nil
             self.process = nil; self.input = nil; self.heartbeat?.cancel()
             self.busy = false; self.operationRunning=false; self.review = nil; self.queuedReviews = []; self.streaming = ""
             self.hostRequests.values.forEach{$0.cancel()};self.hostRequests.removeAll();self.browser.closeAll()
             self.connected = false
-            self.activity = "Engine stopped (\(child.terminationStatus))"
+            self.activity = self.startupTimedOut ? "Engine startup timed out" : "Engine stopped (\(child.terminationStatus))"
             self.failPending("The Python engine stopped")
         } }
-        // One dedicated reader preserves JSON event order without blocking AppKit.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            var buffer = Data()
-            while true {
-                let chunk = stdoutPipe.fileHandleForReading.availableData
-                if chunk.isEmpty { break }
-                buffer.append(chunk)
-                while let newline = buffer.firstIndex(of: 10) {
-                    let line = buffer.prefix(upTo: newline); buffer.removeSubrange(...newline)
-                    if let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
-                        Task { @MainActor in guard self?.generation == currentGeneration else { return }; self?.receive(object) }
+        do {
+            try child.run(); process = child
+            // Start pipe readers after launch so Foundation cannot consume an unopened pipe.
+            // One dedicated reader preserves JSON event order without blocking AppKit.
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                var buffer = Data()
+                while true {
+                    let chunk = stdoutPipe.fileHandleForReading.availableData
+                    if chunk.isEmpty { break }
+                    buffer.append(chunk)
+                    while let newline = buffer.firstIndex(of: 10) {
+                        let line = buffer.prefix(upTo: newline); buffer.removeSubrange(...newline)
+                        if let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
+                            Task { @MainActor in guard self?.generation == currentGeneration else { return }; self?.receive(object) }
+                        }
                     }
                 }
             }
-        }
-        stderrPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            if !data.isEmpty, let message = String(data: data, encoding: .utf8) {
-                Task { @MainActor in guard self?.generation == currentGeneration else { return }; self?.error = String(message.suffix(3000)) }
+            stderrPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+                let data = handle.availableData
+                if !data.isEmpty, let message = String(data: data, encoding: .utf8) {
+                    Task { @MainActor in guard self?.generation == currentGeneration else { return }; self?.error = String(message.suffix(3000)) }
+                }
             }
-        }
-        do {
-            try child.run(); process = child
+            let startupBegan = ContinuousClock.now
+            startupLogger.info("Workspace engine process launched")
+            startupDeadline = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                guard let self, self.generation == currentGeneration, !self.connected else { return }
+                self.startupTimedOut = true
+                self.startupLogger.error("Workspace engine did not answer its startup handshake within 30 seconds")
+                self.error = "Wixal could not open this workspace within 30 seconds. No new action was started. Check that the disk is available, then restart the engine."
+                self.activity = "Engine startup timed out"
+                if child.isRunning { child.terminate() }
+            }
             Task { [self] in
                 do {
                     let result = try await call("hello") as? [String: Any] ?? [:]
                     state = result["state"] as? [String: Any] ?? [:]
                     tools = records(result["tools"])
                     guard generation == currentGeneration else { return }
+                    startupDeadline?.cancel(); startupDeadline = nil
+                    let elapsed = ContinuousClock.now - startupBegan
+                    startupLogger.info("Workspace engine startup handshake completed in \(elapsed.components.seconds) seconds")
                     connected = true; activity = "Python engine ready"; restarting = false
                     heartbeat?.cancel()
                     heartbeat = Task { [weak self] in
@@ -130,7 +154,20 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
                     }
                     if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] == nil {loadModels()}
                     if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] != nil && !smokeStarted { smokeStarted=true; await smoke() }
-                } catch { self.error = error.localizedDescription }
+                } catch {
+                    guard generation == currentGeneration else { return }
+                    startupDeadline?.cancel(); startupDeadline = nil
+                    if startupTimedOut {
+                        self.activity = "Engine startup timed out"
+                        self.error = "Wixal could not open this workspace within 30 seconds. No new action was started. Check that the disk is available, then restart the engine."
+                        return
+                    }
+                    if !self.connected {
+                        self.startupLogger.error("Workspace engine startup failed before handshake")
+                        self.activity = "Engine failed to start"
+                    }
+                    self.error = error.localizedDescription
+                }
             }
         } catch { self.error = error.localizedDescription; activity = "Engine failed to start" }
     }
@@ -142,6 +179,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     func restart() {
         guard !restarting else { return }
         restarting = true; connected = false; busy = false; operationRunning=false; contextInfo=[:]; error = ""; activity = "Restarting engine…"
+        startupDeadline?.cancel(); startupDeadline = nil
         heartbeat?.cancel(); failPending("Engine restarted. Inspect interrupted actions before continuing.")
         review = nil; queuedReviews = []; browser.closeAll(); flushTokens(); streaming = ""
         hostRequests.values.forEach{$0.cancel()};hostRequests.removeAll()
@@ -165,7 +203,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         let data = try JSONSerialization.data(withJSONObject: ["id": id, "method": method, "params": params]) + Data([10])
         return try await withCheckedThrowingContinuation { continuation in
             pending[id] = continuation
-            let limits:[String:Double] = ["mcp-connect":315,"memory-recall":105,"memory-index":105,"memory-review":135,"chat":615,"task-start":615,"assessment-run":615,"tool":615,"session-handoff":125,"model-import":1815,"model-pull":1815,"legacy-import":195,"models":135,"model-status":135]
+            let limits:[String:Double] = ["skill-evaluate":7215,"workflow-merge":315,"agent-verify":615,"agent-resume":1815,"agent-schedule-run":3615,"agent-run":1815,"workflow-run":3615,"workflow-resume":3615,"mcp-connect":315,"memory-recall":105,"memory-index":105,"memory-review":135,"chat":615,"task-start":615,"assessment-run":615,"tool":615,"session-handoff":125,"model-import":1815,"model-pull":1815,"legacy-import":195,"models":135,"model-status":135]
             let seconds = timeout ?? limits[method,default:75]
             deadlines[id] = Task { [weak self] in
                 do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
@@ -188,6 +226,9 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     func receive(_ message: [String: Any]) {
         let event = textValue(message["event"]), data = message["data"] as? [String: Any] ?? [:]
         switch event {
+        case "startup-progress":
+            let phase=textValue(data["phase"]),database=textValue(data["database"]),pid=data["pid"] as? Int ?? 0
+            startupLogger.info("Workspace startup phase: \(phase, privacy:.public); database: \(database, privacy:.public); helper PID: \(pid, privacy:.public)")
         case "response":
             deadlines.removeValue(forKey: textValue(data["id"]))?.cancel()
             if let continuation = pending.removeValue(forKey: textValue(data["id"])) {
@@ -197,18 +238,21 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         case "state":
             let oldCount=messages.count,oldSession=textValue(state["activeSession"])
             state = data
-            busy = operationRunning || records(data["tasks"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) }
-            if messages.count != oldCount || textValue(state["activeSession"]) != oldSession || !busy {flushTokens();streaming=""}
+            busy = operationRunning || records(data["workflowRuns"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) } || records(data["tasks"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) }
+            if messages.count != oldCount || textValue(state["activeSession"]) != oldSession || !busy {flushTokens();streaming="";thinking=""}
             refreshContext()
             refreshMemory()
         case "catalog": tools = records(message["data"]);refreshContext()
         case "operation":
             operationRunning=data["running"] as? Bool ?? false
             busy=operationRunning || records(state["tasks"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) }
-        case "assistant-start": streaming = ""; tokenBuffer = "";currentTool=[:];activity = "Generating reply…"
+        case "assistant-start": streaming = ""; thinking = ""; tokenBuffer = ""; thinkingBuffer = "";currentTool=[:];activity = "Generating reply…";if runStarted == nil{runStarted=Date()}
+        case "thinking":
+            thinkingBuffer += textValue(data["text"])
+            if flushTask == nil { flushTask = Task { try? await Task.sleep(nanoseconds: 60_000_000); self.flushTokens() } }
         case "token":
             tokenBuffer += textValue(data["text"])
-            if flushTask == nil { flushTask = Task { try? await Task.sleep(nanoseconds: 40_000_000); self.flushTokens() } }
+            if flushTask == nil { flushTask = Task { try? await Task.sleep(nanoseconds: 60_000_000); self.flushTokens() } }
         case "review":
             let item = Review(id: textValue(data["id"]), details: data)
             if review == nil { review = item } else { queuedReviews.append(item) }
@@ -242,6 +286,13 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         case "assessment-progress":
             if let taskId=data["taskId"] as? String,taskId != textValue(assessmentProgress["taskId"]) { assessmentProgress=[:] }
             assessmentProgress.merge(data) { _, new in new }
+        case "security-progress":
+            var runs=records(state["securityRuns"])
+            if let index=runs.firstIndex(where:{textValue($0["id"]) == textValue(data["id"])}) {
+                runs[index]["output"]=data["output"]
+                runs[index]["cases"]=data["cases"]
+                state["securityRuns"]=runs
+            }
         case "assessment-case":
             assessmentProgress.merge(data) { _, new in new }
             assessmentProgress["state"] = "running"
@@ -250,15 +301,31 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         default: break
         }
     }
-    func flushTokens() { streaming += tokenBuffer; tokenBuffer = ""; flushTask?.cancel(); flushTask = nil }
+    func flushTokens() { streaming += tokenBuffer; thinking += thinkingBuffer; tokenBuffer = ""; thinkingBuffer = ""; flushTask?.cancel(); flushTask = nil }
     func action(_ method: String, _ params: [String: Any] = [:]) {
         Task { defer { if method == "assessment-run" { busy=false } }; do { _ = try await call(method, params) } catch { self.error = error.localizedDescription } }
     }
+    func cancelAssessment() {
+        guard busy, !assessmentProgress.isEmpty else { return }
+        assessmentProgress["state"] = "stopping"
+        Task {
+            do {
+                let stopped = try await call("assessment-cancel") as? Bool ?? false
+                if !stopped, busy {
+                    assessmentProgress["state"] = "running"
+                    error = "No active assessment was available to stop. Check the engine status before continuing."
+                }
+            } catch {
+                if busy { assessmentProgress["state"] = "running" }
+                self.error = "Could not confirm assessment cancellation: \(error.localizedDescription)"
+            }
+        }
+    }
     func chat(_ text: String, resume: String? = nil, skill: String? = nil, attachments:[[String:Any]] = [],completion:((Bool)->Void)? = nil) {
         guard !busy else { return }
-        busy = true; error = ""; streaming = ""
+        busy = true; error = ""; streaming = ""; thinking = ""; runStarted=Date()
         Task {
-            defer { busy = false; streaming = ""; activity = "Python engine ready" }
+            defer { flushTokens(); busy = false; streaming = ""; thinking = ""; activity = "Python engine ready" }
             do {
                 var params: [String: Any] = ["text": text]
                 params["attachments"]=attachments

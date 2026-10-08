@@ -27,15 +27,15 @@ struct AccountView: View {
         WixalPage(eyebrow: "WIXAL ACCOUNT", title: "Your workspace, wherever you work", subtitle: "Sign in to save workspace presets on another Mac. Local chat, projects, memory and tools are available as a guest.") {
             if signedIn {
                 HStack(spacing: 16) {
-                    Text("◎").font(.system(size: 32)).foregroundStyle(theme.accent)
+                    Text("◎").wixalFont(size:32).foregroundStyle(theme.accent)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(textValue(profile["name"])).font(.system(size: 18, weight: .medium))
+                        Text(textValue(profile["name"])).wixalFont(size:18, weight: .medium)
                         Text(textValue(profile["email"])).foregroundStyle(theme.muted)
-                        Text(verified ? "Email verified" : "Verification needed").font(.system(size: 11)).foregroundStyle(verified ? theme.accent : theme.muted)
+                        Text(verified ? "Email verified" : "Verification needed").wixalFont(size:11).foregroundStyle(verified ? theme.accent : theme.muted)
                     }
                 }.wixalCard()
                 if !verified {
-                    Text("Open the verification email and follow its link, then refresh your status here. If it has not arrived, check spam or resend it.").font(.system(size:11)).foregroundStyle(theme.muted)
+                    Text("Open the verification email and follow its link, then refresh your status here. If it has not arrived, check spam or resend it.").wixalFont(size:11).foregroundStyle(theme.muted)
                     HStack {
                         Button("Refresh verification status") { run("account-refresh") }
                         Button("Resend verification") { run("account-resend") }
@@ -57,13 +57,13 @@ struct AccountView: View {
                 }.disabled(!verified)
                 WixalSection(title: "Global preferences", detail: "Keep short personal instructions in your account. Up to 1,200 characters. Project memory stays local unless you enable sharing separately.") {
                     TextEditor(text: $memory).scrollContentBackground(.hidden).frame(height: 100).wixalField()
-                    HStack { Text("\(memory.count) / 1,200").font(.system(size: 10)).foregroundStyle(theme.muted); Spacer(); Button("Save preferences") { run("global-memory-save", ["content": memory]) }.disabled(memory.count > 1200) }
+                    HStack { Text("\(memory.count) / 1,200").wixalFont(size:10).foregroundStyle(theme.muted); Spacer(); Button("Save preferences") { run("global-memory-save", ["content": memory]) }.disabled(memory.count > 1200) }
                 }.disabled(!verified)
                 WixalSection(title:"Password & account") {
                     Button("Change password…") { passwordChange=true }
                     SecureField("Current password for deletion",text:$currentPassword).textContentType(.password).wixalField().accessibilityLabel("Current password to delete your online account")
                     Button("Delete online account…",role:.destructive) { accountDelete=true }.disabled(currentPassword.isEmpty)
-                    Text("Deletion removes the online identity and cloud presets/preferences. If cloud deletion fails, the identity stays signed in so you can retry. Already removed cloud records cannot be recovered. Local projects and chats stay on this Mac.").font(.system(size:11)).foregroundStyle(theme.muted)
+                    Text("Deletion removes the online identity and cloud presets/preferences. If cloud deletion fails, the identity stays signed in so you can retry. Already removed cloud records cannot be recovered. Local projects and chats stay on this Mac.").wixalFont(size:11).foregroundStyle(theme.muted)
                 }
 
                 Button("Sign out & use guest workspace") { run("account-sign-out") }
@@ -85,10 +85,10 @@ struct AccountView: View {
                 Button("Terms & Conditions") { navigate("Terms") }
                 Text("·").foregroundStyle(theme.muted)
                 Button("Privacy Policy") { navigate("Privacy") }
-            }.buttonStyle(.plain).font(.system(size: 11))
+            }.buttonStyle(.plain).wixalFont(size:11)
             if working { HStack { ProgressView().controlSize(.small); Text("Contacting account service…") } }
-            Text(status.isEmpty ? textValue(account["message"]) : status).font(.system(size: 11)).foregroundStyle(theme.muted).textSelection(.enabled).id(status.isEmpty ? textValue(account["message"]) : status)
-        }.font(.system(size: 12)).disabled(working).onAppear { memory = textValue(account["globalMemory"]) }
+            Text(status.isEmpty ? textValue(account["message"]) : status).wixalFont(size:11).foregroundStyle(theme.muted).textSelection(.enabled).id(status.isEmpty ? textValue(account["message"]) : status)
+        }.wixalFont(size:12).disabled(working).onAppear { memory = textValue(account["globalMemory"]) }
         .sheet(isPresented:$passwordChange) {
             VStack(alignment:.leading,spacing:14) {
                 Text("Change account password").font(.title2)
@@ -121,5 +121,5 @@ struct AccountView: View {
         guard !working else { return }; working = true; status = ""
         Task { defer { working = false }; do { let value = try await engine.call(method, params) as? [String: Any] ?? [:]; status = textValue(value["message"]); if method == "account-password-change" { passwordChange=false }; if signedIn { memory = textValue(value["globalMemory"]) } } catch { status = error.localizedDescription } }
     }
-    private func labeled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View { VStack(alignment: .leading, spacing: 7) { Text(title).font(.system(size: 11)); content() } }
+    private func labeled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View { VStack(alignment: .leading, spacing: 7) { Text(title).wixalFont(size:11); content() } }
 }

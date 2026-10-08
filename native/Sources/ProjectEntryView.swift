@@ -32,3 +32,39 @@ struct ProjectEntryView:View {
         }.padding(24).frame(minWidth:420,idealWidth:560).background(theme.background)
     }
 }
+
+struct CreateProjectView:View {
+    @ObservedObject var engine:EngineClient
+    let close:()->Void
+    @ViewState private var name=""
+    @ViewState private var selectedFolder=""
+    @ViewState private var working=false
+    @ViewState private var error=""
+    @FocusState private var focused:Bool
+    @Environment(\.wixalTheme) private var theme
+    var body:some View {
+        VStack(alignment:.leading,spacing:18){
+            Text("Create project").wixalFont(size:22,weight:.medium)
+            TextField("Project name",text:$name).wixalField().focused($focused).onSubmit(create)
+            Text(selectedFolder.isEmpty ? "Saved inside Wixal’s Projects folder, under the project name." : selectedFolder).wixalFont(size:11).foregroundStyle(theme.muted).textSelection(.enabled)
+            HStack{
+                Button("Select folder…"){
+                    let panel=NSOpenPanel();panel.canChooseDirectories=true;panel.canChooseFiles=false;panel.prompt="Select folder"
+                    if panel.runModal() == .OK,let url=panel.url{selectedFolder=url.path;if name.isEmpty{name=url.lastPathComponent}}
+                }
+                if !selectedFolder.isEmpty{Button("Use Wixal Projects"){selectedFolder=""}}
+            }.buttonStyle(WixalButtonStyle(outlined:true)).disabled(working)
+            if !error.isEmpty{Text(error).wixalFont(size:12).foregroundStyle(.red)}
+            HStack{Button("Cancel",action:close).keyboardShortcut(.cancelAction).disabled(working);Spacer();if working{ProgressView().controlSize(.small)};Button(selectedFolder.isEmpty ? "Create project" : "Add project",action:create).keyboardShortcut(.defaultAction).disabled(working || engine.busy || name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)}.buttonStyle(WixalButtonStyle(outlined:true))
+        }.padding(24).frame(width:480).background(theme.background).onAppear{focused=true}.interactiveDismissDisabled(working)
+    }
+    private func create(){
+        guard !working && !engine.busy && !name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else{return}
+        working=true
+        Task{defer{working=false};do{
+            if selectedFolder.isEmpty{_=try await engine.call("project-create",["name":name])}
+            else{_=try await engine.call("project-add",["root":selectedFolder,"name":name])}
+            close()
+        }catch{self.error=error.localizedDescription}}
+    }
+}

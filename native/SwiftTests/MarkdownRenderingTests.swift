@@ -63,6 +63,11 @@ struct MarkdownRenderingChecks {
         requireTrue(blocks[1].text.contains("<script>"))
     }
 
+    func testTableLineBreaksRemainTextOnly() {
+        requireEqual(String(tableCellMarkdown("First<br>Second<BR />Third").characters),"First\nSecond\nThird")
+        requireTrue(String(tableCellMarkdown("<script>keep as text</script>").characters).contains("script"))
+    }
+
     func testUnsafeInlineLinksHaveNoNavigationDestination() {
         let value=inlineMarkdown("[unsafe](file:///etc/passwd) and [safe](https://docs.python.org/3/)")
         requireEqual(value.runs.compactMap(\.link).map(\.scheme),["https"])
@@ -81,7 +86,8 @@ private func requireTrue(_ value:Bool,file:StaticString=#fileID,line:UInt=#line)
         checks.testNestedMultilineListAndTaskItems()
         checks.testSetextReferenceLinksQuoteAndFence()
         checks.testEscapedTablePipesAndInertHTML()
+        checks.testTableLineBreaksRemainTextOnly()
         checks.testUnsafeInlineLinksHaveNoNavigationDestination()
-        print("{\"status\":\"passed\",\"checks\":4,\"implementation\":\"production WixalMarkdown parser\"}")
+        print("{\"status\":\"passed\",\"checks\":5,\"implementation\":\"production WixalMarkdown parser\"}")
     }
 }

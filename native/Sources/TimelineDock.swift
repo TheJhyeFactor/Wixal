@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import WixalActivity
 
+/// One status line; command output and intermediate work stay behind Details.
 struct TimelineDock: View {
     @ObservedObject var engine: EngineClient
     let milestones: [TimelineMilestone]
@@ -12,93 +13,81 @@ struct TimelineDock: View {
     var maximumDetailHeight:CGFloat = 220
     @Environment(\.wixalTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @FocusState private var dockFocused:Bool
+    @Environment(\.wixalTextSize) private var textSize
 
-    private var selected: TimelineMilestone? {
-        if let selectedID,let value=milestones.first(where:{$0.id==selectedID}) {return value}
-        return milestones.last
+    private var thinking:String {
+        if !engine.thinking.isEmpty{return engine.thinking}
+        let start=engine.messages.lastIndex{ textValue($0["role"])=="user" } ?? 0
+        return engine.messages.suffix(from:start).compactMap{$0["thinking"] as? String}.joined(separator:"\n\n")
     }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 9) {
-                Image(systemName: engine.busy ? "bolt.horizontal.circle" : "clock.arrow.circlepath")
-                    .foregroundStyle(engine.busy ? theme.accent : theme.muted)
-                Text(engine.review != nil ? "Waiting for approval" : engine.busy ? "Running" : "Activity")
-                    .font(.system(size: 11, weight: .semibold))
-                if !milestones.isEmpty { Text("· \(milestones.count) milestones").foregroundStyle(theme.muted) }
-                Spacer()
-                Button(folded ? "Show activity" : "Hide details") { folded.toggle() }
-                    .buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(theme.muted)
-                Button(replaying ? "Stop replay" : "Replay run", action: replay)
-                    .buttonStyle(WixalButtonStyle(outlined: true)).font(.system(size: 10)).disabled(milestones.isEmpty || engine.busy)
-            }
-
-            if !folded {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 7) {
-                        ForEach(milestones) { milestone in
-                            Button {
-                                selectedID = milestone.id
-                                dockFocused = true
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: icon(for: milestone.status)).font(.system(size: 9))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(milestone.title).lineLimit(1)
-                                        Text(milestone.subtitle).font(.system(size: 9)).foregroundStyle(theme.muted).lineLimit(1)
-                                    }
-                                }.padding(.horizontal, 9).padding(.vertical, 7)
-                            }.buttonStyle(WixalButtonStyle(outlined: true))
-                                .background(selectedID == milestone.id ? theme.selected : .clear, in: RoundedRectangle(cornerRadius: 7))
-                                .accessibilityAddTraits(selectedID == milestone.id ? [.isSelected] : [])
-                        }
+    private var status:String {
+        if engine.review != nil{return "Waiting for approval"}
+        if !engine.currentTool.isEmpty{return "Running " + textValue(engine.currentTool["name"]).replacingOccurrences(of:"_",with:" ")}
+        if !engine.streaming.isEmpty{return "Writing response"}
+        if !engine.thinking.isEmpty{return "Thinking"}
+        return engine.activity == "Generating reply…" ? "Waiting for model" : engine.activity
+    }
+    private var selected:TimelineMilestone? {milestones.first{$0.id==selectedID} ?? milestones.last}
+    var body:some View {
+        VStack(alignment:.leading,spacing:12){
+            HStack(spacing:10){
+                if engine.busy {
+                    Image(systemName:engine.review != nil ? "checkmark.shield" : "circle.dotted")
+                        .foregroundStyle(theme.muted)
+                        .symbolEffect(.pulse,options:.repeating,isActive:engine.review == nil && !reduceMotion)
+                    Text(status).id(status).transition(.opacity).lineLimit(2)
+                    if let started=engine.runStarted {
+                        TimelineView(.periodic(from:started,by:1)){context in Text("\(max(0,Int(context.date.timeIntervalSince(started)))) s").monospacedDigit().foregroundStyle(theme.muted)}
                     }
                 }
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration:0.22)){folded.toggle()}
+                } label:{
+                    HStack(spacing:5){Text("Details");Image(systemName:"chevron.right").font(.system(size:9)).rotationEffect(.degrees(folded ? 0 : 90))}
+                }.buttonStyle(.plain).foregroundStyle(theme.muted).accessibilityLabel(folded ? "Show response details" : "Hide response details")
+                Spacer(minLength:5)
+                if engine.busy {Button("Stop",action:engine.stop).buttonStyle(.plain).foregroundStyle(theme.muted).accessibilityLabel("Stop current work")}
+            }.wixalFont(size:11).frame(minHeight:24)
+                .animation(reduceMotion ? nil : .easeInOut(duration:0.16),value:status)
+            if !folded {
+                ScrollView {
+                    VStack(alignment:.leading,spacing:14){
+                        if !thinking.isEmpty {
+                            DisclosureGroup(engine.busy ? "Model thinking · live" : "Model thinking") {
+                                Text(thinking).font(.system(size:max(12,textSize-1))).foregroundStyle(theme.muted).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading).padding(.top,8)
+                            }
+                        }
+                        ForEach(milestones){step in
+                            DisclosureGroup {
+                                VStack(alignment:.leading,spacing:9){
+                                    if !step.command.isEmpty {Text(step.command).textSelection(.enabled)}
+                                    if !step.output.isEmpty {Text(step.output).textSelection(.enabled)}
+                                    if !step.updates.isEmpty {DisclosureGroup("Updates"){ForEach(Array(step.updates.enumerated()),id:\.offset){_,update in MarkdownMessage(content:update)}}}
+                                    DisclosureGroup("Technical events"){Text(step.rawEvents.joined(separator:"\n\n")).textSelection(.enabled)}
+                                    Button("Copy output"){NSPasteboard.general.clearContents();NSPasteboard.general.setString(step.output,forType:.string)}.buttonStyle(.plain).disabled(step.output.isEmpty)
+                                }.wixalFont(size:11,design:.monospaced).padding(.top,7)
+                            } label:{HStack{Text(step.title);Spacer();Text(step.status.replacingOccurrences(of:"_",with:" ").capitalized).foregroundStyle(theme.muted)}}
+                        }
+                        let sources=records(engine.messages.last(where:{textValue($0["role"])=="assistant"})?["memoryEvidence"])
+                        if !sources.isEmpty {
+                            DisclosureGroup("Sources"){
+                                ForEach(Array(sources.enumerated()),id:\.offset){_,source in
+                                    VStack(alignment:.leading,spacing:6){
+                                        Text(textValue(source["excerpt"])).textSelection(.enabled)
+                                        if !textValue(source["sourceSession"]).isEmpty{Button("Open source conversation"){engine.openMemorySource(textValue(source["sourceSession"]))}.buttonStyle(.plain).disabled(engine.busy)}
+                                    }.padding(.vertical,6)
+                                }
+                            }
+                        }
+                        if let usage=engine.messages.last(where:{textValue($0["role"])=="assistant"})?["usage"] as? [String:Any] {
+                            HStack(spacing:12){if let count=usage["eval_count"] as? Int{Text("\(count) tokens")};if let seconds=usage["elapsedSeconds"] as? Double{Text(String(format:"%.1f s",seconds))}}
+                                .foregroundStyle(theme.muted)
+                        }
+                        if milestones.isEmpty && thinking.isEmpty {Text("Waiting for the model’s first output.").foregroundStyle(theme.muted)}
+                    }.wixalFont(size:11).padding(.vertical,4).frame(maxWidth:.infinity,alignment:.leading)
+                }.frame(maxHeight:maximumDetailHeight).transition(.opacity.combined(with:.move(edge:.top)))
+                    .accessibilityElement(children:.contain).accessibilityLabel("Response details")
             }
-
-            if !folded, let selected {
-                ScrollView {VStack(alignment: .leading, spacing: 7) {
-                    HStack {
-                        Label(selected.title, systemImage: icon(for: selected.status))
-                            .font(.system(size: 11, weight: .medium))
-                        Spacer()
-                        Text(selected.status.capitalized)
-                            .font(.system(size: 9)).foregroundStyle(theme.muted)
-                    }
-                    if !selected.command.isEmpty {
-                        ScrollView {Text(selected.command).font(.system(size: 10, design: .monospaced)).textSelection(.enabled)
-                            .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(theme.inset, in: RoundedRectangle(cornerRadius: 6))}.frame(height:CGFloat(min(80,max(32,selected.command.components(separatedBy:"\n").count*14+16))))
-                    }
-                    if !selected.output.isEmpty {
-                        ScrollView {Text(selected.output).font(.system(size: 10,design:.monospaced)).foregroundStyle(theme.muted).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}.frame(height:CGFloat(min(100,max(28,(selected.output.components(separatedBy:"\n").count+selected.output.count/90)*14+10))))
-                    } else if !engine.busy {
-                        Text("No output recorded for this milestone yet.").font(.system(size: 10)).foregroundStyle(theme.muted)
-                    }
-                    HStack {Text(engine.project.map{textValue($0["name"])} ?? "Personal workspace");Spacer();Button("Copy output"){NSPasteboard.general.clearContents();NSPasteboard.general.setString(selected.output,forType:.string)}.disabled(selected.output.isEmpty)}.font(.system(size:10)).foregroundStyle(theme.muted)
-                    if !selected.updates.isEmpty {DisclosureGroup("Approach & updates"){ScrollView{ForEach(Array(selected.updates.enumerated()),id:\.offset){_,update in MarkdownMessage(content:update)}}.frame(height:120)}}
-                    DisclosureGroup("Raw events · \(selected.rawEvents.count)"){ScrollView{Text(selected.rawEvents.joined(separator:"\n\n")).font(.system(size:10,design:.monospaced)).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}.frame(height:120)}
-                }.padding(10)}.frame(maxHeight:maximumDetailHeight).background(theme.panel, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.line, lineWidth: 1))
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("Dock: \(selected.title), \(selected.status)")
-                    .focusable().focused($dockFocused)
-            }
-            if engine.busy {HStack{Label(engine.review != nil ? "Waiting for your approval" : engine.activity,systemImage:engine.review != nil ? "checkmark.shield" : "arrow.triangle.2.circlepath").font(.system(size:10)).foregroundStyle(theme.accent);Spacer();Button("Stop",action:engine.stop).buttonStyle(WixalButtonStyle(outlined:true)).accessibilityLabel("Stop current work")}}
-        }.padding(12).background(theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.line, lineWidth: 1))
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: folded)
-    }
-
-    private func icon(for status: String) -> String {
-        switch status.lowercased() {
-        case "finished", "completed", "success": return "checkmark.circle.fill"
-        case "waiting_review", "awaiting review": return "checkmark.shield"
-        case "running", "requested", "pending": return "circle.dotted"
-        case "stopped", "cancelled": return "stop.circle.fill"
-        case "failed", "error", "declined", "interrupted", "no result": return "exclamationmark.circle.fill"
-        default: return "circle"
-        }
+        }.padding(.vertical,4)
     }
 }

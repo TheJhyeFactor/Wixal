@@ -5,6 +5,8 @@ from .account import Accounts
 from .companion import Companion
 from .storage import now
 
+ACCOUNT_RESTORE_TIMEOUT_SECONDS = 10
+
 class NativeIntegrations:
     def __init__(self,service):
         self.service=service;self.account=Accounts(service.store.directory);self.companion=Companion(service)
@@ -20,8 +22,8 @@ class NativeIntegrations:
         self.service.emit('activity',dict(text='Restoring saved Wixal sign-in…'))
         try:
             # Restoring may refresh a token and read two cloud collections. Give
-            # those cold connections a bounded deadline within the host hello budget.
-            async with asyncio.timeout(45):
+            # those cold connections 10 seconds within the 30-second host hello budget.
+            async with asyncio.timeout(ACCOUNT_RESTORE_TIMEOUT_SECONDS):
                 await self.account.dispatch('account-restore',{},self.service.store)
             if not self.account.ready:
                 self.account.message='Saved sign-in is unavailable. Restore or sign in from Account to use account preferences.'

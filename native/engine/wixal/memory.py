@@ -20,10 +20,15 @@ def owner(store):
 def settings(store):
     project=store.project()
     mode=(project or {}).get('memoryMode','global')
+    from .agent_context import profile
+    active=profile.get()
+    if active:
+        mode={'Project only':'project','Project + global preferences':'both','Global preferences only':'global','Memory off':'off'}.get(active.get('memoryScope'),'project')
+
     return dict(project=bool(project and mode in ('project','both')),
                 global_=bool(mode in ('global','both') and store.data.get('globalMemoryEnabled',True)),
-                history=(project or store.data).get('referenceHistory',True),
-                suggestions=(project or store.data).get('memorySuggestions',True),
+                history=active.get('recallHistory',True) if active else (project or store.data).get('referenceHistory',True),
+                suggestions=active.get('suggestMemory',False) if active else (project or store.data).get('memorySuggestions',True),
                 modelReview=(project or store.data).get('memoryModelReview',False))
 
 def terms(query):

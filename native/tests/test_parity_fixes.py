@@ -57,6 +57,8 @@ class ParityFixes(unittest.IsolatedAsyncioTestCase):
             execute.assert_not_awaited()
 
     async def test_mentions_validate_and_keep_followup_tools(self):
+        # Chat keeps explicit legacy capabilities; Agent mode discovers tools automatically.
+        self.store.data['mode']='chat'
         self.store.data['enabledTools']=['workspace_info','load_skill']
         with patch.object(self.service.runtime,'catalog',AsyncMock(return_value=[dict(name='plain',capabilities=[])])):
             with self.assertRaisesRegex(ValueError,'conversation only'):await self.service.dispatch('chat',dict(text='Use @workspace_info.'))

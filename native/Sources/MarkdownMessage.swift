@@ -10,6 +10,7 @@ private struct MarkdownBlocksView:View{
     let blocks:[MarkdownBlock]
     @Environment(\.wixalTheme) private var theme
     @Environment(\.wixalTextSize) private var textSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body:some View{
         VStack(alignment:.leading,spacing:14){
             ForEach(blocks){block in
@@ -18,7 +19,7 @@ private struct MarkdownBlocksView:View{
                 case "code":
                     VStack(alignment:.leading,spacing:0){HStack{SwiftUI.Text(block.language.isEmpty ? "Code" : block.language);Spacer();Button("Copy"){copyText(block.text)}.buttonStyle(.plain)}.font(.system(size:10,design:.monospaced)).foregroundStyle(theme.muted).padding(.horizontal,14).padding(.vertical,10);Rectangle().fill(theme.line).frame(height:1);ScrollView(.horizontal){SwiftUI.Text(highlightCode(block.text)).font(.system(size:max(11,textSize-2),design:.monospaced)).lineSpacing(5).textSelection(.enabled).padding(16).frame(maxWidth:.infinity,alignment:.leading)}}.background(theme.inset,in:RoundedRectangle(cornerRadius:9)).overlay(RoundedRectangle(cornerRadius:9).stroke(theme.line,lineWidth:1))
                 case "table":
-                    MarkdownTable(rows:block.rows,theme:theme,fontSize:max(11,textSize-1),alignments:block.alignments).frame(height:min(360,CGFloat(block.rows.count)*44+24)).accessibilityLabel("Response table")
+                    ResponseTable(rows:block.rows,theme:theme,fontSize:max(12,textSize-1),alignments:block.alignments).accessibilityLabel("Response table")
                 case "list":AnyView(MarkdownBlocksView(blocks:block.children))
                 case "item":
                     HStack(alignment:.top,spacing:10){SwiftUI.Text(block.marker).foregroundStyle(theme.muted).frame(minWidth:18,alignment:.trailing);AnyView(MarkdownBlocksView(blocks:block.children)).frame(maxWidth:.infinity,alignment:.leading)}
@@ -30,6 +31,7 @@ private struct MarkdownBlocksView:View{
                 }
             }
         }.foregroundStyle(theme.text).tint(theme.accent).frame(maxWidth:.infinity,alignment:.leading)
+            .animation(reduceMotion ? nil : .easeOut(duration:0.16),value:blocks.count)
     }
     private func highlightCode(_ code:String)->AttributedString{
         var value=AttributedString(code)

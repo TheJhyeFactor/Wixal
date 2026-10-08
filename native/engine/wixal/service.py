@@ -2,9 +2,11 @@
 import argparse
 import copy
 import asyncio
+import hashlib
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 from . import VERSION
 from .agent import Agent
@@ -18,10 +20,28 @@ from .integrations import NativeIntegrations
 from .requests import Requests
 
 
+def ipc_socket_path(directory):
+    """Return a per-user short socket path and a workspace-local compatibility alias.
+
+    macOS sockaddr_un.sun_path is short. Application Support paths, especially
+    nested acceptance workspaces, can exceed it even though the filesystem path
+    itself is valid. Keep the real endpoint in a private temporary directory and
+    expose the historical engine.sock name as a symlink for existing clients.
+    """
+    data = Path(directory).expanduser().resolve()
+    root = Path(tempfile.gettempdir()) / f"wxipc-{os.getuid()}"
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = root.lstat()
+    if not root.is_dir() or root.is_symlink() or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise RuntimeError("The private Wixal IPC directory is not safe to use")
+    digest = hashlib.sha256(str(data).encode()).hexdigest()[:24]
+    return root / f"e-{digest}.sock"
+
+
 class Service:
     def __init__(self, directory, payload, emit, endpoint=None):
         self.emit = emit
-        self.store = Store(directory)
+        self.store = Store(directory, startup=lambda info:emit("startup-progress",info))
         if not self.store.data.get("nativeInitialized"):
             self.store.data["enabledTools"] = [t["function"]["name"] for t in DEFINITIONS]
             self.store.data["nativeInitialized"] = True
@@ -52,7 +72,13 @@ class Service:
         self.tools.runtime=self.runtime
         self.agent = Agent(self.store, self.runtime, self.tools, emit)
         self.tools.delegate = self.delegate
+        from .agents import Agents
+        self.agents=Agents(self)
+        self.tools.management=self.agents
         self.active = None
+        from .security_workspace import SecurityWorkspace
+        self.security_workspace = SecurityWorkspace(self)
+        self.assessment_task = None
         self.manual_tools = 0
         self.scheduler = None
         self.model_manager = ModelManager(self.runtime, self.store, emit, self.idle)
@@ -90,6 +116,8 @@ class Service:
         return result
 
     def idle(self):
+        if getattr(self, 'security_workspace', None) and self.security_workspace.busy:
+            raise ValueError('Stop or finish security runs before changing workspace execution settings')
         if getattr(self,"sync",None) and self.sync.lock.locked():raise ValueError("Finish workspace sync first")
         if self.manual_tools or self.active and not self.active.done():
             raise ValueError("Stop or finish the current agent task first")
@@ -98,10 +126,30 @@ class Service:
 
     async def dispatch(self, method, params):
         params = params or {}
+        if method.startswith('security-') and method != 'security-readiness':
+            return await self.security_workspace.dispatch(method, params)
         if method == "hello":
             await self.integrations.restore_if_needed()
             return dict(version=VERSION, protocol=1, state=self.store.data, tools=self.tools.catalog(), storage=str(self.store.directory))
         if method == "ping": return True
+        if method == 'agent-guide':
+            task=next((t for t in self.store.data['tasks'] if t['id']==params.get('id') and t.get('agentId') and t['status'] in ('running','waiting_review')),None)
+            if not task or not self.active or self.active.done():raise ValueError('No active agent run accepts guidance')
+            from .agents import text
+            task.setdefault('pendingGuidance',[]).append(text(params.get('text'),'guidance',4000))
+            self.store.save();self.emit('state',self.store.data);return dict(queued=True)
+        if method in ('agent-starter-pack','agent-save','agent-run','workflow-save','workflow-run','workflow-resume','agent-schedule-save','agent-schedule-toggle','agent-schedule-run','agent-schedule-delete','agent-resume','agent-verify','agent-enqueue','agent-job-cancel','skill-propose','skill-evaluate','skill-promote','skill-rollback','workflow-merge'):
+            return await self.agents.dispatch(method,params)
+        if method in ('workspace-backup','workspace-import-preview','workspace-import','workspace-storage','workspace-diagnostics'):
+            from .workspace_data import dispatch
+            return await dispatch(self,method,params)
+        if method == 'settings' and set(params) == {'ui'}:
+            from .preferences import validate_ui
+            # Appearance does not alter the active request. Permit it during generation,
+            # but avoid racing a sync snapshot transaction.
+            if self.sync.lock.locked():raise ValueError('Finish workspace sync first')
+            self.store.data['ui'].update(validate_ui(params['ui']))
+            self.store.save();self.emit('state',self.store.data);return self.store.data
         if method in ('sync-settings','sync-run','sync-resolve','sync-status'):
             self.idle()
             if method=='sync-settings':result=await self.sync.configure(params)
@@ -191,10 +239,14 @@ class Service:
         if method == "task-start":
             self.idle()
             task = next((t for t in self.store.data["tasks"] if t["id"]==params.get("id")),None)
-            if not task or task["status"] not in ("queued","failed","interrupted","cancelled","paused"):
+            if not task or task["status"] not in ("queued","failed","interrupted","cancelled","paused","needs_attention"):
                 raise ValueError("This task cannot be started")
+            if task.get("agentSnapshot",{}).get("_branchRoot"):raise ValueError("Resume this task through its isolated workflow")
+            if task.get("agentId"):
+                self.agents.find("tasks",task["id"])
+                self.active=asyncio.create_task(self.agents.run(task["agentId"],task["prompt"],task.get("projectId"),snapshot=task["agentSnapshot"],resume_task=task));return await self.active
             await self.tools.close()
-            self.store.select_project(task.get("projectId"));self.store.new_session()
+            self.store.select_project(task.get("projectId"));self.store.data["mode"]="agent";self.store.new_session()
             self.active = asyncio.create_task(self.agent.run(task["prompt"],queued_task=task))
             return await self.active
         if method == "chat":
@@ -245,23 +297,48 @@ class Service:
             finally:
                 self.manual_tools -= 1
         self.idle()
-        if method == "project-add":
+        if method == "project-create":
+            name=params.get("name", "")
+            if not isinstance(name,str):raise ValueError("Enter a project name")
+            name=name.strip()
+            if not name or len(name)>120 or name.startswith('.') or any(c in name for c in '/\\:') or any(ord(c)<32 for c in name):
+                raise ValueError("Use a project name under 120 characters without slashes or special characters")
+            projects=self.store.directory / "Projects"
+            projects.mkdir(exist_ok=True)
+            root=projects / name
+            try:root.mkdir()
+            except FileExistsError:raise ValueError("A project with that name already exists. Choose another name.")
+            self.store.add_project(str(root))
+        elif method == "project-add":
             mode,size=params.get("memoryMode","project"),params.get("memorySize",24000)
             if mode not in ("off","project","global","both") or size not in (8000,24000,48000):raise ValueError("Choose a memory scope and budget")
             root=str(Path(params["root"]).expanduser().resolve(strict=True))
             existing=any(p["root"]==root for p in self.store.data["projects"])
             project=self.store.add_project(root)
-            if not existing:project.update(memoryMode=mode,memorySize=size)
+            if not existing:
+                project.update(memoryMode=mode,memorySize=size)
+                name=params.get("name")
+                if isinstance(name,str) and name.strip() and len(name.strip())<=120:project["name"]=name.strip()
         elif method == "project-select":
             await self.tools.close()
             await self.mcp.close()
             self.store.select_project(params.get("id"))
         elif method == "session-new":
-            self.store.new_session()
+            mode=params.get("mode", self.store.data["mode"])
+            if mode not in ("chat", "agent"):raise ValueError("Unknown conversation mode")
+            self.store.data["mode"]=mode
+            current=self.store.session() or {}
+            draft=current.get("draft") or {}
+            reusable=(current.get("projectId")==self.store.data["activeProject"] and current.get("mode")==mode
+                      and not current.get("archivedAt") and not current.get("messages") and not draft.get("text", "").strip()
+                      and not any(job.get("owner")==current.get("id") for job in self.tools.jobs.values())
+                      and not draft.get("attachments") and current.get("title")=="New conversation")
+            if not reusable:self.store.new_session()
         elif method == "session-select":
             selected = next(s for s in self.store.data["sessions"] if s["id"]==params["id"] and s.get("projectId")==self.store.data["activeProject"])
             await self.tools.close()
             self.store.data["activeSession"] = selected["id"]
+            self.store.data["mode"] = selected.get("mode", self.store.data["mode"])
         elif method == "session-archive":
             session = next(s for s in self.store.data["sessions"] if s["id"]==params["id"])
             session["archivedAt"] = None if params.get("restore") else now()
@@ -280,16 +357,10 @@ class Service:
                     if key=="mode" and params[key] not in ("chat", "agent"):
                         raise ValueError("Unknown chat mode")
                     self.store.data[key] = params[key]
+                    if key=="mode" and self.store.session():self.store.session()["mode"]=params[key]
             if "ui" in params:
-                ui = params["ui"]
-                if not isinstance(ui,dict) or set(ui)-{"theme","textSize","reduceMotion","launchAnimation","launchSound","sidebarCollapsed","appIcon"}: raise ValueError("Invalid appearance settings")
-                if "theme" in ui and ui["theme"] not in ("sakura","midnight","paper","forest"): raise ValueError("Unknown theme")
-                if "textSize" in ui and ui["textSize"] not in (11,13,15,17): raise ValueError("Unknown text size")
-                if "reduceMotion" in ui and not isinstance(ui["reduceMotion"],bool): raise ValueError("Invalid motion preference")
-                for key in ("reduceMotion","launchAnimation","launchSound","sidebarCollapsed"):
-                    if key in ui and not isinstance(ui[key],bool): raise ValueError("Invalid interface preference")
-                if "appIcon" in ui and ui["appIcon"] not in ("theme","sakura","midnight","pearl","copper"): raise ValueError("Unknown app icon")
-                self.store.data["ui"].update(ui)
+                from .preferences import validate_ui
+                self.store.data["ui"].update(validate_ui(params["ui"]))
             if "contextSize" in params:
                 if params["contextSize"] not in (4096,8192,16384,32768):
                     raise ValueError("Choose a bounded model context")
@@ -343,14 +414,19 @@ class Service:
             config=next(s for s in self.store.data['mcpServers'] if s['id']==params['id'])
             await self.mcp.disconnect(config['id']);await Vault(self.store.directory,config['id']).clear()
             self.emit('catalog',self.tools.catalog())
-        elif method == "mcp-add" and params.get('transport')=='http':
-            from .remote_mcp import validate_url
-            url=validate_url(params.get('url',''))
-            self.store.data['mcpServers'].append(dict(id=identity(),name=params.get('name') or 'Remote MCP',transport='http',url=url,oauth=bool(params.get('oauth')),clientId=str(params.get('clientId',''))[:500],scope=str(params.get('scope',''))[:500]))
-        elif method == "mcp-add":
-            if not params.get("command") or not isinstance(params.get("args",[]), list):
-                raise ValueError("Enter a command and JSON argument list")
-            self.store.data["mcpServers"].append(dict(id=identity(), name=params.get("name", "MCP server"), command=params["command"], args=params.get("args",[])))
+        elif method in ('mcp-add','mcp-update'):
+            from .preferences import server_config
+            config=server_config(params)
+            if method=='mcp-add':self.store.data['mcpServers'].append(dict(id=identity(),**config))
+            else:
+                existing=next((v for v in self.store.data['mcpServers'] if v['id']==params.get('id')),None)
+                if existing is None:raise ValueError('Server no longer exists')
+                if any(existing.get(k)!=config.get(k) for k in ('transport','url','clientId','oauth')):
+                    from .remote_mcp import Vault
+                    await Vault(self.store.directory,existing['id']).clear()
+                await self.mcp.disconnect(existing['id'])
+                server_id=existing['id'];existing.clear();existing.update(id=server_id,**config)
+                self.emit('catalog',self.tools.catalog())
         elif method == "mcp-connect":
             config = next(s for s in self.store.data["mcpServers"] if s["id"]==params["id"])
             await self.mcp.connect(config, (self.store.project() or {}).get("root"))
@@ -377,11 +453,15 @@ class Service:
         child_tools = Tools(child_store, no_review, lambda *_: None, self.mcp, None)
         child = Agent(child_store,self.runtime,child_tools,lambda *_:None)
         child.turn_budget = 8
+        from .agent_context import profile as active_profile
+        inherited=active_profile.get()
+        token=active_profile.set(dict(inherited,reviewPolicy='Read only',maxTurns=8) if inherited else dict(id=child_id,name='Project delegate',instructions='Inspect the project and report source evidence. Do not modify anything.',reviewPolicy='Read only',memoryScope='Memory off',skills=[]))
         try:
             task = await child.run(prompt)
             result = next((m["content"] for m in reversed(child_store.session()["messages"]) if m["role"]=="assistant"),"")
             return dict(childId=child_id,status=task["status"],result=result,tools=child_store.data["enabledTools"],checkpoints=task["checkpoints"])
         finally:
+            if token is not None:active_profile.reset(token)
             await child_tools.close()
             child_store.close()
 
@@ -389,7 +469,8 @@ class Service:
         while True:
             await asyncio.sleep(5)
             from .scheduling import run_due
-            await run_due(self)
+            from .agent_jobs import run_next
+            if not await run_due(self):await run_next(self)
             if self.store.data['syncState']['enabled'] and not (self.active and not self.active.done()) and now()-self.store.data['syncState'].get('lastAttempt',0)>60000:
                 self.store.data['syncState']['lastAttempt']=now()
                 try:await self.sync.run();self.emit('state',self.store.data)
@@ -397,6 +478,7 @@ class Service:
                     self.store.data['syncState']['warnings']=[str(error)];self.store.save();self.emit('state',self.store.data)
 
     async def close(self):
+        await self.security_workspace.close()
         if self.scheduler:
             self.scheduler.cancel()
             await asyncio.gather(self.scheduler, return_exceptions=True)
@@ -440,10 +522,17 @@ async def serve(args):
             await requests.close(writer)
             clients.discard(writer); writer.close()
             await writer.wait_closed()
-    socket_path = service.store.directory / "engine.sock"
-    if socket_path.exists() or socket_path.is_symlink(): socket_path.unlink()
+    socket_path = ipc_socket_path(service.store.directory)
+    compatibility_path = service.store.directory / "engine.sock"
+    if compatibility_path.exists() or compatibility_path.is_symlink(): compatibility_path.unlink()
+    if socket_path.exists() or socket_path.is_symlink():
+        endpoint = socket_path.lstat()
+        if not socket_path.is_socket() or endpoint.st_uid != os.getuid():
+            raise RuntimeError("A non-owned file occupies the Wixal IPC endpoint")
+        socket_path.unlink()
     socket_server = await asyncio.start_unix_server(connect, path=socket_path, limit=24*1024*1024)
     os.chmod(socket_path,0o600)
+    compatibility_path.symlink_to(socket_path)
     try:
         while line := await asyncio.to_thread(sys.stdin.buffer.readline, 24*1024*1024):
             try:
@@ -455,6 +544,7 @@ async def serve(args):
         socket_server.close(); await socket_server.wait_closed()
         for writer in list(clients): writer.close()
         socket_path.unlink(missing_ok=True)
+        compatibility_path.unlink(missing_ok=True)
         await requests.close()
         await service.close()
 

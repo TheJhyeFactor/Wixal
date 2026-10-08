@@ -14,6 +14,11 @@ from .memory import owner
 
 def due(schedule, stamp):
     if not schedule.get('enabled') or schedule.get('nextRun',stamp+1)>stamp:return None
+    if schedule.get('timing') in ('Every weekday','Every day','Every Monday','Every hour'):
+        from .agents import next_calendar
+        following=next_calendar(schedule,schedule['nextRun'])
+        missed=following<=stamp
+        return dict(scheduledFor=schedule['nextRun'],missed=int(missed),skip=schedule.get('missedRunPolicy','latest')=='skip' and missed,nextRun=next_calendar(schedule,stamp))
     interval=schedule['intervalSeconds']*1000
     missed=max(0,(stamp-schedule['nextRun'])//interval)
     return dict(scheduledFor=schedule['nextRun'],missed=int(missed),skip=schedule.get('missedRunPolicy','latest')=='skip' and missed>0,
@@ -21,11 +26,12 @@ def due(schedule, stamp):
 
 
 async def run_due(service, background=False):
+    if getattr(service,'security_workspace',None) and service.security_workspace.busy:return False
     if service.active and not service.active.done() or service.manual_tools or service.model_manager.busy or getattr(service,"sync",None) and service.sync.lock.locked():return False
     for schedule in service.store.data['schedules']:
         item=due(schedule,now())
         if not item or schedule.get('owner','guest')!=owner(service.store):continue
-        previous=dict(project=service.store.data['activeProject'],session=service.store.data['activeSession'],model=service.store.data['model'])
+        previous=dict(project=service.store.data['activeProject'],session=service.store.data['activeSession'],model=service.store.data['model'],mode=service.store.data['mode'])
         schedule.update(nextRun=item['nextRun'],lastRun=dict(**item,status='skipped' if item['skip'] else 'running',started=now(),background=background))
         service.store.save()  # Claim before work; never replay uncertain effects after a crash.
         if item['skip']:return True
@@ -35,15 +41,20 @@ async def run_due(service, background=False):
         async def review(details):
             denied.append(details.get('name','action'));return False
         try:
-            service.store.select_project(schedule.get('projectId'));service.store.new_session()
+            service.store.select_project(schedule.get('projectId'));service.store.data['mode']='agent';service.store.new_session()
             if schedule.get('model'):service.store.data['model']=schedule['model']
             if background:service.tools.approve=review;service.tools.host=unavailable
-            result=await service.dispatch('chat',dict(text=schedule['prompt']))
+            if schedule.get('agentID'):
+                service.agents.routine_authority=schedule.get('authority',{})
+                job=service.agents.workflow(schedule['workflowID'],schedule.get('projectId'),source='Background schedule' if background else 'Schedule') if schedule.get('workflowID') else service.agents.run(schedule['agentID'],schedule['prompt'],schedule.get('projectId'),'Background schedule' if background else 'Schedule',checks=schedule.get('successCriteria'),authority=schedule.get('authority',{}))
+                service.active=asyncio.create_task(job)
+                result=await service.active
+            else:result=await service.dispatch('chat',dict(text=schedule['prompt']))
             task=next((t for t in service.store.data['tasks'] if t['id']==result['id']),result)
             task.update(source='Background schedule' if background else 'Schedule',scheduleId=schedule['id'])
             if denied:
                 task.update(status='paused',error='This scheduled task needs action review. Open Wixal and retry it to review the requested actions.')
-            schedule['lastRun'].update(status=task['status'],taskId=task['id'],finished=now(),reviewsRequired=list(dict.fromkeys(denied)))
+            schedule['lastRun'].update(status=task['status'],taskId=task['id'],verification=task.get('verification'),finished=now(),reviewsRequired=list(dict.fromkeys(denied)))
         except asyncio.CancelledError:
             schedule['lastRun'].update(status='interrupted',finished=now());raise
         except Exception as error:
@@ -51,7 +62,13 @@ async def run_due(service, background=False):
             service.emit('error',dict(message=str(error)))
         finally:
             service.tools.approve=original;service.tools.host=original_host
-            service.store.data.update(activeProject=previous['project'],activeSession=previous['session'],model=previous['model'])
+            service.agents.routine_authority=None
+            service.store.data.update(activeProject=previous['project'],activeSession=previous['session'],model=previous['model'],mode=previous['mode'])
+            last=schedule.get('lastRun',{})
+            policy=schedule.get('notification','Completion, failure or review')
+            if policy!='No notifications' and (policy!='Only when attention is needed' or last.get('status')!='completed'):
+                service.store.data.setdefault('notifications',[]).append(dict(id=__import__('uuid').uuid4().hex,scheduleId=schedule['id'],name=schedule.get('name','Scheduled task'),owner=owner(service.store),status=last.get('status'),taskId=last.get('taskId'),created=now(),read=False))
+                service.store.data['notifications']=service.store.data['notifications'][-200:]
             service.store.save();service.emit('state',service.store.data)
         return True
     return False
@@ -97,7 +114,10 @@ async def background(args):
     loop.add_signal_handler(signal.SIGTERM,current.cancel)
     try:
         await service.integrations.restore_if_needed()
-        async with asyncio.timeout(600):await run_due(service,True)
+        async with asyncio.timeout(600):
+            if not await run_due(service,True):
+                from .agent_jobs import run_next
+                await run_next(service,True)
     finally:await service.close()
 
 

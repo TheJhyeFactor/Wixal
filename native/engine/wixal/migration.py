@@ -1,24 +1,33 @@
 """Validated, atomic import of the Electron workspace into native storage."""
 import copy
 import json
+import hashlib
 import re
 from pathlib import Path
 from .storage import now
 from .conversation import attachments
 
 
-def import_workspace(store, source):
+def import_workspace(store, source, *, preview=False, preserve_preferences=False, expected_digest=None):
     source=Path(source).expanduser().resolve(strict=True)
     if source.stat().st_size>128*1024*1024: raise ValueError("Workspace exceeds the 128 MB import limit")
-    legacy=json.loads(source.read_text())
+    with source.open("rb") as stream:raw=stream.read(128*1024*1024+1)
+    if len(raw)>128*1024*1024:raise ValueError("Workspace exceeds the 128 MB import limit")
+    digest=hashlib.sha256(raw).hexdigest()
+    if expected_digest is not None and digest != expected_digest:
+        raise ValueError("The source changed after preview. Choose it again to review the updated records.")
+    legacy=json.loads(raw)
     if not isinstance(legacy,dict) or not all(isinstance(legacy.get(k),list) for k in ("projects","sessions","memories")):
         raise ValueError("This is not a Wixal workspace file")
+    native_backup=legacy.get("wixalBackupVersion")==1
+    if "wixalBackupVersion" in legacy and not native_backup:raise ValueError("Unsupported native backup version")
     candidate=copy.deepcopy(store.data)
     counts,warnings,skipped={},[],{}
     def warn(key,index,reason): warnings.append(f"{key} record {index+1}: {reason}")
-    for key in ("projects","sessions","memories","tasks","skills","schedules","mcpServers"):
+    for key in ("projects","sessions","memories","agentProfiles","agentWorkflows","tasks","skills","schedules","workflowRuns","skillCandidates","agentJobs","mcpServers"):
         records=legacy.get(key,[])
         if not isinstance(records,list): raise ValueError(f"Invalid {key} collection")
+        candidate.setdefault(key,[])
         seen={v["id"] for v in candidate[key]}
         counts[key]=0;skipped[key]=0
         for index,raw in enumerate(records):
@@ -42,7 +51,7 @@ def import_workspace(store, source):
                     messages=[]
                     for message in value["messages"]:
                         if not isinstance(message,dict) or message.get("role") not in ("system","user","assistant","tool") or not isinstance(message.get("content",""),str):raise ValueError("invalid message")
-                        message={k:v for k,v in message.items() if k in ("role","content","created","tool_calls","tool_name","usage","handoff")}
+                        message={k:v for k,v in message.items() if k in ("role","content","created","tool_calls","tool_name","usage","handoff") or native_backup and k in ("id","displayContent","memoryReferences")}
                         message.setdefault("content","")
                         original=value["messages"][len(messages)]
                         images=original.get("images",[])
@@ -50,24 +59,40 @@ def import_workspace(store, source):
                         prepared=[dict(type="image",name=(original.get("imageNames") or [])[i] if i<len(original.get("imageNames") or []) else f"Image {i+1}",base64=image) for i,image in enumerate(images)]
                         prepared+=original.get("attachments",[]) if isinstance(original.get("attachments",[]),list) else []
                         if prepared:
-                            saved=attachments(prepared,store)
+                            saved=attachments(prepared,None if preview else store)
                             message["attachments"]=saved
-                            message["imageIds"]=[a["imageId"] for a in saved if a["type"]=="image"]
+                            message["imageIds"]=[a["imageId"] for a in saved if a["type"]=="image" and "imageId" in a]
                         if "tool_calls" in message and (not isinstance(message["tool_calls"],list) or any(not isinstance(c,dict) or not isinstance(c.get("function"),dict) for c in message["tool_calls"])):raise ValueError("invalid tool history")
                         messages.append(message)
                     value=dict(id=value["id"],projectId=value.get("projectId"),title=str(value.get("title","Imported conversation"))[:120],created=value.get("created",now()),messages=messages,**({"archivedAt":value["archivedAt"]} if value.get("archivedAt") else {}))
+                    if native_backup:
+                        value["mode"]=raw.get("mode") if raw.get("mode") in ("chat","agent") else "agent"
+                        value["memoryOwner"]=raw.get("memoryOwner","guest") if isinstance(raw.get("memoryOwner","guest"),str) else "guest"
+                        value["memoryExcluded"]=raw.get("memoryExcluded") is True
+                        for field in ("agentId","scheduledRun"):
+                            if field in raw:value[field]=raw[field]
+                        if isinstance(raw.get("summary"),dict) and isinstance(raw["summary"].get("content"),str):value["summary"]=copy.deepcopy(raw["summary"])
                 elif key=="memories":
                     if not isinstance(value.get("content"),str):raise ValueError("missing note text")
                     value={k:v for k,v in value.items() if k in ("id","projectId","content","created")}
+                elif key in ("agentProfiles","agentWorkflows","workflowRuns","skillCandidates","agentJobs"):
+                    if not native_backup:raise ValueError("Agent records require a native backup")
+                    from .agent_data import imported
+                    value=imported(key,value,candidate,store)
                 elif key=="tasks":
                     if not isinstance(value.get("prompt"),str):raise ValueError("missing task prompt")
-                    value={k:v for k,v in value.items() if k in ("id","sessionId","projectId","prompt","created","updated","result","checkpoints","status")}
+                    value={k:v for k,v in value.items() if k in ("id","sessionId","projectId","prompt","created","updated","result","checkpoints","status") or native_backup and k in ("owner","agentId","agentSnapshot","source","workflowRunId","successCriteria","verification","attempts","turns","securityEvidence","securityFindings")}
+                    from .agent_data import validate_transfer_snapshot
+                    if native_backup:value=validate_transfer_snapshot(value)
                     value.setdefault("checkpoints",[])
                     if not isinstance(value["checkpoints"],list):raise ValueError("invalid action history")
-                    if value.get("status") not in ("completed","failed","cancelled","interrupted","paused","queued"):value["status"]="interrupted"
+                    if value.get("status") not in ("completed","failed","cancelled","interrupted","paused","queued","needs_attention"):value["status"]="interrupted"
                 elif key=="skills":
                     if not isinstance(value.get("name"),str) or not isinstance(value.get("content"),str) or len(value["content"])>24000:raise ValueError("invalid skill")
-                    value={k:v for k,v in value.items() if k in ("id","name","description","content","source")}
+                    value={k:v for k,v in value.items() if k in ("id","name","description","content","source") or native_backup and k in ("owner","versions","evaluationIds","created","updated")}
+                elif key=="schedules" and native_backup and value.get("agentID"):
+                    from .agent_data import imported
+                    value=imported(key,value,candidate,store)
                 elif key=="schedules":
                     if not isinstance(value.get("prompt"),str) or type(value.get("intervalSeconds")) is not int or not 60<=value["intervalSeconds"]<=31*86400:raise ValueError("invalid schedule")
                     value=dict(id=value["id"],prompt=value["prompt"],intervalSeconds=value["intervalSeconds"],nextRun=now()+value["intervalSeconds"]*1000,enabled=False,projectId=value.get("projectId"),importedPaused=True,model=str(value.get("model", ""))[:200],missedRunPolicy=value.get("missedRunPolicy") if value.get("missedRunPolicy") in ("latest","skip") else "latest",owner="guest")
@@ -82,7 +107,7 @@ def import_workspace(store, source):
                 if key=="mcpServers":warn(key,index,"imported disconnected; reconnect in Settings"+(" and add excluded credentials" if value["credentialsExcluded"] else ""))
                 candidate[key].append(value);seen.add(value["id"]);counts[key]+=1
             except (ValueError,TypeError,KeyError) as error:warn(key,index,str(error)+"; skipped")
-    if candidate.get("migration",{}).get("settingsVersion",0)<3:
+    if not preserve_preferences and candidate.get("migration",{}).get("settingsVersion",0)<3:
         if isinstance(legacy.get("autoSummary"),bool):candidate["autoSummary"]=legacy["autoSummary"]
         ui=legacy.get("ui",{})
         if isinstance(ui,dict):
@@ -90,7 +115,7 @@ def import_workspace(store, source):
             for key,value in ui.items():
                 if key in choices and value in choices[key] or key in ("reduceMotion","launchAnimation","launchSound","sidebarCollapsed") and isinstance(value,bool):candidate["ui"][key]=value
         candidate["appearanceVersion"]=2
-    if not candidate.get("migration"):
+    if not preserve_preferences and not candidate.get("migration"):
         for key,kind in (("model",str),("globalMemory",str),("globalMemoryEnabled",bool)):
             if isinstance(legacy.get(key),kind):candidate[key]=legacy[key]
         candidate["mode"]=legacy.get("mode") if legacy.get("mode") in ("chat","agent") else "agent"
@@ -107,7 +132,9 @@ def import_workspace(store, source):
     if candidate["projects"] or candidate["sessions"]:
         candidate["setup"].update(entryCompleted=True,completed=True)
     candidate["migration"]=dict(source=str(source),imported=now(),counts=counts,skippedExisting=skipped,warnings=warnings,settingsVersion=3)
+    result=dict(source=str(source),digest=digest,counts=counts,skippedExisting=skipped,warnings=warnings,note="Original workspace retained. Credentials and pairing excluded. Schedules imported paused; MCP servers require explicit connection.")
+    if preview:return result
     previous=store.data
     try:store.data=candidate;store.save()
     except BaseException:store.data=previous;raise
-    return dict(counts=counts,skippedExisting=skipped,warnings=warnings,note="Original workspace retained. Credentials and pairing excluded. Schedules imported paused; MCP servers require explicit connection.")
+    return result

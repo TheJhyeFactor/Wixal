@@ -1,7 +1,13 @@
 # Native completion status, 7 October 2026
 
+Latest approved Working/Response pass: Answer first is implemented and installed, with compact live status, optional thinking/tool evidence, subtle animation and measured table rows. 116 supporting tests, 5 Markdown checks, packaged smoke, loopback UI and actual gpt-oss:20b response passed. Exact package and acceptance scope: ANSWER_FIRST_ACCEPTANCE_2026-10-08.md.
+
 This records current implementation and acceptance separately. `PARITY_REVIEW_2026-10-07.md` is the before-change review; its listed differences are not all current defects.
 
+
+## Approved UI implementation, 8 October 2026
+
+The simplified UI is implemented and installed. Visible assessment Stop now passes with retained partial evidence; focused minimum-window/larger-text/four-theme and shortcut checks passed. The current full suite passes 114 tests and packaged smoke passed. See UI_UX_REDESIGN_ACCEPTANCE_2026-10-08.md for exact build hashes, project deletion semantics and remaining accessibility/external acceptance boundaries. Earlier test counts below describe preceding passes.
 
 ## Feature completion pass and current priority
 
@@ -85,6 +91,6 @@ Remaining acceptance includes complete fresh account creation/verification and t
 
 ## Everyday workflow completion pass (7 October, evening)
 
-See [the workflow tracker](WORKFLOW_TRACKER_2026-10-07.md) for final changes, build hashes, retained failures and open acceptance. Three section agents implemented compact activity/layout, memory/schedule/sync review, and browser/account/migration workflows. The combined supporting suite passed 103 tests; actual source and packaged local-model suites passed, and final installed WebKit download completion/cancellation/failure/repeated-transfer cases passed. Assessment cancellation persists partial evidence and stops actual scanner children. Memory workload now measures state saving/reopening and 30,000-passage semantic scoring, with generated workload data explicitly distinguished from live embeddings.
+See [the workflow tracker](WORKFLOW_TRACKER_2026-10-07.md) for final changes, build hashes, retained failures and open acceptance. Three section agents implemented compact activity/layout, memory/schedule/sync review, and browser/account/migration workflows. The combined supporting suite passed 107 tests; actual source and packaged local-model suites passed, and final installed WebKit download completion/cancellation/failure/repeated-transfer cases passed. Assessment cancellation persists partial evidence and stops actual scanner children. Memory workload now measures state saving/reopening and 30,000-passage semantic scoring, with generated workload data explicitly distinguished from live embeddings. Follow-up acceptance also passed populated native skills/schedules/MCP migration and actual Electron-origin MCP migration; see [the populated migration report](MIGRATION_POPULATED_ACCEPTANCE.md).
 
-Disposable-account and two-Mac checks are blocked at the user's request. The full minimum-window/four-theme/larger-text/keyboard/spoken-VoiceOver matrix remains unverified. A prior isolated SQLite startup hang and the long Unix socket path limit remain logged, not claimed fixed. This is an installed local native development preview; published v0.7.9 downloads remain Electron.
+Disposable-account and two-Mac checks are blocked at the user's request. Windows and Linux native support are paused. The full minimum-window/four-theme/larger-text/keyboard/spoken-VoiceOver matrix remains unverified. Long Unix socket paths are now fixed with a real engine/client test. SQLite lock waits are bounded and the app has a 30-second engine-startup watchdog, but the original `posixOpen` stall was not reproduced and its file path/provider was absent from the sample; therefore its underlying filesystem cause remains unresolved. Assessment Stop now targets a dedicated cancellable task, reports “Stopping…” while awaiting acknowledgement, and preserves partial results; the production IPC regression passes, but the visible retest on the newest package is blocked until the Mac is unlocked. Streaming scroll hold, navigation restore and replay completion are visibly accepted on the prior package. Sleeping-hardware wake remains blocked because Apple's scheduled power API requires root and this ad-hoc-signed local preview has no valid signing identity for a privileged helper. This is an installed local native development preview; published v0.7.9 downloads remain Electron.

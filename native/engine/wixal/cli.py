@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 from .storage import identity
-from .service import Service, parser
+from .service import Service, ipc_socket_path, parser
 
 
 async def run(args):
@@ -56,7 +56,7 @@ async def run(args):
 
 
 async def connected(args):
-    reader, writer = await asyncio.open_unix_connection(str(Path(args.data)/"engine.sock"),limit=64*1024*1024)
+    reader, writer = await asyncio.open_unix_connection(str(ipc_socket_path(args.data)),limit=64*1024*1024)
     async def send(method,params):
         request_id=identity()
         writer.write((json.dumps(dict(id=request_id,method=method,params=params))+"\n").encode());await writer.drain()
@@ -95,7 +95,7 @@ async def connected(args):
         writer.close();await writer.wait_closed()
 
 async def choose(args):
-    if (Path(args.data)/"engine.sock").exists():
+    if ipc_socket_path(args.data).exists():
         try: return await connected(args)
         except (FileNotFoundError,ConnectionRefusedError):pass
     await run(args)

@@ -21,9 +21,13 @@ def now():
 
 
 class Store:
-    def __init__(self, directory):
+    def __init__(self, directory, startup=None):
         self.directory = Path(directory).expanduser()
+        report = startup or (lambda info: None)
+        database_path = str((self.directory / "workspace.sqlite3").absolute())
+        report(dict(phase="workspace directory", database=database_path, pid=os.getpid()))
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        report(dict(phase="workspace owner lock", database=database_path, pid=os.getpid()))
         self.owner_lock = (self.directory / ".engine.lock").open("a+")
         try:
             fcntl.flock(self.owner_lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -46,21 +50,35 @@ class Store:
                 raise RuntimeError("This native workspace is already open. Close the other client or choose a separate --data directory.")
         self.owner_lock.seek(0);self.owner_lock.truncate()
         self.owner_lock.write(json.dumps(dict(pid=os.getpid(),background=bool(os.environ.get('WIXAL_BACKGROUND')))));self.owner_lock.flush()
-        self.db = sqlite3.connect(self.directory / "workspace.sqlite3")
-        os.chmod(self.directory / "workspace.sqlite3", 0o600)
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)")
-        row = self.db.execute("SELECT value FROM state WHERE id=1").fetchone()
-        self.data = json.loads(row[0]) if row else {}
+        # Bound waits on database-level locks during cold start. The sqlite3
+        # default is five seconds; spelling it out here makes startup behavior
+        # intentional and keeps the PRAGMA below on the same deadline.
+        try:
+            report(dict(phase="SQLite file open", database=database_path, pid=os.getpid()))
+            self.db = sqlite3.connect(self.directory / "workspace.sqlite3", timeout=3.0)
+            self.db.execute("PRAGMA busy_timeout=3000")
+            os.chmod(self.directory / "workspace.sqlite3", 0o600)
+            report(dict(phase="SQLite journal setup", database=database_path, pid=os.getpid()))
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)")
+            row = self.db.execute("SELECT value FROM state WHERE id=1").fetchone()
+            self.data = json.loads(row[0]) if row else {}
+        except BaseException:
+            if hasattr(self, "db"):
+                self.db.close()
+            self.owner_lock.close()
+            raise
         self.session_digests={};self.session_revisions={}
         had_setup = "setup" in self.data
-        defaults = dict(projects=[], sessions=[], memories=[], tasks=[], schedules=[], skills=[],
+        defaults = dict(projects=[], sessions=[], memories=[], tasks=[], schedules=[], skills=[], agentProfiles=[],agentWorkflows=[],workflowRuns=[],agentJobs=[],skillCandidates=[],notifications=[],
                         enabledTools=[], activeProject=None, activeSession=None, model="", mode="agent",
                         contextSize=8192, autoSummary=True, globalMemory="", globalMemoryEnabled=True,
                         setup=dict(entryCompleted=False, completed=False),assessmentResults=[],
                         mcpServers=[], ui=dict(theme="sakura", textSize=13, reduceMotion=False, launchAnimation=True, launchSound=True, sidebarCollapsed=False, appIcon="theme"))
         for key, value in defaults.items():
             self.data.setdefault(key, value)
+        for session in self.data["sessions"]:
+            session.setdefault("mode", self.data["mode"])
         self.data["provider"] = "ollama"
         if "usage" not in self.data:
             self.data["usage"]=[dict(**m["usage"],sessionId=s["id"],model=self.data.get("model",""),created=m.get("created"),kind="conversation") for s in self.data["sessions"] for m in s.get("messages",[]) if isinstance(m.get("usage"),dict)][-2000:]
@@ -69,11 +87,14 @@ class Store:
         for task in self.data["tasks"]:
             if task.get("status") in ("running", "waiting_review"):
                 task["status"] = "interrupted"
+        for job in self.data['agentJobs']:
+            if job.get('status')=='running':job.update(status='interrupted',error='Engine restarted; inspect retained effects before restarting')
         for schedule in self.data['schedules']:
             if schedule.get('lastRun',{}).get('status')=='running':schedule['lastRun'].update(status='interrupted',finished=now())
         self.save()
         from .memory import Memory
         self.memory = Memory(self)
+        report(dict(phase="workspace ready", database=database_path, pid=os.getpid()))
 
     def save(self):
         for session in self.data.get('sessions', []):
@@ -111,7 +132,7 @@ class Store:
 
     def new_session(self):
         from .memory import owner
-        session = dict(id=identity(), projectId=self.data["activeProject"], memoryOwner=owner(self), title="New conversation", created=now(), messages=[])
+        session = dict(id=identity(), projectId=self.data["activeProject"], memoryOwner=owner(self), mode=self.data.get("mode","agent"), title="New conversation", created=now(), messages=[])
         self.data["sessions"].append(session)
         self.data["activeSession"] = session["id"]
         self.save()
@@ -123,6 +144,8 @@ class Store:
         self.data["activeProject"] = project_id
         sessions = [s for s in self.data["sessions"] if s.get("projectId") == project_id and not s.get("archivedAt")]
         self.data["activeSession"] = sessions[-1]["id"] if sessions else None
+        if sessions:
+            self.data["mode"] = sessions[-1].get("mode", self.data.get("mode", "agent"))
         if not sessions:
             self.new_session()
         self.save()

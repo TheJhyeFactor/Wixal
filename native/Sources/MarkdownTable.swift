@@ -8,8 +8,9 @@ struct MarkdownTable:NSViewRepresentable {
     let theme:WixalTheme
     let fontSize:CGFloat
     var alignments:[NSTextAlignment]=[]
+    @Binding var measuredHeight:CGFloat
     private func cellText(_ text:String,column:Int)->NSAttributedString {
-        let parsed=inlineMarkdown(text)
+        let parsed=tableCellMarkdown(text)
         let result=NSMutableAttributedString(string:"")
         let paragraph=NSMutableParagraphStyle()
         paragraph.alignment=column<alignments.count ? alignments[column] : .left
@@ -44,8 +45,8 @@ struct MarkdownTable:NSViewRepresentable {
     }
     func makeCoordinator()->Coordinator{Coordinator(self)}
     func makeNSView(context:Context)->NSScrollView{
-        let scroll=NSScrollView();scroll.hasHorizontalScroller=true;scroll.hasVerticalScroller=true;scroll.autohidesScrollers=true;scroll.drawsBackground=false;scroll.borderType = .lineBorder
-        let table=NSTableView();table.delegate=context.coordinator;table.dataSource=context.coordinator;table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle;table.usesAlternatingRowBackgroundColors=false;table.gridStyleMask=[.solidHorizontalGridLineMask,.solidVerticalGridLineMask];table.intercellSpacing=NSSize(width:10,height:4);table.setAccessibilityLabel("Markdown table");scroll.documentView=table;return scroll
+        let scroll=FittedResponseTableScrollView();scroll.hasHorizontalScroller=true;scroll.hasVerticalScroller=true;scroll.autohidesScrollers=true;scroll.drawsBackground=false;scroll.borderType = .noBorder
+        let table=NSTableView();table.delegate=context.coordinator;table.dataSource=context.coordinator;table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle;table.usesAlternatingRowBackgroundColors=false;table.rowSizeStyle = .custom;table.gridStyleMask=[.solidHorizontalGridLineMask];table.intercellSpacing=NSSize(width:10,height:4);table.setAccessibilityLabel("Markdown table");scroll.documentView=table;return scroll
     }
     func updateNSView(_ scroll:NSScrollView,context:Context){
         context.coordinator.parent=self
@@ -53,6 +54,35 @@ struct MarkdownTable:NSViewRepresentable {
         let headings=(rows.first ?? []).map{String(inlineMarkdown($0).characters)}
         if table.tableColumns.count != headings.count{for column in table.tableColumns{table.removeTableColumn(column)};for (index,heading) in headings.enumerated(){let column=NSTableColumn(identifier:NSUserInterfaceItemIdentifier(String(index)));column.title=heading;column.minWidth=110;column.width=max(130,CGFloat(heading.count)*7+24);table.addTableColumn(column)}}
         for (index,column) in table.tableColumns.enumerated(){column.title=headings[index];column.headerCell.font=NSFont.systemFont(ofSize:fontSize,weight:.semibold);column.headerCell.textColor=NSColor(theme.text)}
+        (scroll as? FittedResponseTableScrollView)?.heightChanged={height in
+            let bounded=min(460,max(60,height))
+            if abs(measuredHeight-bounded)>1{DispatchQueue.main.async{measuredHeight=bounded}}
+        }
         table.backgroundColor=NSColor(theme.panel);table.gridColor=NSColor(theme.line);table.reloadData()
+        table.noteHeightOfRows(withIndexesChanged:IndexSet(integersIn:0..<table.numberOfRows))
+        scroll.needsLayout=true
+    }
+}
+
+struct ResponseTable:View {
+    let rows:[[String]]
+    let theme:WixalTheme
+    let fontSize:CGFloat
+    var alignments:[NSTextAlignment]=[]
+    @ViewState private var measuredHeight:CGFloat=128
+    var body:some View {
+        MarkdownTable(rows:rows,theme:theme,fontSize:fontSize,alignments:alignments,measuredHeight:$measuredHeight)
+            .frame(height:measuredHeight)
+    }
+}
+
+private final class FittedResponseTableScrollView:NSScrollView {
+    var heightChanged:((CGFloat)->Void)?
+    override func layout(){
+        super.layout()
+        guard let table=documentView as? NSTableView else{return}
+        let rows=table.numberOfRows
+        let bottom=rows>0 ? table.rect(ofRow:rows-1).maxY : 32
+        heightChanged?(bottom+(table.headerView?.frame.height ?? 24)+8)
     }
 }

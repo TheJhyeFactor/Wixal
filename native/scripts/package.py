@@ -18,7 +18,17 @@ parser=argparse.ArgumentParser(description="Build a native app; distribution req
 parser.add_argument("--development",action="store_true",help="Explicit local preview with development signing; not distributable")
 parser.add_argument("--identity",help="Developer ID Application identity")
 parser.add_argument("--notary-profile",help="Stored notarytool Keychain profile")
+parser.add_argument("--output",type=Path,help="Independent app destination for isolated validation")
+parser.add_argument("--display-name",default="Wixal Native")
+parser.add_argument("--bundle-identifier",default="app.wixal.native.preview")
+parser.add_argument("--executable-name",default="WixalNative")
+parser.add_argument("--preview-data",type=Path,help="Development preview workspace retained across Finder launches")
+parser.add_argument("--preview-endpoint",help="Loopback model endpoint for an isolated preview")
 options=parser.parse_args()
+if not options.executable_name.isalnum():parser.error("Use an alphanumeric executable name")
+if (options.preview_data or options.preview_endpoint) and not options.development:parser.error("Preview configuration requires --development")
+if options.preview_endpoint and not options.preview_endpoint.startswith(("http://127.0.0.1:","http://localhost:")):parser.error("Preview endpoint must use loopback")
+if options.output:app=options.output.expanduser().resolve()
 if not options.development:
     if not options.identity or not options.identity.startswith("Developer ID Application:") or not options.notary_profile:
         parser.error("Distribution requires --identity 'Developer ID Application: …' and --notary-profile. Use --development only for local validation.")
@@ -26,9 +36,12 @@ if not options.development:
     if options.identity not in identities:parser.error("The requested Developer ID identity is not available in this Mac's Keychain")
 elif options.identity or options.notary_profile:parser.error("Development and distribution options cannot be combined")
 destination=app
-(root/"release/native").mkdir(parents=True,exist_ok=True)
-staging=Path(tempfile.mkdtemp(prefix="wixal-native-package-",dir=root/"release/native"))
+destination.parent.mkdir(parents=True,exist_ok=True)
+staging=Path(tempfile.mkdtemp(prefix="wixal-native-package-",dir=destination.parent))
 app=staging/app.name
+
+source_paths=list((native/"Sources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))
+source_hashes={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
 
 def run(*args):
     subprocess.run([str(a) for a in args], cwd=native, check=True)
@@ -42,7 +55,7 @@ if app.exists():
     shutil.rmtree(app)
 resources=app/"Contents/Resources";macos=app/"Contents/MacOS"
 resources.mkdir(parents=True);macos.mkdir()
-shutil.copy2(bin_path/"WixalNative",macos/"WixalNative")
+shutil.copy2(bin_path/"WixalNative",macos/options.executable_name)
 for bundle in bin_path.glob("*.bundle"):
     shutil.copytree(bundle,resources/bundle.name,symlinks=True)
 shutil.copytree(native/"dist/wixal-engine",resources/"engine",symlinks=True)
@@ -51,14 +64,23 @@ shutil.copytree(root/"assets/icon-variants",resources/"icon-variants",symlinks=T
 shutil.copytree(root/"assets/audio",resources/"audio",symlinks=True)
 if (root/"assets/Wixal.icns").exists():shutil.copy2(root/"assets/Wixal.icns",resources/"Wixal.icns")
 with (app/"Contents/Info.plist").open("wb") as file:
-    plistlib.dump(dict(CFBundleExecutable="WixalNative",CFBundleIdentifier="app.wixal.native.preview",CFBundleName="Wixal Native",
-        CFBundleDisplayName="Wixal Native",CFBundlePackageType="APPL",CFBundleShortVersionString="0.7.8",CFBundleVersion="1",
+    plistlib.dump(dict(CFBundleExecutable=options.executable_name,CFBundleIdentifier=options.bundle_identifier,CFBundleName=options.display_name,
+        CFBundleDisplayName=options.display_name,CFBundlePackageType="APPL",CFBundleShortVersionString="0.7.8",CFBundleVersion="1",
         CFBundleIconFile="Wixal.icns",LSMinimumSystemVersion="14.0",LSApplicationCategoryType="public.app-category.developer-tools",
         NSHighResolutionCapable=True,NSAppTransportSecurity=dict(NSAllowsArbitraryLoads=True),
         NSHumanReadableCopyright="Wixal. Includes SwiftTerm and Ollama; see bundled notices."),file)
-notices = "Wixal Native uses SwiftTerm (MIT), Swift Markdown (Apache 2.0 with Swift runtime exception), swift-cmark (CommonMark/GFM parser licenses), Ollama (MIT) and a bundled Python runtime (PSF).\nNo Hermes implementation has been copied into this port.\n"
+if options.preview_data or options.preview_endpoint:
+    info_path=app/"Contents/Info.plist"
+    info=plistlib.loads(info_path.read_bytes())
+    if options.preview_data:info["WixalPreviewData"]=str(options.preview_data.expanduser().resolve())
+    if options.preview_endpoint:info["WixalPreviewEndpoint"]=options.preview_endpoint
+    info_path.write_bytes(plistlib.dumps(info))
+changed=[str(path.relative_to(root)) for path in source_paths if hashlib.sha256(path.read_bytes()).hexdigest()!=source_hashes[str(path.relative_to(root))]]
+if changed:raise RuntimeError("Source changed during packaging; rerun after edits finish: "+", ".join(changed))
+(resources/"SOURCE_MANIFEST.json").write_text(json.dumps(source_hashes,indent=2))
+notices = "Wixal Native uses SwiftTerm (MIT), Swift Markdown (Apache 2.0 with Swift runtime exception), swift-cmark (CommonMark/GFM parser licenses), Ollama (MIT) and a bundled Python runtime (PSF).\nIncludes an adapted Hermes duration parser (MIT, Nous Research). See Hermes-NOTICE.md and Hermes-LICENSE.\n"
 (resources/"THIRD_PARTY_NOTICES.txt").write_text(notices)
-for name, source in (("SwiftTerm-LICENSE",native/".build/checkouts/SwiftTerm/LICENSE"),("Wixal-LICENSE",root/"LICENSE")):
+for name, source in (("Hermes-LICENSE",native/"third_party/hermes/LICENSE"),("Hermes-NOTICE.md",native/"third_party/hermes/NOTICE.md"),("SwiftTerm-LICENSE",native/".build/checkouts/SwiftTerm/LICENSE"),("Wixal-LICENSE",root/"LICENSE")):
     if source.exists():shutil.copy2(source,resources/name)
 for dependency in ("swift-markdown", "swift-cmark"):
     checkout=native/".build/checkouts"/dependency

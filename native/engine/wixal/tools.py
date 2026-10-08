@@ -16,7 +16,7 @@ from pathlib import Path
 from .storage import identity, now
 
 DEFINITIONS = json.loads((Path(__file__).parent / "resources/tools.json").read_text())
-SKIP = {".git", "node_modules", ".venv", "venv", "release", ".next", "dist", ".build"}
+SKIP = {".git", "node_modules", ".venv", "venv", "release", ".next", "dist", ".build", ".wixal-tmp"}
 
 
 def sensitive(relative):
@@ -44,9 +44,9 @@ def validate(args, schema):
         raise ValueError("Tool arguments must be an object")
     properties = schema.get("properties", {})
     if any(k not in args for k in schema.get("required", [])):
-        raise ValueError("Missing required tool argument")
+        raise ValueError("Missing required tool argument; required fields: "+", ".join(schema.get("required",[])))
     if schema.get("additionalProperties") is False and set(args) - set(properties):
-        raise ValueError("Unknown tool argument")
+        raise ValueError("Unknown tool argument; allowed fields: "+", ".join(properties))
     for key, value in args.items():
         rule = properties.get(key, {})
         types = {"string": str, "integer": int, "number": (int, float), "array": list, "object": dict, "boolean": bool}
@@ -54,7 +54,7 @@ def validate(args, schema):
         if expected and (not isinstance(value, expected) or rule.get("type") in ("integer", "number") and isinstance(value, bool)):
             raise ValueError(f"Invalid type for {key}")
         if "enum" in rule and value not in rule["enum"]:
-            raise ValueError(f"Invalid value for {key}")
+            raise ValueError(f"Invalid value for {key}; choose one of {rule["enum"]}")
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             if value < rule.get("minimum", value) or value > rule.get("maximum", value):
                 raise ValueError(f"{key} is outside its bounds")
@@ -198,8 +198,11 @@ class Tools:
         self.jobs = {}
         self.delegate = None
 
+    def environment(self):
+        return dict(shell='/bin/zsh -l',executables={name:path for name in ('python','python3','node','npm','git','rg','nmap') if (path:=shutil.which(name))})
+
     def catalog(self):
-        return DEFINITIONS + self.mcp.definitions()
+        return DEFINITIONS + self.mcp.definitions() + (self.management.definitions() if getattr(self,"management",None) else [])
 
     def files(self, directory="."):
         root = self.store.project()["root"]
@@ -222,9 +225,19 @@ class Tools:
         project = self.store.project()
         if not project or not command.strip() or len(command)>8000:
             raise ValueError("A project and valid command are required")
-        if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds)):
+        if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds,**({"networkTarget":argv[-1]} if argv and Path(argv[0]).name=="nmap" else {}))):
             return "User declined this command."
-        child = await asyncio.create_subprocess_exec(*(argv or ["/bin/zsh", "-l", "-c", command]), cwd=project["root"],
+        from .agent_context import profile
+        branch=(profile.get() or {}).get("_branchRoot")
+        invocation=argv or ["/bin/zsh", "-l", "-c", command]
+        environment=None
+        if branch:
+            if not Path("/usr/bin/sandbox-exec").is_file():raise ValueError("Isolated commands require the macOS sandbox backend")
+            policy="(version 1) (allow default) (deny file-write*) (deny network*) (allow file-write* (subpath "+json.dumps(str(Path(branch).resolve()))+")) (allow file-write* (literal \"/dev/null\"))"
+            invocation=["/usr/bin/sandbox-exec","-p",policy,*invocation]
+            temporary=Path(branch)/".wixal-tmp";temporary.mkdir(exist_ok=True)
+            environment={**os.environ,"TMPDIR":str(temporary),"PYTHONDONTWRITEBYTECODE":"1"}
+        child = await asyncio.create_subprocess_exec(*invocation, cwd=project["root"],env=environment,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True)
         job_id = identity()
         job = dict(id=job_id, owner=session_id, projectId=project["id"], command=command, started=now(), state="running",
@@ -285,15 +298,22 @@ class Tools:
                     more=start+len(output.encode('utf-16-le'))//2<job["base"]+units, earliest_offset=job["base"], started=job["started"], finished=job.get("finished"))
 
     async def execute(self, name, args, session_id):
-        if name not in self.store.data["enabledTools"]:
-            raise ValueError(f"{name} is switched off in the tool kit")
+        from .agent_context import available_names
         definition = next((t for t in self.catalog() if t["function"]["name"]==name), None)
-        if not definition:
-            raise ValueError("Tool is unavailable")
+        if not definition:raise ValueError("Unknown tool name. Inspect workspace_info for the exact available tool names.")
+        if name not in available_names(self,self.store):
+            raise ValueError(f"{name} is switched off or outside this agent task boundary")
         validate(args, definition["function"]["parameters"])
+        from .agent_context import profile
+        from .agent_authority import enforce_target
+        enforce_target(profile.get(),name,args)
+        if (profile.get() or {}).get("_branchRoot") and (name.startswith("mcp_") or name.startswith("browser_") or name in ("terminal_exec","delegate_task","http_request","web_search","website_assess","network_scan")):
+            raise ValueError("External actions are unavailable in an isolated change branch")
         root = (self.store.project() or {}).get("root")
         from .context_policy import requires_project
         if requires_project(name) and (self.store.project() or {}).get('syncRootRequired'):raise ValueError('Locate this synced project folder in Settings before using project tools')
+        if getattr(self,"management",None) and name in self.management.names:
+            return await self.management.tool(name,args)
         if name == "load_skill":
             skill = next((s for s in self.store.data["skills"] if s["name"]==args["name"]),None)
             if not skill: raise ValueError("Unknown skill")
@@ -303,8 +323,8 @@ class Tools:
             return await self.delegate(args["prompt"])
         if name == "workspace_info":
             from .context_policy import eligible,category
-            available=eligible(self.catalog(),self.store.data['enabledTools'],self.store.project())
-            return dict(app="Wixal Native", project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name'])) for t in available],memory=self.store.memory.snapshot()['policy'])
+            available=eligible(self.catalog(),available_names(self,self.store),self.store.project())
+            return dict(app="Wixal Native",environment=self.environment(), project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name']),description=t['function']['description']) for t in available],memory=self.store.memory.snapshot()['policy'])
         if name == "list_files":
             return self.files(args.get("directory", "."))[args.get("offset", 0):]
         if name in ("read_file", "search_files"):

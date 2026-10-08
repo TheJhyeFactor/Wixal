@@ -15,7 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WindowGroup("Wixal Native") {
             WorkspaceView(engine: engine)
                 .frame(minWidth: 920, minHeight: 640)
-                .onAppear { delegate.engine = engine; engine.start() }
+                .onAppear {
+                    delegate.engine = engine; engine.start()
+                    // A deterministic packaged acceptance window, with the same
+                    // production minimum and no change to normal saved geometry.
+                    if ProcessInfo.processInfo.environment["WIXAL_NATIVE_ACCEPTANCE"] == "1" {
+                        DispatchQueue.main.async { NSApp.windows.first(where:{$0.title=="Wixal Native"})?.setContentSize(NSSize(width:920,height:640)) }
+                    }
+                }
         }
         .defaultSize(width: 1320, height: 880)
         .windowStyle(.hiddenTitleBar)
@@ -29,7 +36,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             CommandMenu("Workspace"){
                 Button("Project files"){navigate("Files")}.keyboardShortcut("f",modifiers:[.command,.shift])
                 Button("Tool kit"){navigate("Tool kit")}.keyboardShortcut("t",modifiers:[.command,.shift])
-                Button("Project memory"){navigate("Project memory")}.keyboardShortcut("m",modifiers:[.command,.shift])
+                Button("Chat"){navigate("Chat")}
+                Button("Agents"){navigate("Agents")}
+                Button("Cybersecurity"){navigate("Cybersecurity")}
+                Button("Projects"){navigate("Projects")}
                 Button("Terminal"){navigate("Terminal")}.keyboardShortcut("j")
                 Button("Models"){navigate("Models")}.keyboardShortcut("l")
                 Button("Usage & performance"){navigate("Performance")}

@@ -57,3 +57,9 @@ public func inlineMarkdown(_ text:String)->AttributedString{
     for run in result.runs{if let url=run.link,!["http","https"].contains(url.scheme ?? ""){result[run.range].link=nil}}
     return result
 }
+
+/// Accept the common non-executable line-break token in Markdown table cells.
+public func tableCellMarkdown(_ text:String)->AttributedString {
+    let breaks=text.replacingOccurrences(of:"<br\\s*/?>",with:"\n",options:[.regularExpression,.caseInsensitive])
+    return inlineMarkdown(breaks)
+}

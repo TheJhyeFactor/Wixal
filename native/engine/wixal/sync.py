@@ -11,7 +11,7 @@ from .memory import owner,SENSITIVE
 from .storage import identity,now
 
 MAX=64*1024*1024
-COLLECTIONS=('projects','sessions','memories','globalMemories')
+COLLECTIONS=('projects','sessions','memories','globalMemories','agentProfiles','agentWorkflows','skills')
 
 def fingerprint(value):return hashlib.sha256(json.dumps(value,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
@@ -58,6 +58,8 @@ class Sync:
             session['messages']=[m for m in session.get('messages',[]) if not SENSITIVE.search(m.get('content',''))]
         selected['memories']=[copy.deepcopy(n) for n in d['memories'] if n.get('projectId') in allowed and not SENSITIVE.search(n['content'])]
         selected['globalMemories']=[copy.deepcopy(n) for n in d['globalMemories'] if n.get('owner')==who and not SENSITIVE.search(n['content'])]
+        for collection in ('agentProfiles','agentWorkflows','skills'):
+            selected[collection]=[self.comparable(collection,r) for r in d[collection] if r.get('owner','guest')==who]
         images={}
         for session in selected['sessions']:
             for m in session['messages']:
@@ -118,8 +120,11 @@ class Sync:
                     local={n['id']:n for n in self.store.data[collection]}
                     for record in records:
                         if not isinstance(record,dict) or not isinstance(record.get('id'),str):raise ValueError('Invalid sync record')
+                        deleted=self.store.data.get('deletedProjects',[])
+                        if (collection=='projects' and record['id'] in deleted) or record.get('projectId') in deleted:continue
                         if collection in ('memories','globalMemories') and record['id'] in self.store.data['forgottenMemories']:continue
                         self.validate(collection,record)
+                        if collection in ('agentProfiles','agentWorkflows','skills') and record.get('owner','guest')!=remote['owner']:raise ValueError('A synced agent record belongs to another identity')
                         if collection=='globalMemories' and record.get('owner')!=remote['owner']:raise ValueError('A synced global note belongs to another identity')
                         if collection=='sessions' and record.get('memoryOwner','guest')!=remote['owner']:raise ValueError('A synced conversation belongs to another identity')
                         current=local.get(record['id']);key=collection+':'+record['id'];hash_remote=fingerprint(record)
@@ -163,6 +168,10 @@ class Sync:
         value=copy.deepcopy(record)
         if collection=='projects':
             for key in ('root','syncRootRequired','approvalMode'):value.pop(key,None)
+        if collection=='agentProfiles':
+            value.pop('authority',None)
+            value['reviewPolicy']='Read only' if value.get('reviewPolicy')=='Read only' else 'Review actions'
+        if collection=='skills':value.pop('versions',None)
         if collection=='sessions':
             for key in ('draft','contextInfo','requests'):value.pop(key,None)
         return value
@@ -176,6 +185,10 @@ class Sync:
             if not isinstance(record.get('messages'),list) or not isinstance(record.get('title'),str):raise ValueError('Invalid synced conversation')
             for message in record['messages']:
                 if not isinstance(message,dict) or message.get('role') not in ('user','assistant','tool') or not isinstance(message.get('content',''),str):raise ValueError('Invalid synced message')
+        elif collection in ('agentProfiles','agentWorkflows','skills'):
+            from .agent_data import validate_record
+            validate_record(collection,record)
+            if collection=='agentProfiles':record.update(authority={},reviewPolicy='Read only' if record.get('reviewPolicy')=='Read only' else 'Review actions')
         elif not isinstance(record.get('content'),str) or not 1<=len(record['content'])<=4000:raise ValueError('Invalid synced note')
     def resolve(self,params):
         state=self.store.data['syncState'];conflict=next((c for c in state['conflicts'] if c['id']==params.get('id')),None)

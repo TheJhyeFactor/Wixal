@@ -8,18 +8,51 @@ from .storage import identity, now
 async def dispatch(service, method, params):
     store = service.store
     if method == "assessment-cancel":
-        if getattr(service, 'assessment_task', None) is service.active and service.active and not service.active.done():
-            service.active.cancel()
-            await asyncio.gather(service.active, return_exceptions=True)
-        return True, True
-    methods = {"session-rename", "session-copy", "session-delete", "memory-add", "memory-update", "memory-settings", "assessment-run", "mcp-delete", "mcp-status", "task-dismiss", "schedule-toggle"}
+        # Target the dedicated assessment task directly. `service.active` is
+        # shared with chat/task work and can change independently after the
+        # assessment starts; cancellation must not depend on that alias.
+        task = getattr(service, 'assessment_task', None)
+        if task and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            return True, True
+        return True, False
+    methods = {"project-delete", "session-rename", "session-copy", "session-delete", "memory-add", "memory-update", "memory-settings", "assessment-run", "mcp-delete", "mcp-status", "task-dismiss", "schedule-toggle"}
     if method not in methods:
         return False, None
     if method == "mcp-status":
         return True, [dict(id=config["id"], connected=config["id"] in service.mcp.connections,
-                           tools=len(service.mcp.connections.get(config["id"], {}).get("definitions", []))) for config in store.data["mcpServers"]]
+                           tools=len(service.mcp.connections.get(config["id"], {}).get("definitions", [])),
+                           toolNames=[t["function"].get("original",t["function"]["name"]) for t in service.mcp.connections.get(config["id"],{}).get("definitions",[])]) for config in store.data["mcpServers"]]
     service.idle()
-    if method.startswith("session-"):
+    if method == "project-delete":
+        project_id=params.get("id")
+        project=next((p for p in store.data["projects"] if p["id"]==project_id),None)
+        if project is None:raise ValueError("Project no longer exists")
+        if params.get("confirmed") is not True:raise ValueError("Confirm project deletion first")
+        sessions=[s for s in store.data["sessions"] if s.get("projectId")==project_id]
+        session_ids={s["id"] for s in sessions}
+        sources={m.get("id") for s in sessions for m in s.get("messages",[]) if m.get("id")}
+        for sid in session_ids:await service.tools.close(sid)
+        if store.data["activeProject"]==project_id:await service.mcp.close()
+        for collection in ("sessions", "memories", "tasks", "schedules", "assessmentResults", "securityTargets", "securityRuns", "securityDiscoveries", "securityFindings", "securityResearch", "securityPlans", "securityTemplates", "securityEvents", "securityContracts", "memorySuggestionsPending", "usage"):
+            store.data[collection]=[item for item in store.data.get(collection,[]) if item.get("projectId")!=project_id and item.get("sessionId") not in session_ids and item.get("sourceSession") not in session_ids and item.get("id") not in session_ids]
+        store.data["projects"].remove(project)
+        # A stale local-folder snapshot must not recreate a user-deleted project.
+        store.data["deletedProjects"]=list(dict.fromkeys(store.data.get("deletedProjects",[])+[project_id]))
+        sync_state=store.data.get("syncState",{})
+        sync_state["conflicts"]=[c for c in sync_state.get("conflicts",[]) if not (c.get("collection")=="projects" and c.get("record",{}).get("id")==project_id) and c.get("record",{}).get("projectId")!=project_id]
+
+        # Remove saved project notes' embedding cache as well as indexed history.
+        live_notes={"note:"+n["id"] for n in store.data.get("memories",[])+store.data.get("globalMemories",[])}
+        with store.db:
+            for key, in store.db.execute("SELECT key FROM memory_vectors WHERE key LIKE 'note:%'").fetchall():
+                if key not in live_notes:store.db.execute("DELETE FROM memory_vectors WHERE key=?",(key,))
+            for source in sources:store.db.execute("DELETE FROM memory_source_roles WHERE source=?",(source,))
+        if store.data["activeProject"]==project_id:store.select_project(None)
+        store.save()
+        store.memory.sync()
+    elif method.startswith("session-"):
         session = next((s for s in store.data["sessions"] if s["id"] == params.get("id")), None)
         if session is None:
             raise ValueError("Conversation no longer exists")
@@ -89,9 +122,16 @@ async def dispatch(service, method, params):
         name = params.get("name")
         if name not in ("network_scan", "website_assess", "website_simulate"):
             raise ValueError("Unknown assessment")
-        service.active = asyncio.create_task(run_assessment(service, name, params.get("arguments", {})))
-        service.assessment_task = service.active
-        return True, await service.active
+        task = asyncio.create_task(run_assessment(service, name, params.get("arguments", {})))
+        service.active = task
+        service.assessment_task = task
+        try:
+            return True, await task
+        finally:
+            if service.assessment_task is task:
+                service.assessment_task = None
+            if service.active is task:
+                service.active = None
     store.save()
     return True, store.data
 
@@ -101,7 +141,7 @@ async def run_assessment(service, name, arguments):
     session = store.session() or store.new_session()
     task = dict(id=identity(), sessionId=session["id"], projectId=session.get("projectId"),
                 prompt=f"{name}: {arguments.get('target') or arguments.get('url') or 'local fixtures'}",
-                source="Tool kit", status="running", created=now(), checkpoints=[])
+                source="Cybersecurity", status="running", created=now(), checkpoints=[])
     store.data["tasks"].append(task)
     store.save();service.emit("state", store.data)
     result = None

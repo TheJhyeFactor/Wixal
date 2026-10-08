@@ -12,6 +12,7 @@ final class WixalPromptTextView: NSTextView {
 }
 struct PromptEditor:NSViewRepresentable {
     @Binding var text:String
+    @Environment(\.wixalTextSize) private var textSize
     var theme:WixalTheme
     var send:()->Void
     var selection: NSRange = NSRange(location:0,length:0)
@@ -29,13 +30,14 @@ struct PromptEditor:NSViewRepresentable {
     func makeCoordinator()->Coordinator{Coordinator(self)}
     func makeNSView(context:Context)->NSScrollView {
         let scroll=NSScrollView();scroll.drawsBackground=false;scroll.hasVerticalScroller=true;scroll.autohidesScrollers=true;scroll.borderType = .noBorder
-        let view=WixalPromptTextView();view.isRichText=false;view.drawsBackground=false;view.isHorizontallyResizable=false;view.isVerticallyResizable=true;view.autoresizingMask=[.width];view.textContainer?.widthTracksTextView=true;view.textContainer?.containerSize=NSSize(width:0,height:CGFloat.greatestFiniteMagnitude);view.textContainer?.lineFragmentPadding=0;view.textContainerInset=NSSize(width:0,height:4);view.font=NSFont.systemFont(ofSize:14);view.isAutomaticQuoteSubstitutionEnabled=false;view.isAutomaticDashSubstitutionEnabled=false;view.isAutomaticTextReplacementEnabled=false;view.delegate=context.coordinator;view.submit=send;view.setAccessibilityLabel("Message Wixal");scroll.documentView=view
+        let view=WixalPromptTextView();view.isRichText=false;view.drawsBackground=false;view.isHorizontallyResizable=false;view.isVerticallyResizable=true;view.autoresizingMask=[.width];view.textContainer?.widthTracksTextView=true;view.textContainer?.containerSize=NSSize(width:0,height:CGFloat.greatestFiniteMagnitude);view.textContainer?.lineFragmentPadding=0;view.textContainerInset=NSSize(width:0,height:4);view.font=NSFont.systemFont(ofSize:max(13,textSize+1));view.isAutomaticQuoteSubstitutionEnabled=false;view.isAutomaticDashSubstitutionEnabled=false;view.isAutomaticTextReplacementEnabled=false;view.delegate=context.coordinator;view.submit=send;view.setAccessibilityLabel("Message Wixal");scroll.documentView=view
         return scroll
     }
     func updateNSView(_ scroll:NSScrollView,context:Context){
         context.coordinator.parent=self
         guard let view=scroll.documentView as? WixalPromptTextView else{return}
         if view.string != text{view.string=text;view.setSelectedRange(NSRange(location:min(selection.location,(text as NSString).length),length:0))}
+        view.font=NSFont.systemFont(ofSize:max(13,textSize+1))
         view.mentionKey=mentionKey
         context.coordinator.measure(view)
         view.textColor=NSColor(theme.text);view.insertionPointColor=NSColor(theme.accent);view.submit=send

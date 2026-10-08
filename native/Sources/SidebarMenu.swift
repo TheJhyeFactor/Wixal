@@ -9,7 +9,7 @@ struct SidebarRailButton:View {
     @Environment(\.wixalTheme) private var theme
     @ViewState<Bool> private var hover=false
     var body:some View {
-        Button(action:action){HStack(spacing:10){Text(symbol).font(.system(size:16,design:.monospaced)).frame(width:20,height:20);if !collapsed{Text(title).font(.system(size:11));Spacer();if title=="Workspace"{Image(systemName:selected ? "chevron.down" : "chevron.up").font(.system(size:9))}}}.padding(.horizontal,collapsed ? 0 : 10).frame(maxWidth:.infinity,alignment:collapsed ? .center : .leading).frame(height:40).contentShape(Rectangle()).background(selected || hover ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:8))}.buttonStyle(.plain).foregroundStyle(theme.muted).onHover{hover=$0}.accessibilityLabel(title=="Workspace" ? "Workspace menu" : title).help(title=="Settings" ? "Settings · ⌘ ," : title)
+        Button(action:action){HStack(spacing:10){Text(symbol).wixalFont(size:16,design:.monospaced).frame(width:20,height:20);if !collapsed{Text(title).wixalFont(size:11);Spacer();if title=="Workspace"{Image(systemName:selected ? "chevron.down" : "chevron.up").wixalFont(size:9)}}}.padding(.horizontal,collapsed ? 0 : 10).frame(maxWidth:.infinity,alignment:collapsed ? .center : .leading).frame(height:40).contentShape(Rectangle()).background(selected || hover ? theme.panel : .clear,in:RoundedRectangle(cornerRadius:8))}.buttonStyle(.plain).foregroundStyle(selected ? theme.text : theme.muted).accessibilityAddTraits(selected ? [.isSelected] : []).onHover{hover=$0}.accessibilityLabel(title=="Workspace" ? "Workspace menu" : title).help(title=="Settings" ? "Settings · ⌘ ," : title)
     }
 }
 struct SidebarWorkspaceMenu:View {
@@ -23,7 +23,7 @@ struct SidebarWorkspaceMenu:View {
     private var notes:Int{records(engine.state["memories"]).filter{textValue($0["projectId"])==textValue(engine.state["activeProject"])}.count}
     var body:some View {
         VStack(alignment:.leading,spacing:2){
-            Text("WORKSPACE").font(.system(size:9,design:.monospaced)).tracking(1).foregroundStyle(theme.muted).padding(.horizontal,9).padding(.top,7).padding(.bottom,9)
+            Text("WORKSPACE").wixalFont(size:9,design:.monospaced).tracking(1).foregroundStyle(theme.muted).padding(.horizontal,9).padding(.top,7).padding(.bottom,9)
             row("Archived chats",symbol:"▤",count:archives,route:"Archived chats")
             row("Task inbox",symbol:"↳",count:records(engine.state["tasks"]).filter{["queued","running","waiting_review","paused","interrupted","failed"].contains(textValue($0["status"]))}.count,route:"Tasks")
             row("Connections",symbol:"⇄",route:"Connections")
@@ -32,7 +32,7 @@ struct SidebarWorkspaceMenu:View {
             row("Project memory",icon:"diamond",count:notes,route:"Project memory")
             row("Terminal",icon:"terminal",shortcut:"⌘ J",route:"Terminal")
             Rectangle().fill(theme.line).frame(height:1).padding(.top,8)
-            HStack(spacing:9){Circle().fill(engine.modelReady ? theme.accent : theme.muted).frame(width:5,height:5);VStack(alignment:.leading,spacing:4){Text(engine.modelConnectionLabel).font(.system(size:10));Text("On this Mac · 127.0.0.1").font(.system(size:9,design:.monospaced)).foregroundStyle(theme.muted)};Spacer(minLength:0);Button(action:engine.loadModels){Image(systemName:"arrow.clockwise").font(.system(size:16)).frame(width:24,height:30)}.buttonStyle(.plain).accessibilityLabel("Refresh models")}.padding(.horizontal,4).padding(.top,10).padding(.bottom,4)
+            HStack(spacing:9){Circle().fill(engine.modelReady ? theme.accent : theme.muted).frame(width:5,height:5);VStack(alignment:.leading,spacing:4){Text(engine.modelConnectionLabel).wixalFont(size:10);Text("On this Mac · 127.0.0.1").wixalFont(size:9,design:.monospaced).foregroundStyle(theme.muted)};Spacer(minLength:0);Button(action:engine.loadModels){Image(systemName:"arrow.clockwise").wixalFont(size:16).frame(width:24,height:30)}.buttonStyle(.plain).accessibilityLabel("Refresh models")}.padding(.horizontal,4).padding(.top,10).padding(.bottom,4)
         }.padding(9).frame(width:220).background(theme.raised,in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).stroke(theme.line,lineWidth:1)).shadow(color:.black.opacity(theme.light ? 0.18 : 0.45),radius:19,x:0,y:12).foregroundStyle(theme.text).accessibilityElement(children:.contain).accessibilityLabel("Workspace controls")
         .focusable().focusEffectDisabled().focused($menuFocused)
         .task{await Task.yield();focusedRow=0;menuFocused=true}
@@ -67,7 +67,7 @@ private struct WorkspaceMenuRow:View {
     @Environment(\.wixalTheme) private var theme
     @ViewState<Bool> private var hover=false
     var body:some View {
-        Button(action:action){HStack(spacing:10){Group{if icon.isEmpty{Text(symbol).font(.system(size:16,design:.monospaced))}else{Image(systemName:icon).font(.system(size:15))}}.foregroundStyle(theme.muted).frame(width:20,height:20);Text(title).font(.system(size:11)).lineLimit(1);Spacer(minLength:0);if let count{Text("\(count)").font(.system(size:10,design:.monospaced)).padding(.horizontal,6).padding(.vertical,3).background(theme.line.opacity(0.7),in:RoundedRectangle(cornerRadius:4))};if !shortcut.isEmpty{Text(shortcut).font(.system(size:9,design:.monospaced)).foregroundStyle(theme.muted)}}.padding(.horizontal,8).frame(height:40).frame(maxWidth:.infinity).contentShape(Rectangle()).background(hover || focused ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:8))}.buttonStyle(.plain).onHover{hover=$0}.accessibilityLabel(title).accessibilityValue(count.map{"\($0) items"} ?? shortcut).help(shortcut.isEmpty ? title : "\(title) · \(shortcut)")
+        Button(action:action){HStack(spacing:10){Group{if icon.isEmpty{Text(symbol).wixalFont(size:16,design:.monospaced)}else{Image(systemName:icon).wixalFont(size:15)}}.foregroundStyle(theme.muted).frame(width:20,height:20);Text(title).wixalFont(size:11).lineLimit(1);Spacer(minLength:0);if let count{Text("\(count)").wixalFont(size:10,design:.monospaced).padding(.horizontal,6).padding(.vertical,3).background(theme.line.opacity(0.7),in:RoundedRectangle(cornerRadius:4))};if !shortcut.isEmpty{Text(shortcut).wixalFont(size:9,design:.monospaced).foregroundStyle(theme.muted)}}.padding(.horizontal,8).frame(height:40).frame(maxWidth:.infinity).contentShape(Rectangle()).background(hover || focused ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:8))}.buttonStyle(.plain).onHover{hover=$0}.accessibilityLabel(title).accessibilityValue(count.map{"\($0) items"} ?? shortcut).help(shortcut.isEmpty ? title : "\(title) · \(shortcut)")
     }
 }
 extension Notification.Name { static let wixalOpenSettings=Notification.Name("WixalOpenSettings");static let wixalNavigate=Notification.Name("WixalNavigate") }

@@ -14,7 +14,7 @@ def category(name):
     if name.startswith(('website_', 'network_')) or name == 'security_tools': return 'security'
     if name.startswith('command_') or name == 'run_command': return 'commands'
     if name.startswith('browser_') or name in ('http_request','web_search'): return 'web'
-    if name in ('workspace_info','search_history','recall_memory','save_memory','forget_memory'): return 'memory'
+    if name in ('workspace_info','search_history','recall_memory','save_memory','forget_memory','schedule_manage','skill_manage','workflow_manage'): return 'memory'
     return 'files'
 
 def eligible(catalog, enabled, project):
@@ -25,7 +25,11 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
     if load_name and load_name not in names: raise ValueError('That tool is not enabled or available in this workspace')
     if load_category and load_category not in CATEGORIES: raise ValueError('Choose a supported tool category')
     if len(available) <= 8 and not load_name and not load_category: return available
-    chosen = {'workspace_info', 'recall_memory', 'save_memory', *requested}
+    chosen = {'workspace_info', 'recall_memory', 'save_memory', 'load_skill', *requested}
+    if re.search(r'\b(workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('workflow_manage')
+    if re.search(r'\b(schedule|scheduled|recurring|routine|routines|calendar)\b',prompt,re.I):chosen.add('schedule_manage')
+    if re.search(r'\b(skill|skills|procedure|procedures)\b',prompt,re.I):
+        chosen.add('skill_manage');chosen.discard('save_memory')
     value = load_category
     if load_name: chosen.add(load_name)
     elif not value:
@@ -39,6 +43,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
         else:
             routing_prompt = re.sub(r"\b(?:do not|don't|without)\s+(?:inspect|read|write|edit|search)\s+(?:(?:the|any|project|unrelated)\s+)?files\b", "", prompt, flags=re.I)
             for candidate, pattern in (
+                ('external', r'\b(mcp|connected|connector|integration)\b'),
                 ('security', r'\b(nmap|scan|ports|tls|assessment|security|vulnerab\w*)\b'),
                 ('commands', r'\b(run|build|test|command|shell|terminal|execute)\b'),
                 ('web', r'https?://|\b(browse|website|web|online|internet|url|links?)\b'),
@@ -55,7 +60,7 @@ def thinking_options(metadata):
     if 'thinking' not in metadata.get('capabilities',[]):return {}
     config=metadata.get('thinking') or {}
     values=config.get('values',[])
-    return dict(think=False if False in values else 'low' if 'low' in values else config.get('default',False))
+    return dict(think='low' if 'low' in values else True if True in values else config.get('default',True))
 
 def bounded_evidence(content, limit):
     if len(content) <= limit: return content
@@ -94,7 +99,7 @@ def token_estimate(messages, definitions):
     return text+images+tools, text, images, tools
 
 def thinking_reserve(metadata,context):
-    forced='thinking' in metadata.get('capabilities',[]) and False not in (metadata.get('thinking') or {}).get('values',[False])
+    forced='thinking' in metadata.get('capabilities',[]) and thinking_options(metadata).get('think') is not False
     return min(4096,max(1024,context//2)) if forced else None
 
 def fit_request(messages, definitions, limit, output_reserve=None):

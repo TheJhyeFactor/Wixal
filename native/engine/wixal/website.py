@@ -6,6 +6,7 @@ import re
 import secrets
 import ssl
 import urllib.parse
+from html.parser import HTMLParser
 from datetime import datetime, timezone
 from pathlib import Path
 from .tools import safe_path
@@ -105,8 +106,31 @@ async def bounded_request(url,method='GET',headers=None,limit=512*1024):
                 except (OSError,asyncio.CancelledError): pass
 
 
+def observed_inputs(body,page):
+    class Forms(HTMLParser):
+        def __init__(self):
+            super().__init__();self.forms=[];self.current=None
+        def handle_starttag(self,tag,attributes):
+            attrs=dict(attributes)
+            if tag=='form':
+                action=urllib.parse.urljoin(page,attrs.get('action') or page)
+                parsed=urllib.parse.urlsplit(action)
+                action=urllib.parse.urlunsplit((parsed.scheme,parsed.netloc,parsed.path,'',''))
+                self.current=dict(page=page,action=action,method=(attrs.get('method') or 'GET').upper(),fields=[])
+                if origin(action)==origin(page) and len(self.forms)<40:self.forms.append(self.current)
+            elif tag in ('input','select','textarea') and self.current and len(self.current['fields'])<80:
+                name=attrs.get('name')
+                if name:self.current['fields'].append(dict(name=name[:160],type=(attrs.get('type') or tag)[:40]))
+        def handle_endtag(self,tag):
+            if tag=='form':self.current=None
+    parser=Forms()
+    try:parser.feed(body)
+    except ValueError:return []
+    return parser.forms
+
+
 async def assess_website(args,on_case=lambda *_:None,delay=.2):
-    plan=website_plan(args);started=timestamp();cases=[];findings=[];requests=[];pages=[];seen=set();queue=[plan['url']]
+    plan=website_plan(args);started=timestamp();cases=[];findings=[];requests=[];pages=[];inputs=[];seen=set();queue=[plan['url']]
     def check(case_id,status,target,evidence):
         row=dict(id=case_id,status=status,target=target,evidence=evidence);cases.append(row);on_case(row)
     def finding(fid,severity,title,target,evidence,remediation,confidence='confirmed configuration'):
@@ -134,6 +158,7 @@ async def assess_website(args,on_case=lambda *_:None,delay=.2):
                     else: check('redirect-scope','not-followed',target,dict(location=location))
                     continue
                 if r['status']!=200 or 'text/html' not in (r['contentType'] or ''): continue
+                inputs.extend(observed_inputs(r['body'],target))
                 csp=h['content-security-policy'] or '';meta=bool(re.search(r'<meta\s[^>]*http-equiv\s*=\s*[\"\']?content-security-policy',r['body'],re.I))
                 framed=bool(re.search(r"(?:^|;)\s*frame-ancestors\s+(?:'none'|'self')\s*(?:;|$)",csp,re.I)) or (h['x-frame-options'] or '').lower() in ('deny','sameorigin')
                 check('frame-protection','pass' if framed else 'fail',target,dict(csp=csp or None,xFrameOptions=h['x-frame-options']))
@@ -186,7 +211,7 @@ async def assess_website(args,on_case=lambda *_:None,delay=.2):
                 check('open-redirect-canary','fail' if external else 'no-redirect-observed',target,dict(status=r['status'],destination=destination))
                 if external: finding('open-redirect','medium','Untrusted next parameter controls an external redirect',target,dict(status=r['status'],destination=destination),'Allow only validated relative or explicitly permitted redirect destinations.')
             except (OSError,ValueError,TimeoutError) as error: check('open-redirect-canary','error',target,str(error))
-    return dict(schema=1,target=plan['url'],profile=plan['profile'],started=started,finished=timestamp(),scope=plan,requests=requests,cases=cases,findings=findings,references=REFERENCES,
+    return dict(schema=1,target=plan['url'],profile=plan['profile'],started=started,finished=timestamp(),scope=plan,requests=requests,inputs=inputs,cases=cases,findings=findings,references=REFERENCES,
                 limitations=['Unauthenticated GET checks only; no writes or login attempts.','Reflection is not proven code execution. Missing headers are configuration findings.','Same-origin crawl; redirects outside the origin are not followed.','Bodies are hashed, not saved. Cookie values are omitted.'],
                 summary=dict(requests=len(requests),pages=len(pages),cases=len(cases),findings=len(findings),errors=sum(c['status']=='error' for c in cases)))
 

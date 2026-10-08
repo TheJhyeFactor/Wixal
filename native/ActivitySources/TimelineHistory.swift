@@ -25,10 +25,11 @@ public enum TimelineHistory {
     }
     public static func resultStatus(_ text:String)->String {
         let value=decode(text),state=textValue(value["state"])
+        let readable=(try? JSONSerialization.jsonObject(with:Data(text.utf8),options:.fragmentsAllowed)) as? String ?? text
         if state=="cancelled" || textValue(value["status"])=="cancelled" {return "cancelled"}
-        if text.hasPrefix("User declined") {return "declined"}
-        if text.hasPrefix("Execution interrupted") {return "interrupted"}
-        if text.hasPrefix("Error:") || value["error"] != nil || state=="failed" || textValue(value["status"])=="failed" || (value["exitCode"] as? Int ?? 0) != 0 || (value["status"] as? Int ?? 0)>=400 {return "failed"}
+        if readable.hasPrefix("User declined") {return "declined"}
+        if readable.hasPrefix("Execution interrupted") {return "interrupted"}
+        if readable.hasPrefix("Error:") || value["error"] != nil || state=="failed" || textValue(value["status"])=="failed" || (value["exitCode"] as? Int ?? 0) != 0 || (value["status"] as? Int ?? 0)>=400 {return "failed"}
         if value["stopped"] as? Bool == true || state=="stopped" {return "stopped"}
         return state=="running" ? "running" : "completed"
     }

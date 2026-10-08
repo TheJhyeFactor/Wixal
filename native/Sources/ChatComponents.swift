@@ -68,8 +68,8 @@ struct WorkHistoryView:View {
                 let updates=messages.filter{textValue($0["role"]) != "tool" && !textValue($0["content"]).isEmpty}
                 if !updates.isEmpty{DisclosureGroup("Approach & updates"){ForEach(Array(updates.enumerated()),id:\.offset){_,message in MarkdownMessage(content:textValue(message["content"]))}}}
             }
-        } label:{HStack(spacing:8){Image(systemName:"checklist");Text("Work history");Text("\(actions.count) actions").foregroundStyle(theme.muted);Spacer()}}
-        .font(.system(size:11)).padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).stroke(theme.line,lineWidth:1)).padding(.vertical,8)
+        } label:{HStack(spacing:8){Text("Details");Spacer()}}
+        .wixalFont(size:11).foregroundStyle(theme.muted).padding(.vertical,8)
     }
 }
 struct StructuredToolResult:View {

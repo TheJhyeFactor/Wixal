@@ -282,7 +282,10 @@ class PackageRegistry:
             freshness_error=db.execute("SELECT value FROM settings WHERE key='catalogueError'").fetchone()
             selected=db.execute('SELECT value FROM settings WHERE key=?',('provider:'+tool,)).fetchone()
             versions=[json.loads(r['descriptor']) for r in db.execute('SELECT descriptor FROM packages')]
-            versions=[r for r in versions if r['tool']==tool]
+            # Receipts survive removal for historical provenance. Only payloads
+            # still on disk are available for recovery; rollback re-verifies the
+            # complete inventory before changing the active pointer.
+            versions=[r for r in versions if r['tool']==tool and (self.path(r)/r['entrypoint']).is_file()]
         row=json.loads(pointer['descriptor']) if pointer else None
         return dict(configured=bool(self.client),provider=selected['value'] if selected else 'external_homebrew',installed=bool(row),active=row,versions=versions,catalogue=json.loads(cached['value']) if cached else [],lastCatalogueCheck=float(checked['value']) if checked else None,catalogueError=freshness_error['value'] if freshness_error else None,verifiedAt=pointer['verified'] if pointer else None,modelEvaluation='unevaluated')
 

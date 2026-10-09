@@ -56,6 +56,19 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
         target=self.root/'repository/metadata/targets.json';value=json.loads(target.read_text());value['signed']['version']=123;target.write_text(json.dumps(value))
         with self.assertRaises(Exception):await self.install()
         self.assertFalse(self.registry.snapshot()['installed'])
+    async def test_removed_recovery_payload_is_not_offered_after_reinstall(self):
+        first,_=await self.install(self.rows[0]['sha256'])
+        second,_=await self.install()
+        self.registry.remove(first['sha256'])
+        await self.install()
+        state=self.registry.snapshot()
+        self.assertEqual(state['active']['sha256'],second['sha256'])
+        self.assertEqual([row['sha256'] for row in state['versions']],[second['sha256']])
+        with self.assertRaisesRegex(ValueError,'retained, approved recovery'):
+            self.registry.rollback(first['sha256'])
+        with self.registry.database() as db:
+            self.assertIsNotNone(db.execute('SELECT 1 FROM packages WHERE digest=?',(first['sha256'],)).fetchone())
+        self.assertEqual(self.registry.resolve()['packageSha256'],second['sha256'])
     async def test_successful_refresh_clears_previous_offline_warning(self):
         first,_=await self.install()
         with self.registry.database() as db:db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogueError','Previous catalogue outage'))

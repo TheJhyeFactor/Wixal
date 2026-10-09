@@ -494,6 +494,8 @@ class Agent:
                 task.update(status="failed", error=str(error))
                 raise
             finally:
+                if task['status'] in ('failed','paused','interrupted','needs_attention'):
+                    await self.tools.close(session['id'])
                 task["updated"] = now()
                 self.store.memory.suggest(text,session)
                 self.selected_tools=None

@@ -203,12 +203,8 @@ async def inspect(tools,args,session):
         raw=Path(job['evidence']['stdoutPath']).read_text(errors='replace');outputs.append(raw);evidence.append(job['evidence'])
         if job['state']!='completed' or job['exitCode']!=0 or job['evidence']['incomplete']:
             return dict(state='failed',coverage='partial',error='Inspection failed or incomplete; raw evidence retained',services=services,evidence=evidence,sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),sourceResultSha256=result['resultSha256'],output='\n'.join(outputs)[-100000:])
-        import xml.etree.ElementTree as ET
-        xml=ET.fromstring(raw)
-        for host in xml.findall('host'):
-            address=host.find('address')
-            for p in host.findall('./ports/port'):
-                if address is None or address.get('addr')!=bound['target'] or int(p.get('portid')) not in ports(bound['ports']):raise ValueError('Inspection result escapes source binding')
-                state=p.find('state');service=p.find('service')
-                services.append(dict(host=address.get('addr'),port=p.get('portid'),protocol=p.get('protocol'),state=state.get('state','') if state is not None else '',service=dict(service.attrib) if service is not None else {}))
+        from .nmap_results import parse
+        for service in parse(raw.encode()):
+            if service['host']!=bound['target'] or int(service['port']) not in ports(bound['ports']):raise ValueError('Inspection result escapes source binding')
+            services.append(service)
     return dict(state='completed',services=services,sourceResultSha256=result['resultSha256'],sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),invocations=mapping,evidence=evidence,output='\n'.join(outputs)[-100000:])

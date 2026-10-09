@@ -10,7 +10,12 @@ def capture(task,name,args,result):
     if not isinstance(report,dict):return
     if name=='network_read' and result.get('structuredResult'):
         discovery=result['structuredResult']
+        if result.get('state')!='completed' or result.get('exitCode')!=0 or discovery.get('error'):return
         report=dict(summary=dict(coverage=discovery['coverage'],openPorts=len(discovery['services']),interpretation=discovery['interpretation']),findings=[],rawEvidence=discovery.get('evidence'),sourceResultSha256=discovery['resultSha256'])
+        report['summary']['openPorts']=sum(s.get('state','open')=='open' for s in discovery['services'])
+        if discovery.get('kind')=='nmap':
+            for port in discovery['services']:
+                if port['state']=='open':report['findings'].append(dict(id='open-port-'+port['protocol']+'-'+port['port'],title='Open '+port['protocol']+' port '+port['port'],url=port['host'],severity='info',confidence='Scanner observation',evidence=port,remediation='Confirm whether this service and its exposure are intended.'))
         args=dict(target=discovery['invocation']['target'])
     elif name=='network_read':
         if result.get('state')!='completed' or result.get('exitCode')!=0:return

@@ -263,6 +263,12 @@ class Service:
             future.set_result(params.get("value"))
             return True
         if method == "stop":
+            if params.get('taskId') or params.get('runId'):
+                row=self.agents.find('workflowRuns' if params.get('runId') else 'tasks',params.get('runId') or params['taskId'])
+                if row.get('status') not in ('running','waiting_review'):
+                    raise ValueError('This run has already stopped; no other run was cancelled')
+                if params.get('taskId') and row.get('workflowRunId'):
+                    raise ValueError('Stop this run from its parent workflow')
             if self.active and not self.active.done():
                 self.active.cancel()
                 await asyncio.gather(self.active, return_exceptions=True)

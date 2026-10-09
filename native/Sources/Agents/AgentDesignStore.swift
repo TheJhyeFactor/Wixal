@@ -85,6 +85,7 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
     private var subscription:AnyCancellable?
     @Published var notice = ""
     @Published var error = ""
+    @Published var saving = false
     private let file: URL
     init() {
         let location = ProcessInfo.processInfo.environment["WIXAL_AGENTS_DESIGN_DATA"] ?? (Bundle.main.object(forInfoDictionaryKey:"WixalPreviewData") as? String).map{$0+"/drafts"}
@@ -140,9 +141,11 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
             }catch{self.error="Could not register earlier local drafts: \(error.localizedDescription)"}
         }
     }
-    private func send<T:Encodable>(_ method:String,_ value:T){
-        guard let engine else{error="Engine is not connected; saved only as a local draft.";return}
-        Task{do{_ = try await engine.call(method,encoded(value));notice="Saved to the local agent engine.";self.error=""}catch{self.error=error.localizedDescription}}
+    private func send<T:Encodable>(_ method:String,_ value:T,completion:((Bool)->Void)?=nil){
+        guard let engine,engine.connected else{error="Connect the engine before saving. Your editor remains open.";completion?(false);return}
+        guard !saving else{completion?(false);return}
+        saving=true;error=""
+        Task{defer{saving=false};do{_ = try await engine.call(method,encoded(value));notice="Saved to the local agent engine.";self.error="";completion?(true)}catch{self.error=error.localizedDescription;completion?(false)}}
     }
     func run(_ agent:AgentProfileDraft,_ prompt:String,_ checks:[AgentSuccessCheck]?=nil){
         guard let engine else{return}
@@ -158,7 +161,7 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
     }
     func enqueue(_ agent:AgentProfileDraft,_ prompt:String,_ checks:[AgentSuccessCheck]){
         guard let engine else{return}
-        Task{do{_ = try await engine.call("agent-save",encoded(agent));let data=try JSONEncoder().encode(checks);var params:[String:Any]=["agentID":agent.id,"prompt":prompt,"successCriteria":try JSONSerialization.jsonObject(with:data)];if let project=engine.project{params["projectId"]=project["id"]};_ = try await engine.call("agent-enqueue",params);notice="Task queued. Its agent configuration is retained."}catch{self.error=error.localizedDescription}}
+        Task{do{let data=try JSONEncoder().encode(checks);var params:[String:Any]=["agentID":agent.id,"prompt":prompt,"successCriteria":try JSONSerialization.jsonObject(with:data)];if let project=engine.project{params["projectId"]=project["id"]};_ = try await engine.call("agent-enqueue",params);notice="Task queued. Its agent configuration is retained."}catch{self.error=error.localizedDescription}}
     }
     func runWorkflow(_ flow:AgentWorkflowDraft){
         guard let engine else{return}
@@ -174,10 +177,10 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
             let result=try await engine.call("agent-schedule-run",["id":id]) as? [String:Any] ?? [:];liveSelection=textValue(result["id"])
         }catch{self.error=error.localizedDescription}}
     }
-    func save(_ profile:AgentProfileDraft){send("agent-save",profile);if let i=agents.firstIndex(where:{$0.id==profile.id}){agents[i]=profile}else{agents.append(profile)};persist()}
-    func save(_ workflow:AgentWorkflowDraft){send("workflow-save",workflow);if let i=workflows.firstIndex(where:{$0.id==workflow.id}){workflows[i]=workflow}else{workflows.append(workflow)};persist()}
-    func save(_ schedule:AgentScheduleDraft){send("agent-schedule-save",schedule);if let i=schedules.firstIndex(where:{$0.id==schedule.id}){schedules[i]=schedule}else{schedules.append(schedule)};persist()}
-    func toggleSchedule(_ id:String){guard let i=schedules.firstIndex(where:{$0.id==id})else{return};schedules[i].enabled.toggle();if let engine{engine.action("agent-schedule-toggle",["id":id,"enabled":schedules[i].enabled])};persist()}
+    func save(_ profile:AgentProfileDraft,completion:((Bool)->Void)?=nil){send("agent-save",profile,completion:completion)}
+    func save(_ workflow:AgentWorkflowDraft,completion:((Bool)->Void)?=nil){send("workflow-save",workflow,completion:completion)}
+    func save(_ schedule:AgentScheduleDraft,completion:((Bool)->Void)?=nil){send("agent-schedule-save",schedule,completion:completion)}
+    func toggleSchedule(_ id:String){guard let row=schedules.first(where:{$0.id==id}),let engine else{return};engine.action("agent-schedule-toggle",["id":id,"enabled":!row.enabled])}
     func duplicate(_ profile:AgentProfileDraft){var next=profile;next.id=UUID().uuidString;next.name += " copy";save(next)}
-    func archive(_ id:String,_ archived:Bool){guard let i=agents.firstIndex(where:{$0.id==id})else{return};agents[i].archived=archived;send("agent-save",agents[i]);persist()}
+    func archive(_ id:String,_ archived:Bool){guard var row=agents.first(where:{$0.id==id})else{return};row.archived=archived;send("agent-save",row)}
 }

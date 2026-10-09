@@ -258,7 +258,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         case "catalog": tools = records(message["data"]);refreshContext()
         case "operation":
             operationRunning=data["running"] as? Bool ?? false
-            busy=operationRunning || records(state["tasks"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) }
+            busy=operationRunning || records(state["workflowRuns"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) } || records(state["tasks"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) }
         case "assistant-start": streaming = ""; thinking = ""; tokenBuffer = ""; thinkingBuffer = "";currentTool=[:];activity = "Generating reply…";if runStarted == nil{runStarted=Date()}
         case "thinking":
             thinkingBuffer += textValue(data["text"])
@@ -315,8 +315,8 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         }
     }
     func flushTokens() { streaming += tokenBuffer; thinking += thinkingBuffer; tokenBuffer = ""; thinkingBuffer = ""; flushTask?.cancel(); flushTask = nil }
-    func action(_ method: String, _ params: [String: Any] = [:]) {
-        Task { defer { if method == "assessment-run" { busy=false } }; do { _ = try await call(method, params) } catch { self.error = error.localizedDescription } }
+    func action(_ method: String, _ params: [String: Any] = [:], completion:((Bool)->Void)? = nil) {
+        Task { defer { if method == "assessment-run" { busy=false } }; do { _ = try await call(method, params); completion?(true) } catch { self.error = error.localizedDescription; completion?(false) } }
     }
     func cancelAssessment() {
         guard busy, !assessmentProgress.isEmpty else { return }

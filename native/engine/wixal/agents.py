@@ -134,6 +134,9 @@ class Agents:
         value['authority']=validate(source.get('authority',{}))
         self.upsert('schedules',value);return value
     async def run(self,identifier,prompt,project_id=None,source='Agent',workflow_id=None,snapshot=None,checks=None,authority=None,resume_task=None):
+        if resume_task:
+            retained=next((s for s in self.store.data['sessions'] if s['id']==resume_task.get('sessionId') and s.get('projectId')==resume_task.get('projectId')),None)
+            if retained is None:raise ValueError('The retained run conversation is unavailable; start a new task after inspecting its evidence')
         agent=copy.deepcopy(snapshot or self.find('agentProfiles',identifier))
         if agent.get('archived'):raise ValueError('Restore this agent before running it')
         if agent.get('projectScope')=='Current project only':
@@ -235,6 +238,13 @@ class Agents:
         finally:
             run['updated']=now();self.store.save();self.service.emit('state',self.store.data)
     async def dispatch(self,method,params):
+        if method=='agent-enqueue':
+            from .agent_jobs import enqueue
+            return enqueue(self,params)
+        if method=='agent-job-cancel':
+            job=self.find('agentJobs',params['id'])
+            if job['status']!='queued':raise ValueError('Only a queued job can be cancelled')
+            job.update(status='cancelled',updated=now());self.store.save();self.service.emit('state',self.store.data);return job
         if method in ('agent-run','workflow-run','workflow-resume','agent-schedule-run','agent-resume','agent-verify','skill-evaluate'):
             self.service.idle()
             if method=='skill-evaluate':
@@ -280,13 +290,6 @@ class Agents:
         if method in ('skill-propose','skill-promote','skill-rollback'):
             from .skill_learning import manage
             return manage(self,method,params)
-        if method=='agent-enqueue':
-            from .agent_jobs import enqueue
-            return enqueue(self,params)
-        if method=='agent-job-cancel':
-            job=self.find('agentJobs',params['id'])
-            if job['status']!='queued':raise ValueError('Only a queued job can be cancelled')
-            job.update(status='cancelled',updated=now());self.store.save();return job
         if method=='agent-schedule-delete':
             row=self.find('schedules',params['id']);self.store.data['schedules'].remove(row);self.store.save();self.service.emit('state',self.store.data);return dict(deleted=True)
         if method=='workflow-merge':

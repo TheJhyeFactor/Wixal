@@ -41,10 +41,17 @@ struct AgentsHubView:View {
         .task{design.bind(engine)}
         .onChange(of:engine.connected){_,connected in if connected{design.bind(engine)}}
         .environment(\.agentDesignReduceMotion,motion == nil)
-        .sheet(item:$editor){draft in AgentBuilderView(engine:engine,draft:draft,save:{design.save($0);selectedAgent=$0.id;editor=nil},close:{editor=nil}).environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
-        .sheet(item:$workflowEditor){draft in AgentWorkflowEditor(agents:design.agents,draft:draft,save:{design.save($0);workflowEditor=nil},close:{workflowEditor=nil}).environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
-        .sheet(item:$scheduleEditor){draft in AgentScheduleEditor(agents:design.agents,workflows:design.workflows,draft:draft,save:{design.save($0);scheduleEditor=nil},close:{scheduleEditor=nil}).environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
+        .sheet(item:$editor){draft in editorContent { AgentBuilderView(engine:engine,draft:draft,save:{value in design.save(value,completion:{success in if success{selectedAgent=value.id;editor=nil}})},close:{editor=nil}) }.environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
+        .sheet(item:$workflowEditor){draft in editorContent { AgentWorkflowEditor(agents:design.agents,draft:draft,save:{value in design.save(value,completion:{success in if success{workflowEditor=nil}})},close:{workflowEditor=nil}) }.environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
+        .sheet(item:$scheduleEditor){draft in editorContent { AgentScheduleEditor(agents:design.agents,workflows:design.workflows,draft:draft,save:{value in design.save(value,completion:{success in if success{scheduleEditor=nil}})},close:{scheduleEditor=nil}) }.environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
         .sheet(item:$taskAgent){agent in AgentTaskSheet(agent:agent,project:engine.project.map{textValue($0["name"])} ?? "Personal workspace",start:{title,checks in selectedRun=nil;design.run(agent,title,checks);taskAgent=nil;page="Runs"},queue:{title,checks in design.enqueue(agent,title,checks);taskAgent=nil;page="Runs"},close:{taskAgent=nil}).environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
+    }
+    private func editorContent<Content:View>(@ViewBuilder content:()->Content)->some View{
+        VStack(spacing:0){
+            if !design.error.isEmpty{Text(design.error).wixalFont(size:12).foregroundStyle(.orange).textSelection(.enabled).padding(14).frame(maxWidth:.infinity,alignment:.leading)}
+            if design.saving{ProgressView("Saving…").padding(8)}
+            content().disabled(design.saving)
+        }
     }
     private var toolbar:some View{
         ViewThatFits(in:.horizontal){

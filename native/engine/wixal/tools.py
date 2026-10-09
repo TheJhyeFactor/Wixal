@@ -225,11 +225,13 @@ class Tools:
     async def start_command(self, command, seconds, session_id, argv=None, assessment=None, environment=None, on_finished=None, retain_evidence=False):
         if sum(j["state"]=="running" for j in self.jobs.values()) >= 8:
             raise ValueError("Eight commands are already running")
-        project = self.store.project()
+        project = dict(self.store.project() or {})
         if not project or not command.strip() or len(command)>8000:
             raise ValueError("A project and valid command are required")
         if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds,**({"assessment":assessment} if assessment else {}))):
             return "User declined this command."
+        if self.store.project()!=project or sum(j["state"]=="running" for j in self.jobs.values())>=8:
+            raise ValueError("Project or command capacity changed during review; review the action again")
         from .agent_context import profile
         branch=(profile.get() or {}).get("_branchRoot")
         invocation=argv or ["/bin/zsh", "-l", "-c", command]
@@ -287,24 +289,34 @@ class Tools:
                 self.stop_job(job,'collector_error');await child.wait();job['exitCode']=child.returncode;job['state']='stopped'
                 raise
             finally:
+                # The session leader may have exited while a descendant still
+                # owns a pipe or keeps running after redirecting its output.
+                self.terminate_group(job)
                 job['finished']=now()
-                if on_finished:await on_finished(job)
+                try:
+                    if on_finished:await on_finished(job)
+                except Exception as error:
+                    job.update(state='failed',error='Command evidence finalization failed: '+str(error))
+                finally:job['settled']=True
         job["collector"] = asyncio.create_task(collect())
         return dict(session_id=job_id, state="running")
 
+    def terminate_group(self,job):
+        if job.get('groupTerminated'):return
+        try:os.killpg(job['child'].pid,signal.SIGKILL)
+        except ProcessLookupError:pass
+        job['groupTerminated']=True
+
     def stop_job(self, job, reason="user_stop"):
-        if job["child"].returncode is None:
+        if job['state']=='running' or job["child"].returncode is None:
             job["reason"] = reason
-            try:
-                os.killpg(job["child"].pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            self.terminate_group(job)
 
     async def read_job(self, args, session_id):
         job = self.jobs.get(args["session_id"])
         if not job or job["owner"] != session_id or job["projectId"] != (self.store.project() or {}).get("id"):
             raise ValueError("Command belongs to another conversation or project")
-        if job["state"] == "running":
+        if job["state"] == "running" or not job.get('settled',False):
             await asyncio.sleep(args.get("wait_ms", 1000)/1000)
         offset = args.get("offset", job["base"])
         encoded=job['output'].encode('utf-16-le');units=len(encoded)//2
@@ -314,11 +326,19 @@ class Tools:
         maximum=args.get('max_chars',24000)
         if not isinstance(maximum,int) or not 1<=maximum<=100000:raise ValueError('Choose 1–100,000 output characters')
         data=encoded[(start-job['base'])*2:(start-job['base']+maximum)*2]
+        if data and 0xDC00<=int.from_bytes(data[:2],'little')<=0xDFFF:
+            raise ValueError('Output offset must align to a character boundary')
         try:output=data.decode('utf-16-le')
         except UnicodeDecodeError:
-            try:output=data[:-2].decode('utf-16-le')
+            # A one-unit page must still advance over a complete emoji. Never
+            # return an empty page at the same offset forever.
+            if len(data)==2 and 0xD800<=int.from_bytes(data,'little')<=0xDBFF:
+                data=encoded[(start-job['base'])*2:(start-job['base']+2)*2]
+            else:data=data[:-2]
+            try:output=data.decode('utf-16-le')
             except UnicodeDecodeError as error:raise ValueError('Output offset must align to a character boundary') from error
-        return dict(**({"structuredResult":job["structuredResult"]} if job.get("structuredResult") else {}), **({"evidence":job["evidence"]} if job.get("evidence") else {}), session_id=job["id"], command=job["command"], state=job["state"], exitCode=job["exitCode"],
+        structured=job.get('structuredResult',{})
+        return dict(**({"structuredResult":structured} if structured else {}), **({"services":structured['services'],"summary":structured['summary']} if structured.get('kind')=='nmap' else {}), **({"error":job.get('error') or structured['error']} if job.get('error') or structured.get('error') else {}), **({"evidence":job["evidence"]} if job.get("evidence") else {}), session_id=job["id"], command=job["command"], state=job["state"] if job.get('settled',False) else 'running', exitCode=job["exitCode"],
                     reason=job["reason"], output=output, offset=start, next_offset=start+len(output.encode('utf-16-le'))//2,
                     more=start+len(output.encode('utf-16-le'))//2<job["base"]+units, earliest_offset=job["base"], started=job["started"], finished=job.get("finished"))
 
@@ -472,8 +492,9 @@ class Tools:
             argv=[executable,*scan_plan(args)]
             from .network_discovery import ports
             from .managed_tools import controlled_environment,digest
-            assessment=dict(capability='network_scan',target=args['target'],ports=ports(args.get('ports','22,53,80,443,445,3389,8080,8443')),executableSha256=await asyncio.to_thread(digest,executable))
-            return await self.start_command(' '.join(argv),args.get('timeout_seconds',180),session_id,argv,assessment=assessment,retain_evidence=True,environment=controlled_environment(Path(executable).parent))
+            assessment=dict(capability='network_scan',profile=args.get('profile','services'),target=args['target'],ports=ports(args.get('ports','22,53,80,443,445,3389,8080,8443')),executableSha256=await asyncio.to_thread(digest,executable))
+            from .nmap_results import finish
+            return await self.start_command(' '.join(argv),args.get('timeout_seconds',180),session_id,argv,assessment=assessment,retain_evidence=True,environment=controlled_environment(Path(executable).parent),on_finished=finish)
         if name in ("http_request", "web_search"):
             if not await self.approve(dict(name=name, **args, **({"providers": ["lite.duckduckgo.com", "www.bing.com"]} if name == "web_search" else {}))):
                 return "User declined this network request."

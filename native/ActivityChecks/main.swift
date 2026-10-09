@@ -1,5 +1,10 @@
 import Foundation
 import WixalActivity
+if CommandLine.arguments.contains("--self-test") {
+    let checks=try activityRegressionChecks()
+    print("{\"status\":\"passed\",\"checks\":\(checks),\"implementation\":\"production WixalActivity projection\"}")
+    exit(0)
+}
 let input=FileHandle.standardInput.readDataToEndOfFile()
 let payload=try JSONSerialization.jsonObject(with:input) as! [String:Any]
 let messages=payload["messages"] as! [[String:Any]]

@@ -37,7 +37,8 @@ def successful(checkpoint):
     if checkpoint.get('status')!='finished':return False
     if isinstance(result,str):return not result.startswith(('User declined','Not executed:'))
     if not isinstance(result,dict):return True
-    return not result.get('error') and result.get('exitCode') in (None,0) and result.get('state') not in ('running','stopped') and result.get('saved') is not False
+    pending=('running','stopped','failed','cancelled','interrupted','queued','waiting_review','needs_attention','paused')
+    return not result.get('error') and result.get('exitCode') in (None,0) and result.get('state') not in pending and result.get('status') not in pending and result.get('saved') is not False
 
 def equal(left,right):
     if isinstance(left,bool) or isinstance(right,bool):return type(left)==type(right) and left==right
@@ -80,7 +81,7 @@ async def verify(store,tools,task,checks=None):
     settled={}
     for checkpoint in task.get('checkpoints',[]):
         result=decode(checkpoint.get('result',''))
-        if isinstance(result,dict) and result.get('session_id') and result.get('state') in ('completed','stopped'):settled[result['session_id']]=result
+        if isinstance(result,dict) and result.get('session_id') and result.get('state') in ('completed','stopped','failed'):settled[result['session_id']]=result
     for checkpoint in task.get('checkpoints',[]):
         result=decode(checkpoint.get('result',''))
         if isinstance(result,dict) and result.get('session_id') in settled:checkpoint['resolvedOutcome']=settled[result['session_id']]
@@ -118,7 +119,9 @@ async def verify(store,tools,task,checks=None):
             else:
                 matching=[c for c in task['checkpoints'] if c['name']==check['tool']]
                 if not matching or not successful(matching[-1]):raise ValueError('No successful final outcome for the required tool')
-                if kind=='tool_contains' and check['value'] not in matching[-1].get('result',''):raise ValueError('Required evidence is absent from the tool result')
+                result=matching[-1].get('resolvedOutcome',decode(matching[-1].get('result','')))
+                evidence=(str(result['output'])+json.dumps(result.get('structuredResult',{}),ensure_ascii=False)) if isinstance(result,dict) and 'output' in result else json.dumps(result,ensure_ascii=False) if not isinstance(result,str) else result
+                if kind=='tool_contains' and check['value'] not in evidence:raise ValueError('Required evidence is absent from the tool result')
                 row['checkpointId']=matching[-1]['id']
             row['status']='passed'
         except (ValueError,OSError,KeyError,IndexError,TypeError,UnicodeError) as error:row['error']=str(error)

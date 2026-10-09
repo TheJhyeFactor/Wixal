@@ -4,6 +4,8 @@
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 
+The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. These changes do not update the already published alpha download.
+
 ## Build and run
 
 Requires Apple Silicon macOS 14+, Swift 6.4 command-line tools, a build-time Python and the staged runtime payload. The public alpha and native CI use the Xcode 27 toolchain. Older Swift compilers can time out while checking the current SwiftUI views; this build-time requirement does not change the app's macOS 14 deployment target.

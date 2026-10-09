@@ -345,6 +345,9 @@ class SecurityWorkspace(SecurityRecords):
                     if job['state'] != 'completed' or job.get('exitCode') not in accepted:
                         run['result'] = result
                         raise ValueError('Tool process failed or timed out; captured output retained')
+                    if result.get('error'):
+                        run['result']=result
+                        raise ValueError(result['error'])
                 if (capability == 'network_scan' or (capability not in CAPABILITIES and tool=='network_scan')) and 'services' not in result:
                     import xml.etree.ElementTree as ET
                     try:

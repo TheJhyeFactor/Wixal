@@ -31,7 +31,9 @@ public enum TimelineHistory {
         if readable.hasPrefix("Execution interrupted") {return "interrupted"}
         if readable.hasPrefix("Error:") || value["error"] != nil || state=="failed" || textValue(value["status"])=="failed" || (value["exitCode"] as? Int ?? 0) != 0 || (value["status"] as? Int ?? 0)>=400 {return "failed"}
         if value["stopped"] as? Bool == true || state=="stopped" {return "stopped"}
-        return state=="running" ? "running" : "completed"
+        let progress=state.isEmpty ? textValue(value["status"]) : state
+        if ["queued","paused","stopped","interrupted","needs_attention","waiting_review","waiting_model"].contains(progress){return progress.replacingOccurrences(of:"_",with:" ")}
+        return progress=="running" ? "running" : "completed"
     }
     public static func milestones(messages:[[String:Any]],tasks:[[String:Any]],sessionID:String,busy:Bool,review:[String:Any]?,activeTool:[String:Any]=[:]) -> [TimelineMilestone] {
         var rows:[TimelineMilestone]=[],turn=0,updates:[String]=[],sessions:[String:Int]=[:],pending:[String:[Int]]=[:]

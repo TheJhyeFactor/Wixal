@@ -79,6 +79,8 @@ The canonical development and release source is `native/` on `main`.
 
 The source branch also includes a native tools library and managed RustScan development pilot. Controlled forks, exact source pins and unsigned build candidates live in [wixal-tools](https://github.com/TheJhyeFactor/wixal-tools). See the [implementation and measured acceptance status](native/MANAGED_TOOLS_IMPLEMENTATION_STATUS.md) for the current limits. This work is not yet included in the alpha download linked above, and a public managed installer catalogue has not been qualified.
 
+The [10 October application gap audit](native/APPLICATION_GAP_AUDIT_2026-10-10.md) documents the current source fixes in priority order: structured chat/scanner evidence, process cleanup, agent outcome verification, queues and resume, native editor acknowledgements, and activity history. It includes reproducible tests, installed-build evidence and retained model failures.
+
 ```sh
 python3 -m venv native/.venv
 native/.venv/bin/python -m pip install -r native/requirements-build.txt

@@ -37,12 +37,12 @@ const home = `<section class="hero container">
   <div class="hero-actions">${button(zip,'Download for macOS')}${link(repo,'View on GitHub')}</div>
   <p class="release-meta">${version} · Apple Silicon · macOS 14+ · Not notarised</p>
   <figure class="demo-preview">
-    <video data-demo controls muted playsinline preload="metadata" width="1600" height="900" poster="${assetUrl('assets/wixal-demo-poster.jpg')}" aria-label="Wixal installation and product demo" aria-describedby="demo-description">
+    <video data-demo controls loop muted playsinline preload="auto" width="1600" height="900" poster="${assetUrl('assets/wixal-demo-poster.jpg')}" aria-label="Wixal installation and product demo" aria-describedby="demo-description">
       <source src="${assetUrl('assets/wixal-demo.mp4')}" type="video/mp4">
       <p><a href="${assetUrl('assets/wixal-demo.mp4')}">Watch the Wixal demo</a></p>
     </video>
-    <figcaption><span>Setup → local models → project tools → cybersecurity</span><span>46 seconds</span></figcaption>
-    <p class="sr-only" id="demo-description">Animated command-line setup shows the release ZIP downloading, extracting and opening. Captured native Wixal workflows then show gpt-oss:20b reading a project README, completed tool activity and a cybersecurity baseline assessment of an authorised local website. The setup progress is illustrated; the app results are captured from actual local runs. The demo is silent and starts when you press Play.</p>
+    <figcaption><span>Setup → local models → project tools → cybersecurity</span><span class="demo-actions"><span>46 seconds</span><button data-demo-playback hidden aria-label="Play demo">Play</button></span></figcaption>
+    <p class="sr-only" id="demo-description">Animated command-line setup shows the release ZIP downloading, extracting and opening. Captured native Wixal workflows then show gpt-oss:20b reading a project README, completed tool activity and a cybersecurity baseline assessment of an authorised local website. The setup progress is illustrated; the app results are captured from actual local runs. The silent demo plays automatically and loops while visible. Use Pause to stop it. With reduced motion enabled, it starts only when you press Play.</p>
   </figure>
 </section>
 <section class="section container home-features" aria-label="Inside Wixal">

@@ -30,21 +30,49 @@ previewDialog?.querySelector('[data-preview-close]').addEventListener('click', (
 previewDialog?.addEventListener('click', event => { if (event.target === previewDialog) previewDialog.close(); });
 previewDialog?.addEventListener('close', () => previewTrigger?.focus());
 
-// Demos start only from their native controls, including with reduced motion.
+// Keep the demo moving while visible, with an explicit pause and motion preference.
 document.querySelectorAll('video[data-demo]').forEach(video => {
-  let visible = true;
-  let resume = false;
-  function updatePlayback() {
-    if (document.hidden || !visible) {
-      if (!video.paused) {
-        resume = true;
-        video.pause();
-      }
-    } else if (resume) {
-      resume = false;
-      video.play().catch(() => {});
-    }
+  const button = video.closest('figure').querySelector('[data-demo-playback]');
+  if (!button) return;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let visible = !('IntersectionObserver' in window);
+  let userPaused = false;
+  let manualPlay = false;
+  video.controls = false;
+  video.muted = true;
+  video.loop = true;
+  button.hidden = false;
+  function syncButton() {
+    const label = video.paused ? 'Play' : 'Pause';
+    button.textContent = label;
+    button.setAttribute('aria-label', `${label} demo`);
   }
+  function updatePlayback() {
+    const shouldPlay = !document.hidden && visible && !userPaused && (!reducedMotion.matches || manualPlay);
+    video.autoplay = shouldPlay;
+    if (shouldPlay) {
+      if (video.paused) video.play().catch(syncButton);
+    } else {
+      video.pause();
+    }
+    syncButton();
+  }
+  button.addEventListener('click', () => {
+    if (video.paused) {
+      userPaused = false;
+      manualPlay = true;
+    } else {
+      userPaused = true;
+      manualPlay = false;
+    }
+    updatePlayback();
+  });
+  video.addEventListener('play', syncButton);
+  video.addEventListener('pause', syncButton);
+  reducedMotion.addEventListener('change', () => {
+    manualPlay = false;
+    updatePlayback();
+  });
   if ('IntersectionObserver' in window) {
     const observer = new IntersectionObserver(entries => {
       visible = entries[0].isIntersecting;
@@ -53,4 +81,5 @@ document.querySelectorAll('video[data-demo]').forEach(video => {
     observer.observe(video);
   }
   document.addEventListener('visibilitychange', updatePlayback);
+  updatePlayback();
 });

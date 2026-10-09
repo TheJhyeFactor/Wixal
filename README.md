@@ -18,7 +18,7 @@
   <a href="https://thejhyefactor.github.io/Wixal/" aria-label="Watch the full-quality Wixal demo">
     <picture>
       <source media="(prefers-reduced-motion: reduce)" srcset="assets/motion/wixal-demo-still.png">
-      <img src="assets/motion/wixal-demo.gif" alt="Wixal demo: typed download commands, local model setup, a project task and an authorised cybersecurity investigation" width="800" height="450">
+      <img src="assets/motion/wixal-demo.gif" alt="Wixal demo: typed download commands, local model setup, a project task and an authorised cybersecurity investigation" width="800">
     </picture>
   </a>
 </p>

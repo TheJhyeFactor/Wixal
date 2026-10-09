@@ -12,7 +12,7 @@ async def run(manager,tools,args,session):
     if not executable:raise ValueError('Missing add-on. Use addon_install and wait for verified readiness.')
     root=(tools.store.project() or {}).get('root')
     if not root:raise ValueError('Select a project for evidence and command ownership')
-    identifier=row['id'];target=args.get('target','');path=args.get('path','.');seconds=args.get('timeout_seconds',180)
+    identifier=row['id'];target=args.get('target','');path=args.get('path','.');seconds=args.get('timeout_seconds',180);template_bytes=None
     if identifier in ('ffuf','nuclei'):
         parsed=urlsplit(target)
         if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:raise ValueError('Use an authorised HTTP(S) target without credentials, query or fragment')
@@ -24,7 +24,9 @@ async def run(manager,tools,args,session):
     elif identifier=='nuclei':
         template=safe_path(root,args.get('template',''))
         if not template.is_file() or template.suffix not in ('.yaml','.yml') or template.stat().st_size>1024*1024:raise ValueError('Select an explicit signed YAML template below 1 MB')
-        argv=[executable,'-u',target,'-t',str(template),'-dut','-ni','-duc','-rl','10','-c','2','-jsonl']
+        from .nuclei_templates import validate
+        template_bytes=template.read_bytes();validate(template_bytes)
+        argv=[executable,'-u',target,'-t',str(template),'-dut','-ni','-duc','-dr','-no-stdin','-pt','http','-rl','10','-c','2','-jsonl']
     elif identifier=='wireshark':
         capture=safe_path(root,path)
         if not capture.is_file() or capture.stat().st_size>100*1024*1024:raise ValueError('Select a project capture below 100 MB')
@@ -53,10 +55,23 @@ async def run(manager,tools,args,session):
         if identifier in ('trivy','osv-scanner'):raise ValueError('Local advisory tools may contact external databases; use an unrestricted authorised task')
     from .managed_tools import controlled_environment,digest
     home=Path(tempfile.mkdtemp(prefix='wixal-addon-run-'))
-    fingerprint=await asyncio.to_thread(digest,executable)
-    async def finished(job):shutil.rmtree(home)
+    lease=None
+    from .managed_tools import PROFILES
+    async def finished(job):
+        if lease:await asyncio.to_thread(manager.managed.release,lease['lease'])
+        shutil.rmtree(home,ignore_errors=True)
     try:
-        result=await tools.start_command(shlex.join(argv),seconds,session,argv=argv,assessment=dict(capability='addon:'+identifier,target=target,path=path,executableSha256=fingerprint),environment=controlled_environment(home),retain_evidence=True,on_finished=finished)
-        if not isinstance(result,dict):shutil.rmtree(home)
+        if template_bytes is not None:
+            selected=home/'selected-template.yaml';selected.write_bytes(template_bytes)
+            argv[argv.index('-t')+1]=str(selected)
+        if identifier in PROFILES and manager.managed.snapshot(identifier)['provider']=='managed':
+            lease=await asyncio.to_thread(manager.managed.acquire,session,identifier)
+            argv[0]=lease['path'];executable=lease['path']
+        fingerprint=await asyncio.to_thread(digest,executable)
+        result=await tools.start_command(shlex.join(argv),seconds,session,argv=argv,assessment=dict(capability='addon:'+identifier,target=target,path=path,executableSha256=fingerprint,**({'templateSha256':__import__('hashlib').sha256(template_bytes).hexdigest()} if template_bytes is not None else {}),**({'packageSha256':lease['packageSha256'],'adapter':lease['adapter']} if lease else {})),environment=controlled_environment(home),retain_evidence=True,on_finished=finished)
+        if not isinstance(result,dict):await finished(None)
+        elif lease:
+            job=tools.jobs.get(result['session_id'])
+            if job:await asyncio.to_thread(manager.managed.bind_lease,lease['lease'],job['child'].pid)
         return result
-    except BaseException:shutil.rmtree(home);raise
+    except BaseException:await finished(None);raise

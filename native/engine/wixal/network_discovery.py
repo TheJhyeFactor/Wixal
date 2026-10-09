@@ -95,13 +95,7 @@ def parse(stdout,invocation,complete=True):
     result['resultSha256']=canonical(result);return result
 
 
-class SocketBudget:
-    def __init__(self):self.used=0;self.condition=asyncio.Condition()
-    async def acquire(self,count):
-        async with self.condition:
-            await self.condition.wait_for(lambda:self.used+count<=256);self.used+=count
-    async def release(self,count):
-        async with self.condition:self.used-=count;self.condition.notify_all()
+from .socket_budget import SocketBudget
 
 
 def executable(tools):
@@ -129,7 +123,7 @@ async def start(tools,args,session):
     budget=getattr(manager,'socket_budget',None)
     if budget is None:
         budget=getattr(tools,'socket_budget',None) or SocketBudget();tools.socket_budget=budget
-    await budget.acquire(invocation['batchSize'])
+    reservation=await budget.acquire(invocation['batchSize'])
     handle=None;home=None
     try:
         acquisition=asyncio.create_task(asyncio.to_thread(executable,tools))
@@ -149,18 +143,19 @@ async def start(tools,args,session):
                 job['structuredResult']=result
             finally:
                 if handle.get('lease'):manager.managed.release(handle['lease'])
-                await budget.release(invocation['batchSize']);shutil.rmtree(home)
+                await budget.release(invocation['batchSize'],reservation);shutil.rmtree(home,ignore_errors=True)
         result=await tools.start_command(shlex.join(argv),invocation['timeoutSeconds'],session,argv=argv,assessment=dict(capability='network_discover',target=invocation['target'],addresses=invocation['addresses'],ports=invocation['ports'],connectionPairs=invocation['connectionPairs'],retryAllowance=invocation['retryAllowance'],executable=invocation['executable']),environment=controlled_environment(home),on_finished=finished,retain_evidence=True)
         if isinstance(result,dict):
             job=tools.jobs[result['session_id']]
+            await budget.bind(reservation,job['child'].pid)
             if handle.get('lease'):manager.managed.bind_lease(handle['lease'],job['child'].pid)
             result.update(coverage=invocation['coverage'],addresses=invocation['addresses'],connectionPairs=invocation['connectionPairs'],retryAllowance=invocation['retryAllowance'],executable=invocation['executable'],read='network_read',stop='network_stop')
             return result
         raise ValueError(result)
     except BaseException:
         if handle and handle.get('lease'):manager.managed.release(handle['lease'])
-        await budget.release(invocation['batchSize'])
-        if home:shutil.rmtree(home)
+        await budget.release(invocation['batchSize'],reservation)
+        if home:shutil.rmtree(home,ignore_errors=True)
         raise
 
 
@@ -179,7 +174,7 @@ def source_result(tools,args,session):
         result=job.get('structuredResult',{})
         if result.get('invocation',{}).get('target')!=args['target']:raise ValueError('Discovery target cannot change')
     if not result.get('handoffEligible') or result.get('resultSha256')!=canonical({k:v for k,v in result.items() if k!='resultSha256'}):raise ValueError('Discovery evidence is partial, malformed or has changed')
-    if 'ports' in args:raise ValueError('Source-bound inspection derives ports; conflicting manual ports are forbidden')
+    if args.get('ports','')!='':raise ValueError('Source-bound inspection derives ports; conflicting manual ports are forbidden; omit ports or use an empty string')
     if args.get('profile','services')=='discovery':raise ValueError('Inspection requires a port inspection profile')
     return result
 
@@ -192,7 +187,7 @@ async def inspect(tools,args,session):
         selected=host['ports']
         if args.get('profile')=='ssh':selected=[p for p in selected if p==22]
         for offset in range(0,len(selected),256):mapping.append(dict(target=host['host'],ports=','.join(map(str,selected[offset:offset+256])),profile=args.get('profile','services')))
-    if not mapping:return dict(state='completed',services=[],sourceResultSha256=result['resultSha256'],skipped=True,reason='No open ports detected for the selected profile')
+    if not mapping:return dict(state='completed',services=[],sourceResultSha256=result['resultSha256'],sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),skipped=True,reason='No open ports detected for the selected profile')
     authorize(result['invocation'],profile.get() or {})
     path=shutil.which('nmap') or ('/opt/homebrew/bin/nmap' if Path('/opt/homebrew/bin/nmap').exists() else None)
     if not path:raise ValueError('Nmap is required for inspection; discovery evidence remains available')

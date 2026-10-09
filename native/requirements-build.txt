@@ -11,3 +11,4 @@ cryptography==50.0.2
 tuf==7.0.1
 securesystemslib==1.5.1
 urllib3==2.8.0
+PyYAML==6.0.3

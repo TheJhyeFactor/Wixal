@@ -5,7 +5,7 @@ struct WorkspaceView: View {
     @ObservedObject var engine: EngineClient
     @ViewState<String> private var tab = "Chat"
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @ViewState<Bool> private var introFinished=false
+    @ViewState<Bool> private var introFinished=true
     @ViewState<Bool> private var preferencesLoaded=false
     @ViewState<Bool> private var terminal = false
     @ViewState<Bool> private var modelPicker=false
@@ -49,18 +49,24 @@ struct WorkspaceView: View {
                     if ["Chat","Agents","Files"].contains(tab){workspaceHeader}
                     HStack(spacing:0) {
                         VSplitView {
-                            Group {
+                            ZStack {
+                                CybersecurityAgentWorkspace(engine:engine,design:agentDesign)
+                                    .opacity(tab == "Cybersecurity" ? 1 : 0)
+                                    .allowsHitTesting(tab == "Cybersecurity")
+                                    .accessibilityHidden(tab != "Cybersecurity")
+                                Group {
                                 switch tab {
                                 case "Files": FilesView(engine:engine,onUse:addFileContext)
                                 case "Models": ModelsView(engine:engine)
                                 case "Performance": PerformanceView(engine:engine)
                                 case "Projects": projectsPage
-                                case "Cybersecurity": CybersecurityAgentWorkspace(engine:engine,design:agentDesign)
+                                case "Cybersecurity": EmptyView()
                                 case "Tools": AddonLibraryView(engine:engine)
                                 case "Agents": agentsPage
                                 case "Tasks": TasksView(engine:engine,openConversation:{tab="Agents";agentPage="Conversation";drawer=nil})
                                 case "Settings": SettingsView(engine:engine,settings:settings,navigate:{select($0)},previewLaunch:{introFinished=false})
                                 default: ChatView(engine:engine,openModels:{modelPicker=true},openFiles:{tab="Files"},openTools:{drawer=drawer == "Tools" ? nil : "Tools"})
+                                }
                                 }
                             }.frame(maxWidth:.infinity,maxHeight:.infinity)
                             if terminal {
@@ -100,9 +106,8 @@ struct WorkspaceView: View {
         .background(SheetFocusRestorer().frame(width:0,height:0))
         .ignoresSafeArea(.container,edges:.top)
         .animation(motion,value:expanded).animation(motion,value:collapsed).animation(motion,value:drawer).animation(motion,value:tab)
-        .overlay{if preferencesLoaded && !introFinished{LaunchView(theme:theme,motion:!reduceMotion && (ui["launchAnimation"] as? Bool ?? true),sound:ui["launchSound"] as? Bool ?? true,done:{introFinished=true})}}
-        .task{try? await Task.sleep(for:.seconds(3));if !preferencesLoaded{introFinished=true}}
-        .onChange(of:engine.connected){_,ready in if ready && !preferencesLoaded{preferencesLoaded=true;tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat";collapsed=ui["sidebarCollapsed"] as? Bool ?? false;if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] != nil{introFinished=true};if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] == nil{let setup=engine.state["setup"] as? [String:Any] ?? [:];setupPresented = !(setup["completed"] as? Bool ?? false)}}}
+        .overlay{if !introFinished{LaunchView(theme:theme,motion:!reduceMotion && (ui["launchAnimation"] as? Bool ?? true),sound:ui["launchSound"] as? Bool ?? true,done:{introFinished=true})}}
+        .onChange(of:engine.connected,initial:true){_,ready in if ready && !preferencesLoaded{preferencesLoaded=true;tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat";collapsed=ui["sidebarCollapsed"] as? Bool ?? false;if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] == nil{let setup=engine.state["setup"] as? [String:Any] ?? [:];setupPresented = !(setup["completed"] as? Bool ?? false)}}}
         .onChange(of:ui["sidebarCollapsed"] as? Bool){_,value in collapsed=value ?? false}
         .onChange(of:ui["appIcon"] as? String){_,_ in updateIcon()}
         .onExitCommand{if drawer != nil{drawer=nil}else{tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat"}}
@@ -126,7 +131,7 @@ struct WorkspaceView: View {
         .sheet(isPresented:Binding(get:{projectDeleteID != nil},set:{if !$0{projectDeleteID=nil}})){DeleteProjectView(engine:engine,id:projectDeleteID ?? "",close:{projectDeleteID=nil;tab="Projects"})}
         .sheet(isPresented:$modelPicker){VStack(spacing:0){HStack{Text("Choose your model").wixalFont(size:15,weight:.medium);Spacer();Button{modelPicker=false}label:{Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel("Close model picker")}.padding(20).background(theme.panel);ModelsView(engine:engine)}.frame(width:min(980,windowSize.width-40),height:min(680,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
         .sheet(isPresented:$palette) {CommandPalette(action:{select($0);palette=false})}
-        .onAppear {updateIcon();expanded.insert(textValue(engine.state["activeProject"]));if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] != nil {terminal=true}}
+        .onAppear {StartupEvidence.record("workspace-mounted");updateIcon();expanded.insert(textValue(engine.state["activeProject"]));if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] != nil {terminal=true}}
         .onChange(of:engine.state["activeProject"] as? String) {_,id in expanded.insert(id ?? "")}
         .onChange(of:appearance){_,_ in updateIcon()}
         .onChange(of:engine.state["activeSession"] as? String) {_,_ in engine.browser.closeAll();if ["Chat","Agents"].contains(tab){tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat"}}

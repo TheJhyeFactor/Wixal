@@ -16,6 +16,46 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
     scripted=fixtures.AgentRuntimeTests.scripted
+    async def test_empty_completed_inference_retries_once_without_effects(self):
+        calls=0
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==1:return dict(role='assistant',content='',usage=dict(eval_count=1))
+            self.assertIn('No new action occurred',body['messages'][-1]['content'])
+            return dict(role='assistant',content='The task needs no tool actions.',usage=dict(eval_count=5))
+        with patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Explain the project'))
+        self.assertEqual(calls,2);self.assertEqual(task['checkpoints'],[]);self.assertEqual(task['status'],'completed')
+    async def test_repeated_empty_inference_fails_visibly_and_stays_bounded(self):
+        calls=0
+        async def stream(*args):
+            nonlocal calls
+            calls+=1;return dict(role='assistant',content='',usage=dict(eval_count=1))
+        with patch('wixal.agent.stream_chat',stream):
+            with self.assertRaisesRegex(ValueError,'without a visible answer'):await self.service.dispatch('agent-run',dict(id='coder',prompt='Explain the project'))
+        self.assertEqual(calls,2);self.assertEqual(self.service.store.data['tasks'][-1]['checkpoints'],[])
+    async def test_invalid_tool_json_recovery_executes_no_failed_response(self):
+        from wixal.agent import ToolCallSyntaxError
+        calls=0
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==1:raise ToolCallSyntaxError('Invalid model tool JSON')
+            self.assertIn('No action from that response executed',body['messages'][-1]['content'])
+            return dict(role='assistant',content='No tools were executed.')
+        with patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Explain the project'))
+        self.assertEqual(calls,2);self.assertEqual(task['checkpoints'],[])
+    async def test_invalid_tool_json_retry_is_bounded(self):
+        from wixal.agent import ToolCallSyntaxError
+        calls=0
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1;raise ToolCallSyntaxError('Invalid model tool JSON')
+        with patch('wixal.agent.stream_chat',stream):
+            with self.assertRaises(ToolCallSyntaxError):await self.service.dispatch('agent-run',dict(id='coder',prompt='Explain the project'))
+        self.assertEqual(calls,3)
     async def test_false_success_missing_artifact_needs_attention(self):
         context,_=self.scripted([],'I saved the report successfully')
         with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Save report',successCriteria=[dict(kind='file_exists',path='missing.md')]))

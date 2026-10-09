@@ -13,7 +13,7 @@ struct CommandPalette:View{
     @FocusState private var searchFocused:Bool
     @ViewState<String> private var query=""
     @ViewState<Int> private var selection=0
-    let commands=["New conversation","Open project","Chat","Agents","Cybersecurity","Projects","Models","Performance","Files","Tool kit","Project memory","Terminal","Tasks","Archived chats","Settings","Account","Connections","Setup","Terms","Privacy"]
+    let commands=["New conversation","Open project","Chat","Agents","Cybersecurity","Tools","Projects","Models","Performance","Files","Tool kit","Project memory","Terminal","Tasks","Archived chats","Settings","Account","Connections","Setup","Terms","Privacy"]
     private var matches:[String]{commands.filter{query.isEmpty || $0.localizedCaseInsensitiveContains(query)}}
     var body:some View{
         VStack(alignment:.leading,spacing:16){

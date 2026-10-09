@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import WixalMarkdown
+import OSLog
 
 /// AppKit table keeps real column-header, row and cell accessibility semantics.
 struct MarkdownTable:NSViewRepresentable {
@@ -46,7 +47,7 @@ struct MarkdownTable:NSViewRepresentable {
     func makeCoordinator()->Coordinator{Coordinator(self)}
     func makeNSView(context:Context)->NSScrollView{
         let scroll=FittedResponseTableScrollView();scroll.hasHorizontalScroller=true;scroll.hasVerticalScroller=true;scroll.autohidesScrollers=true;scroll.drawsBackground=false;scroll.borderType = .noBorder
-        let table=NSTableView();table.delegate=context.coordinator;table.dataSource=context.coordinator;table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle;table.usesAlternatingRowBackgroundColors=false;table.rowSizeStyle = .custom;table.gridStyleMask=[.solidHorizontalGridLineMask];table.intercellSpacing=NSSize(width:10,height:4);table.setAccessibilityLabel("Markdown table");scroll.documentView=table;return scroll
+        let table=ResponseNSTableView();table.allowsEmptySelection=true;table.delegate=context.coordinator;table.dataSource=context.coordinator;table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle;table.usesAlternatingRowBackgroundColors=false;table.rowSizeStyle = .custom;table.gridStyleMask=[.solidHorizontalGridLineMask];table.intercellSpacing=NSSize(width:10,height:4);table.setAccessibilityLabel("Markdown table");scroll.documentView=table;return scroll
     }
     func updateNSView(_ scroll:NSScrollView,context:Context){
         context.coordinator.parent=self
@@ -61,6 +62,20 @@ struct MarkdownTable:NSViewRepresentable {
         table.backgroundColor=NSColor(theme.panel);table.gridColor=NSColor(theme.line);table.reloadData()
         table.noteHeightOfRows(withIndexesChanged:IndexSet(integersIn:0..<table.numberOfRows))
         scroll.needsLayout=true
+    }
+}
+
+private final class ResponseNSTableView:NSTableView {
+    private let logger=Logger(subsystem:Bundle.main.bundleIdentifier ?? "app.wixal.native",category:"ResponseTable")
+    override func mouseDown(with event:NSEvent) {
+        let clicked=row(at:convert(event.locationInWindow,from:nil))
+        let clear=clicked>=0 && selectedRowIndexes.contains(clicked) && event.clickCount==1 && event.modifierFlags.intersection([.command,.shift,.option,.control]).isEmpty
+        super.mouseDown(with:event)
+        if clear{deselectAll(nil);logger.info("Response table row deselected")}
+    }
+    override func keyDown(with event:NSEvent) {
+        if event.keyCode==53{deselectAll(nil);logger.info("Response table selection cleared with Escape");return}
+        super.keyDown(with:event)
     }
 }
 

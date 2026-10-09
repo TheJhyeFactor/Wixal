@@ -10,12 +10,13 @@ import threading
 from pathlib import Path
 from .storage import identity, now
 from .memory import owner
+from .managed_tools import PROFILES
 
 CATALOG = [
  dict(id='rustscan',name='RustScan',category='Network',package='rustscan',binary='rustscan',source='https://github.com/bee-san/RustScan',description='Bounded TCP discovery with retained evidence and source-bound Nmap inspection.',adapter='network_discover'),
  dict(id='nmap',name='Nmap',category='Network',package='nmap',binary='nmap',source='https://nmap.org/',description='Host, port and service discovery.',adapter='network_scan'),
  dict(id='ffuf',name='ffuf',category='Web',package='ffuf',binary='ffuf',source='https://github.com/ffuf/ffuf',description='Bounded route discovery with a supplied wordlist.',adapter='addon_run'),
- dict(id='nuclei',name='Nuclei',category='Web',package='nuclei',binary='nuclei',source='https://docs.projectdiscovery.io/tools/nuclei/overview',description='Selected signed template checks; provide a template path.',adapter='addon_run'),
+ dict(id='nuclei',name='Nuclei',category='Web',package='nuclei',binary='nuclei',source='https://docs.projectdiscovery.io/tools/nuclei/overview',description='Selected signed GET/HEAD HTTP checks; provide a target-bound template path.',adapter='addon_run'),
  dict(id='wireshark',name='Wireshark / TShark',category='Traffic',package='wireshark',binary='tshark',source='https://www.wireshark.org/',description='Analyse saved packet captures. Desktop app and live capture permissions are separate.',adapter='addon_run'),
  dict(id='trivy',name='Trivy',category='Software',package='trivy',binary='trivy',source='https://trivy.dev/',description='Local software vulnerability and configuration assessment.',adapter='addon_run'),
  dict(id='osv-scanner',name='OSV-Scanner',category='Software',package='osv-scanner',binary='osv-scanner',source='https://google.github.io/osv-scanner/',description='Match local dependency evidence against OSV advisories.',adapter='addon_run'),
@@ -45,7 +46,7 @@ class Addons:
         self.service=service;self.store=service.store;self.tasks={};self.children={};self.lock=asyncio.Lock();self.versions={}
         from .managed_tools import PackageRegistry
         from .network_discovery import SocketBudget
-        self.managed=PackageRegistry();self.socket_budget=SocketBudget();self.managed_cancellations={}
+        self.managed=PackageRegistry();self.socket_budget=SocketBudget(self.managed.root);self.managed_cancellations={}
         self.store.data.setdefault('addonPolicy',dict(automaticInstall=True))
         self.store.data.setdefault('addonJobs',[])
         self.store.data.setdefault('addonCandidates',[])
@@ -60,8 +61,8 @@ class Addons:
         candidates=[shutil.which(row['binary']),'/opt/homebrew/bin/'+row['binary'],'/usr/local/bin/'+row['binary'],*row.get('paths',[])]
         return next((p for p in candidates if p and Path(p).is_file() and os.access(p,os.X_OK)),None)
     def executable(self,row):
-        if row['id']=='rustscan' and self.managed.snapshot()['provider']=='managed':
-            try:return self.managed.resolve()['path']
+        if row['id'] in PROFILES and self.managed.snapshot(row['id'])['provider']=='managed':
+            try:return self.managed.resolve(row['id'])['path']
             except (ValueError,OSError):return None
         return self.external_executable(row)
     def snapshot(self,query=''):
@@ -72,8 +73,8 @@ class Addons:
             row['version']=self.versions.get(spec['id'],'')
             row['registryURL']='https://formulae.brew.sh/'+('cask/' if spec.get('kind')=='cask' else 'formula/')+spec.get('package','') if spec.get('package') else spec['source']
             row.update(provider='specialist_installer' if not spec.get('package') else 'external_homebrew',packageVerified=False,capabilityReady=bool(path and self.versions.get(spec['id']) and spec['adapter']!='setup_required'),modelEvaluation='unevaluated',readiness='setup_required' if path else 'not_installed')
-            if spec['id']=='rustscan':
-                managed=self.managed.snapshot();row.update(managed=managed,provider=managed['provider'],externalPath=self.external_executable(spec),managedInstallable=managed['configured'])
+            if spec['id'] in PROFILES:
+                managed=self.managed.snapshot(spec['id']);row.update(managed=managed,provider=managed['provider'],externalPath=self.external_executable(spec),managedInstallable=managed['configured'])
                 if managed['provider']=='managed':
                     row.update(registry='Wixal managed preview',packageVerified=bool(path),capabilityReady=bool(path),version=(managed['active'] or {}).get('version',''),registryURL=spec['source'])
             if row['capabilityReady']:row['readiness']='ready'
@@ -89,9 +90,9 @@ class Addons:
         from .agent_context import profile
         active=profile.get() or {}
         if active.get('reviewPolicy')=='Read only' or active.get('_branchRoot'):raise ValueError('Package installation is unavailable in this task boundary')
-        provider=args.get('provider',self.managed.snapshot()['provider'] if row['id']=='rustscan' else 'external_homebrew')
+        provider=args.get('provider',self.managed.snapshot(row['id'])['provider'] if row['id'] in PROFILES else 'external_homebrew')
         if provider=='managed':
-            if row['id']!='rustscan':raise ValueError('This tool has no managed contract yet')
+            if row['id'] not in PROFILES:raise ValueError('This tool has no managed contract yet')
             return await self.install_managed(args,tools,session,manual)
         if not row.get('package'):raise ValueError('This tool requires its official installer and specialist setup: '+row['source'])
         if path:=self.executable(row):
@@ -113,9 +114,11 @@ class Addons:
     async def install_managed(self,args,tools,session,manual=False,artifact=None):
         if not self.managed.client:raise ValueError('Managed repository is not configured in this build')
         if args.get('channel',self.managed.configuration['channel'])!=self.managed.configuration['channel']:raise ValueError('This channel has no embedded trust configuration')
-        job=dict(id=identity(),addon='rustscan',provider='managed',owner=owner(self.store),session=session,projectId=(tools.store.project() or {}).get('id'),status='waiting_review',stage='requested',created=now(),reason=args.get('reason','Managed RustScan maintenance'),output='')
+        identifier=args.get('id','rustscan')
+        if identifier not in PROFILES:raise ValueError('This tool has no managed package contract')
+        job=dict(id=identity(),addon=identifier,provider='managed',owner=owner(self.store),session=session,projectId=(tools.store.project() or {}).get('id'),status='waiting_review',stage='requested',created=now(),reason=args.get('reason','Managed '+identifier+' maintenance'),output='')
         self.store.data['addonJobs'].append(job);self.publish()
-        if not manual and not self.store.data['addonPolicy']['automaticInstall'] and not await tools.approve(dict(name='addon_install',addon='rustscan',provider='managed',installationReview=True,reason=job['reason'])):
+        if not manual and not self.store.data['addonPolicy']['automaticInstall'] and not await tools.approve(dict(name='addon_install',addon=identifier,provider='managed',installationReview=True,reason=job['reason'])):
             job.update(status='declined',finished=now());self.publish();return dict(job)
         cancel=threading.Event();self.managed_cancellations[job['id']]=cancel
         async def collect():
@@ -191,6 +194,11 @@ class Addons:
         row=dict(id=identity(),name=pack['name'],description=pack['description'],content=pack['content'],addonPack=identifier,owner=owner(self.store),source='Wixal bundled workflow',created=now(),versions=[])
         self.store.data['skills'].append(row);self.publish();return row
     async def verify(self,row,path):
+        if row['id'] in PROFILES and self.managed.snapshot(row['id'])['provider']=='managed':
+            from .managed_tools import inspect_payload
+            managed=self.managed.snapshot(row['id'])['active']
+            await asyncio.to_thread(inspect_payload,self.managed.path(managed),managed)
+            self.versions[row['id']]=managed['version'];return managed['version']
         if row['adapter']=='setup_required' or row['id'].startswith('core:'):return 'Detected executable; specialist setup required'
         flag={'ffuf':'-V','nuclei':'-version'}.get(row['id'],'--version')
         child=await asyncio.create_subprocess_exec(path,flag,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.STDOUT)
@@ -224,15 +232,16 @@ class Addons:
     async def dispatch(self,method,args):
         if method=='addon-managed-refresh':return await asyncio.to_thread(self.managed.refresh)
         if method=='addon-provider':
-            if args.get('id')!='rustscan':raise ValueError('Only RustScan has a managed provider')
-            await asyncio.to_thread(self.managed.select_provider,args.get('provider'));return self.snapshot('rustscan')
-        if method=='addon-rollback':return await asyncio.to_thread(self.managed.rollback,args.get('artifact'))
-        if method=='addon-manage' and args.get('id')=='rustscan' and self.managed.snapshot()['provider']=='managed':
+            identifier=args.get('id')
+            if identifier not in PROFILES:raise ValueError('This tool has no managed provider')
+            await asyncio.to_thread(self.managed.select_provider,args.get('provider'),identifier);return self.snapshot(identifier)
+        if method=='addon-rollback':return await asyncio.to_thread(self.managed.rollback,args.get('artifact'),args.get('id','rustscan'))
+        if method=='addon-manage' and args.get('id') in PROFILES and self.managed.snapshot(args['id'])['provider']=='managed':
             operation=args.get('operation')
-            if operation=='uninstall':return await asyncio.to_thread(self.managed.remove)
+            if operation=='uninstall':return await asyncio.to_thread(self.managed.remove,None,args['id'])
             if operation not in ('upgrade','reinstall'):raise ValueError('Choose update, repair or removal')
-            artifact=(self.managed.snapshot()['active'] or {}).get('sha256') if operation=='reinstall' else None
-            return await self.install_managed(dict(reason='Managed '+operation),self.service.tools,'native-library',manual=True,artifact=artifact)
+            artifact=(self.managed.snapshot(args['id'])['active'] or {}).get('sha256') if operation=='reinstall' else None
+            return await self.install_managed(dict(id=args['id'],reason='Managed '+operation),self.service.tools,'native-library',manual=True,artifact=artifact)
         if method=='addon-manage':
             row=self.spec(args.get('id'));operation=args.get('operation')
             if operation not in ('upgrade','reinstall','uninstall'):raise ValueError('Choose update, repair or removal')

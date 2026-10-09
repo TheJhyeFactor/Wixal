@@ -37,7 +37,7 @@ class Client:
                     future=self.pending.pop(data['id'],None)
                     if future and not future.done():future.set_result(data)
                 elif event=='review':
-                    approved=data.get('name') in self.allowed
+                    approved=self.review_policy(data) if hasattr(self,'review_policy') else data.get('name') in self.allowed
                     self.reviews.append(dict(name=data.get('name'),approved=approved,details={k:v for k,v in data.items() if k not in ('id','before')}))
                     self.send('respond',dict(id=data['id'],value=approved))
                 elif event in ('error','activity','token','assistant-start'):self.events.append(item)

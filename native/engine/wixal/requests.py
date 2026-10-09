@@ -1,8 +1,9 @@
 """Connection-owned IPC requests with deadlines and acknowledged cancellation."""
 import asyncio
+import time
 
 
-LIMITS = {"agent-resume":1800,"agent-verify":600,"skill-evaluate":7200,"workflow-merge":300,"agent-schedule-run":3600,"agent-run":1800,"workflow-run":3600,"workflow-resume":3600,"chat": 600, "task-start": 600, "session-handoff": 110,
+LIMITS = {"community-report-prepare":150,"agent-resume":1800,"agent-verify":600,"skill-evaluate":7200,"workflow-merge":300,"agent-schedule-run":3600,"agent-run":1800,"workflow-run":3600,"workflow-resume":3600,"chat": 600, "task-start": 600, "session-handoff": 110,
           "assessment-run": 600, "tool": 600, "model-import": 1800, "model-pull": 1800,
           "mcp-connect": 300, "memory-recall": 90, "memory-index": 90, "memory-review":120, "legacy-import": 180, "models": 120, "model-status": 120}
 
@@ -29,6 +30,10 @@ class Requests:
     async def handle(self, owner, message):
         identifier, method = message["id"], message["method"]
         params = message.get("params") or {}
+        diagnostics = getattr(self.service, 'diagnostics', None)
+        started = time.monotonic()
+        if diagnostics and method not in ('ping', 'diagnostic-ui-event'):
+            diagnostics.write('request-start', requestId=identifier, method=method)
         try:
             if method == "cancel-request":
                 target = self.running.get((owner, params.get("id")))
@@ -48,6 +53,9 @@ class Requests:
             self.emit("response", dict(id=identifier, error="Request deadline reached. Execution was cancelled; check interrupted actions before retrying.", timedOut=True))
         except Exception as error:
             self.emit("response", dict(id=identifier, error=str(error)))
+        finally:
+            if diagnostics and method not in ('ping', 'diagnostic-ui-event'):
+                diagnostics.write('request-end', requestId=identifier, method=method, elapsedMs=round((time.monotonic()-started)*1000))
 
     async def close(self, owner=None):
         tasks = [task for (client, _), task in list(self.running.items()) if owner is None or client == owner]

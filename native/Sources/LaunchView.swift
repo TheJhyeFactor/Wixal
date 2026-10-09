@@ -30,6 +30,7 @@ struct LaunchView:View {
     let theme:WixalTheme
     let motion:Bool
     let sound:Bool
+    var dismissAutomatically = true
     let done:()->Void
     @ViewState<CGFloat> private var reveal=0
     @ViewState<Bool> private var shown=false
@@ -49,7 +50,11 @@ struct LaunchView:View {
         }.frame(maxWidth:.infinity,maxHeight:.infinity).background(theme.background).opacity(exited ? 0 : 1).offset(y:exited ? -4 : 0).accessibilityLabel("Wixal is starting")
         .task {
             if sound,let url=Bundle.main.url(forResource:"launch",withExtension:"wav",subdirectory:"audio"),let audio=NSSound(contentsOf:url,byReference:true){chime=audio;audio.volume=0.32;audio.play()}
-            guard motion else{done();return}
+            guard motion else{
+                shown=true;reveal=285;folded=true;version=true
+                do {try await Task.sleep(for:.milliseconds(350))} catch{return}
+                done();return
+            }
             withAnimation(.easeOut(duration:0.58)){shown=true}
             try? await Task.sleep(for:.milliseconds(180));guard !Task.isCancelled else{return}
             withAnimation(.timingCurve(0.215,0.61,0.355,1,duration:1.02)){reveal=285}
@@ -58,9 +63,13 @@ struct LaunchView:View {
             try? await Task.sleep(for:.milliseconds(530));guard !Task.isCancelled else{return}
             withAnimation(.easeOut(duration:0.42)){version=true}
             try? await Task.sleep(for:.milliseconds(1120));guard !Task.isCancelled else{return}
-            withAnimation(.easeIn(duration:0.2)){exited=true}
+            if dismissAutomatically {withAnimation(.easeIn(duration:0.2)){exited=true}}
             try? await Task.sleep(for:.milliseconds(220));guard !Task.isCancelled else{return};done()
-        }.onExitCommand{chime?.stop();done()}
+        }.onExitCommand{
+            chime?.stop()
+            if !dismissAutomatically {shown=true;reveal=285;folded=true;version=true}
+            done()
+        }
         .onDisappear{if exited == false{chime?.stop()}}
     }
 }

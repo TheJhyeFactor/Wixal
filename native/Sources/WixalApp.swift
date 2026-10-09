@@ -13,10 +13,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @StateObject private var engine = EngineClient()
     var body: some Scene {
         WindowGroup("Wixal") {
-            WorkspaceView(engine: engine)
+            AppStartupView(engine: engine)
                 .frame(minWidth: 920, minHeight: 640)
                 .onAppear {
-                    delegate.engine = engine; engine.start()
+                    delegate.engine = engine
                     // A deterministic packaged acceptance window, with the same
                     // production minimum and no change to normal saved geometry.
                     if ProcessInfo.processInfo.environment["WIXAL_NATIVE_ACCEPTANCE"] == "1" {

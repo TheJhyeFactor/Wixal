@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+import re
 from .storage import identity, now
 
 KINDS=('file_exists','file_contains','json_equals','command_exit','tool_succeeded','tool_contains')
@@ -45,6 +46,33 @@ def equal(left,right):
     if isinstance(left,dict):return left.keys()==right.keys() and all(equal(left[k],right[k]) for k in left)
     if isinstance(left,list):return len(left)==len(right) and all(equal(a,b) for a,b in zip(left,right))
     return left==right
+
+def discovery_follow_up(task):
+    """Check a requested chain against this task's checkpoints, never memories.
+
+    This only returns feedback. Execution still requires a model tool call and
+    all normal controller authority/review checks.
+    """
+    prompt=task.get('prompt','').lower()
+    if not re.search(r'\b(discover|discovery|rustscan)\b',prompt):return None
+    if not re.search(r'\b(inspect|inspection|enumerate|enumeration|nmap)\b',prompt):return None
+    if re.search(r"\b(?:do not|don't|without|no|skip)\b[^.!?\n]{0,160}\b(?:inspect\w*|enumerat\w*|nmap)\b",prompt):return None
+    sources=[];inspections=[]
+    for checkpoint in task.get('checkpoints',[]):
+        result=decode(checkpoint.get('result',''))
+        if checkpoint.get('status')!='finished' or not isinstance(result,dict):continue
+        structured=result.get('structuredResult',{})
+        if checkpoint['name']=='network_read' and result.get('state')=='completed' and structured.get('handoffEligible'):
+            sources.append(result)
+        if checkpoint['name']=='network_scan' and result.get('sourceSessionId'):
+            inspections.append(result)
+    if not sources:return None
+    missing=[source['session_id'] for source in sources if not any(
+        result.get('sourceSessionId')==source['session_id'] and not result.get('error')
+        and (result.get('skipped') or result.get('state')=='completed' or result.get('exitCode')==0) for result in inspections)]
+    return dict(check=dict(kind='requested_discovery_inspection',tool='network_scan',
+                          label='Complete the inspection requested in the current task using its discovery source_session_id'),
+                status='failed' if missing else 'passed',sourceSessions=missing,checked=now())
 
 async def verify(store,tools,task,checks=None):
     checks=criteria(task.get('successCriteria',[]) if checks is None else checks)
@@ -95,6 +123,8 @@ async def verify(store,tools,task,checks=None):
             row['status']='passed'
         except (ValueError,OSError,KeyError,IndexError,TypeError,UnicodeError) as error:row['error']=str(error)
         rows.append(row)
+    follow_up=discovery_follow_up(task)
+    if follow_up:rows.append(follow_up)
     latest={}
     for checkpoint in task.get('checkpoints',[]):
         # Corrected arguments can recover; later unrelated command success cannot hide a failed command.

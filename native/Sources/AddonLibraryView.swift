@@ -66,7 +66,9 @@ struct AddonLibraryView: View {
         .task { await refresh() }
         .onChange(of:changes) { _,_ in Task { await refresh() } }
         .onChange(of:engine.connected) { _,ready in if ready { Task { await refresh() } } }
-        .sheet(isPresented:Binding(get:{detailItem != nil},set:{if !$0 { detailItem=nil }})) { if let item=detailItem { details(item) } }
+        .sheet(isPresented:Binding(get:{detailItem != nil},set:{if !$0 { detailItem=nil }})) {
+            if let selected=detailItem { details(items.first { textValue($0["id"]) == textValue(selected["id"]) } ?? selected) }
+        }
         .alert("Remove globally?",isPresented:Binding(get:{removal != nil},set:{if !$0 { removal=nil }})) {
             Button("Cancel",role:.cancel) { removal=nil }
             Button("Remove",role:.destructive) { if let item=removal { Task { await perform(workflow(item) ? "addon-workflow-remove" : "addon-manage",["id":textValue(item["id"]),"operation":"uninstall"]); removal=nil } } }
@@ -118,7 +120,7 @@ struct AddonLibraryView: View {
             if !textValue(item["version"]).isEmpty { Text(textValue(item["version"])).wixalFont(size:11).textSelection(.enabled) }
             if !workflow(item) {
                 Text("Capability: " + readinessLabel(item) + " · Model: " + textValue(item["modelEvaluation"]).capitalized).wixalFont(size:11).foregroundStyle(theme.muted)
-                if textValue(item["id"]) == "rustscan" { managedControls(item) }
+                if item["managed"] != nil { managedControls(item) }
             }
             HStack {
                 Button("Details") { detailItem=item }
@@ -150,12 +152,12 @@ struct AddonLibraryView: View {
         return VStack(alignment:.leading,spacing:10) {
             Text("Provider: " + textValue(item["provider"]).replacingOccurrences(of:"_",with:" ")).wixalFont(size:11)
             HStack {
-                Button("Use external installation") { Task { await perform("addon-provider",["id":"rustscan","provider":"external_homebrew"]) } }
+                Button("Use external installation") { Task { await perform("addon-provider",["id":textValue(item["id"]),"provider":"external_homebrew"]) } }
                 if managed["installed"] as? Bool == true {
-                    Button("Use managed package") { Task { await perform("addon-provider",["id":"rustscan","provider":"managed"]) } }
+                    Button("Use managed package") { Task { await perform("addon-provider",["id":textValue(item["id"]),"provider":"managed"]) } }
                 }
                 if managed["configured"] as? Bool == true {
-                    Button("Install managed") { Task { await perform("addon-install",["id":"rustscan","provider":"managed","reason":"Use a verified Wixal managed package"]) } }
+                    Button("Install managed") { Task { await perform("addon-install",["id":textValue(item["id"]),"provider":"managed","reason":"Use a verified Wixal managed package"]) } }
                     Button("Check catalogue") { Task { await perform("addon-managed-refresh",[:]) } }
                 }
             }.wixalFont(size:11).disabled(pending(item))
@@ -163,7 +165,7 @@ struct AddonLibraryView: View {
             Text("Package verified: " + ((item["packageVerified"] as? Bool == true) ? "Yes" : "No managed receipt") + " · AI utilisation: Unevaluated").wixalFont(size:11).foregroundStyle(theme.muted)
             if let stamp=managed["lastCatalogueCheck"] as? Double { Text("Catalogue checked " + Date(timeIntervalSince1970:stamp).formatted()).wixalFont(size:10).foregroundStyle(theme.muted) }
             ForEach(recovery,id:\.self) { artifact in
-                Button("Roll back to " + String(artifact.prefix(12))) { Task { await perform("addon-rollback",["artifact":artifact]) } }.wixalFont(size:11)
+                Button("Roll back to " + String(artifact.prefix(12))) { Task { await perform("addon-rollback",["id":textValue(item["id"]),"artifact":artifact]) } }.wixalFont(size:11)
             }
             DisclosureGroup("Package identity") { Text(pretty(active)).wixalFont(size:10,design:.monospaced).textSelection(.enabled) }
         }
@@ -189,8 +191,10 @@ struct AddonLibraryView: View {
             ScrollView { VStack(alignment:.leading,spacing:16) {
                 Text(textValue(item["description"])).wixalFont(size:13)
                 Text("Global installation · Shared across all projects").wixalFont(size:12).foregroundStyle(theme.muted)
+                if !error.isEmpty { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+                ForEach(jobs.filter { textValue($0["addon"]) == textValue(item["id"]) && ["queued","running","waiting_review","failed","cancelled"].contains(textValue($0["status"])) },id:\.toolIdentity) { job in jobRow(job) }
                 if workflow(item) { Text("Required programs: " + (item["tools"] as? [String] ?? []).joined(separator:", ")).wixalFont(size:12); Text(textValue(item["content"])).wixalFont(size:12).textSelection(.enabled) }
-                else { if textValue(item["id"]) == "rustscan" { managedControls(item) }; Text(textValue(item["integration"]) == "setup_required" ? "Specialist setup and a usable AI adapter are still required. Installation alone does not make this tool ready." : "Structured AI adapter available. Execution follows the task's scope and permissions.").wixalFont(size:12); if let url=URL(string:textValue(item["source"])) { Link("Official documentation",destination:url) }; if let url=URL(string:textValue(item["registryURL"])) { Link("Installation source",destination:url) } }
+                else { if item["managed"] != nil { managedControls(item) }; Text(textValue(item["integration"]) == "setup_required" ? "Specialist setup and a usable AI adapter are still required. Installation alone does not make this tool ready." : "Structured AI adapter available. Execution follows the task's scope and permissions.").wixalFont(size:12); if let url=URL(string:textValue(item["source"])) { Link("Official documentation",destination:url) }; if let url=URL(string:textValue(item["registryURL"])) { Link("Installation source",destination:url) } }
             }.frame(maxWidth:.infinity,alignment:.leading) }
         }.padding(24).frame(width:560,height:480).foregroundStyle(theme.text).background(theme.background)
     }

@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: TheJhyeFactor/wixal-tools
-          ref: 3afcf0dfb5afc476f553ec63814908929e3c54ee
+          ref: ea327e41052603f6334b6205df26a0d6e609d384
           path: .managed-tools-build
           persist-credentials: false
       - name: Build the real pinned RustScan test artifact

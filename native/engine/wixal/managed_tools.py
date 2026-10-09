@@ -1,6 +1,6 @@
 """Authenticated, immutable tool packages. The catalogue contains data, never code.
 
-Only the application-owned RustScan profile is enabled in the first preview.
+Application-owned standalone RustScan and Go profiles are enabled in this preview.
 Production repositories require an embedded trust configuration at build time.
 """
 import contextlib
@@ -16,17 +16,25 @@ import sqlite3
 import subprocess
 import tarfile
 import threading
+import tempfile
 import time
 import uuid
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin
 from urllib.error import HTTPError,URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from . import VERSION
 
-MAX_ARCHIVE = 64 * 1024 * 1024
-MAX_EXPANSION = 128 * 1024 * 1024
+MAX_ARCHIVE = 256 * 1024 * 1024
+MAX_EXPANSION = 512 * 1024 * 1024
 ADAPTER = 'rustscan.discovery.v1'
+PROFILES={
+    'rustscan':dict(adapter=ADAPTER,flag='--version',pattern=r'^rustscan (2\.(?:3|4)\.\d+)$'),
+    'ffuf':dict(adapter='ffuf.assessment.v1',flag='-V',pattern=r'ffuf version: (\d+\.\d+\.\d+)'),
+    'nuclei':dict(adapter='nuclei.assessment.v1',flag='-version',pattern=r'Nuclei Engine Version: v?(\d+\.\d+\.\d+)'),
+    'trivy':dict(adapter='trivy.assessment.v1',flag='--version',pattern=r'Version: (\d+\.\d+\.\d+)'),
+    'osv-scanner':dict(adapter='osv-scanner.assessment.v1',flag='--version',pattern=r'(?:osv-scanner version:|Version:)\s*v?(\d+\.\d+\.\d+)'),
+}
 
 
 def digest(path):
@@ -59,10 +67,11 @@ def relative(value):
 def descriptor(row):
     required = {'schemaVersion','tool','version','revision','source','platform','target','sha256','length','unpackedSize','entrypoint','inventory','adapter','appBuilds','readiness','distribution','dependencies','state','recovery'}
     if not isinstance(row, dict) or set(row) != required: raise ValueError('Unsupported package descriptor schema')
-    if row['schemaVersion'] != 1 or row['tool'] != 'rustscan' or row['adapter'] != ADAPTER or row['readiness'] != 'rustscan-version-v1': raise ValueError('Unknown application-owned capability or readiness procedure')
+    profile=PROFILES.get(row['tool'])
+    if row['schemaVersion'] != 1 or not profile or row['adapter'] != profile['adapter'] or row['readiness'] != row['tool']+'-version-v1': raise ValueError('Unknown application-owned capability or readiness procedure')
     for key in ('sha256',):
         if not re.fullmatch('[a-f0-9]{64}', str(row[key])): raise ValueError('Invalid package digest')
-    if not isinstance(row['version'],str) or not re.fullmatch(r'2\.(3|4)\.\d+', row['version']): raise ValueError('Unsupported RustScan CLI version')
+    if not isinstance(row['version'],str) or not re.fullmatch(r'\d+\.\d+\.\d+', row['version']) or (row['tool']=='rustscan' and not re.fullmatch(r'2\.(3|4)\.\d+',row['version'])): raise ValueError('Unsupported executable CLI version')
     if type(row['revision']) != int or row['revision'] < 1: raise ValueError('Invalid package revision')
     for key, maximum in (('length',MAX_ARCHIVE),('unpackedSize',MAX_EXPANSION)):
         if type(row[key]) != int or not 0 < row[key] <= maximum: raise ValueError('Package size exceeds profile limits')
@@ -110,8 +119,11 @@ def inspect_payload(directory, row, readiness=True):
         subprocess.run(['/usr/bin/codesign','--verify','--strict',str(executable)],check=True,capture_output=True,timeout=15)
         subprocess.run(['/usr/sbin/spctl','--assess','--type','execute',str(executable)],check=True,capture_output=True,timeout=30)
     if readiness:
-        result=subprocess.run([str(executable),'--version'],cwd=directory,env=controlled_environment(directory),capture_output=True,timeout=10)
-        if result.returncode or result.stdout.decode().strip() != 'rustscan '+row['version']: raise ValueError('Executable readiness/version mismatch')
+        profile=PROFILES[row['tool']]
+        with tempfile.TemporaryDirectory(prefix='wixal-package-readiness-') as home:
+            result=subprocess.run([str(executable),profile['flag']],cwd=home,env=controlled_environment(home),capture_output=True,timeout=10)
+        observed=re.search(profile['pattern'],(result.stdout+result.stderr).decode(errors='replace').strip())
+        if result.returncode or not observed or observed.group(1)!=row['version']: raise ValueError('Executable readiness/version mismatch')
     return str(executable)
 
 
@@ -141,23 +153,33 @@ class CatalogueClient:
         if configuration['channel'] not in ('preview','stable'): raise ValueError('Unsupported channel')
         self.validate_url(configuration['metadataURL']);self.validate_url(configuration['targetsURL'])
 
-    def validate_url(self,url):
+    def validate_url(self,url,redirect=False):
         parsed=urlsplit(url)
         local=self.configuration['preview'] and parsed.hostname in ('127.0.0.1','localhost','::1')
-        if parsed.username or parsed.password or parsed.fragment or parsed.query or parsed.hostname not in self.configuration['allowedHosts'] or (parsed.scheme!='https' and not (local and parsed.scheme=='http')): raise ValueError('Repository URL is outside the trusted download policy')
+        # GitHub release assets use short-lived signed query parameters on these
+        # CDN hosts. They are allowed only after an approved HTTPS redirect.
+        signed_asset=redirect and parsed.scheme=='https' and parsed.hostname in ('release-assets.githubusercontent.com','objects.githubusercontent.com')
+        if parsed.username or parsed.password or parsed.fragment or (parsed.query and not signed_asset) or parsed.hostname not in self.configuration['allowedHosts'] or (parsed.scheme!='https' and not (local and parsed.scheme=='http')): raise ValueError('Repository URL is outside the trusted download policy')
 
     def updater(self,cancelled=lambda:False):
         from tuf.ngclient import Updater
         from tuf.ngclient.fetcher import FetcherInterface
         from tuf.ngclient.config import UpdaterConfig
         client=self
-        class NoRedirect(HTTPRedirectHandler):
-            def redirect_request(self,*args,**kwargs): return None
+        class ControlledRedirect(HTTPRedirectHandler):
+            def __init__(self):self.hops=0
+            def redirect_request(self,request,response,code,message,headers,url):
+                self.hops+=1
+                if self.hops>4:raise ValueError('Too many repository redirects')
+                destination=urljoin(request.full_url,url)
+                client.validate_url(destination,redirect=True)
+                # Never forward authorization, cookies or referrer headers.
+                return Request(destination,headers={'User-Agent':'Wixal-Tools/1'})
         class BoundedFetcher(FetcherInterface):
             def _fetch(self,url):
                 client.validate_url(url)
                 from tuf.api.exceptions import DownloadHTTPError,DownloadError
-                try:response=build_opener(ProxyHandler({}),NoRedirect()).open(Request(url,headers={'User-Agent':'Wixal-Tools/1'}),timeout=15)
+                try:response=build_opener(ProxyHandler({}),ControlledRedirect()).open(Request(url,headers={'User-Agent':'Wixal-Tools/1'}),timeout=15)
                 except HTTPError as error:
                     error.close()
                     raise DownloadHTTPError(str(error),error.code) from error
@@ -197,6 +219,8 @@ class PackageRegistry:
         self.configuration=configuration
         if configuration is None:
             config_path=Path(__file__).parent/'resources/managed-repository.json'
+            if not getattr(__import__('sys'),'frozen',False) and os.environ.get('WIXAL_NATIVE_ACCEPTANCE')=='1' and os.environ.get('WIXAL_ACCEPTANCE_REPOSITORY'):
+                config_path=Path(os.environ['WIXAL_ACCEPTANCE_REPOSITORY'])
             if config_path.exists():
                 configuration=json.loads(config_path.read_text());configuration['trustedRoot']=str(config_path.parent/configuration['trustedRoot']);self.configuration=configuration
         self.client=CatalogueClient(self.root,self.configuration) if self.configuration else None
@@ -242,7 +266,9 @@ class PackageRegistry:
 
     @staticmethod
     def process_identity(pid):
-        result=subprocess.run(['/bin/ps','-p',str(pid),'-o','lstart=','-o','command='],capture_output=True,text=True,timeout=5)
+        # Command text can change during exec (notably Python.app startup).
+        # Process birth time remains stable; a reused PID has a new birth time.
+        result=subprocess.run(['/bin/ps','-p',str(pid),'-o','lstart='],capture_output=True,text=True,timeout=5)
         return result.stdout.strip() if result.returncode==0 else ''
 
     def persist_job(self,job):
@@ -256,13 +282,15 @@ class PackageRegistry:
             freshness_error=db.execute("SELECT value FROM settings WHERE key='catalogueError'").fetchone()
             selected=db.execute('SELECT value FROM settings WHERE key=?',('provider:'+tool,)).fetchone()
             versions=[json.loads(r['descriptor']) for r in db.execute('SELECT descriptor FROM packages')]
+            versions=[r for r in versions if r['tool']==tool]
         row=json.loads(pointer['descriptor']) if pointer else None
         return dict(configured=bool(self.client),provider=selected['value'] if selected else 'external_homebrew',installed=bool(row),active=row,versions=versions,catalogue=json.loads(cached['value']) if cached else [],lastCatalogueCheck=float(checked['value']) if checked else None,catalogueError=freshness_error['value'] if freshness_error else None,verifiedAt=pointer['verified'] if pointer else None,modelEvaluation='unevaluated')
 
-    def select_provider(self,provider):
+    def select_provider(self,provider,tool='rustscan'):
+        if tool not in PROFILES:raise ValueError('This tool has no application-owned managed package profile')
         if provider not in ('managed','external_homebrew'):raise ValueError('Unknown provider')
-        if provider=='managed':self.resolve()
-        with self.lock(),self.database() as db:db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('provider:rustscan',provider))
+        if provider=='managed':self.resolve(tool)
+        with self.lock(),self.database() as db:db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('provider:'+tool,provider))
 
     def refresh(self):
         if not self.client:raise ValueError('Managed repository is not configured in this build. External providers remain available.')
@@ -272,16 +300,16 @@ class PackageRegistry:
             db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogueChecked',str(time.time())))
         return dict(packages=rows,errors=errors)
 
-    def resolve(self):
-        state=self.snapshot();row=state['active']
-        if not row:raise ValueError('No managed RustScan package is active')
+    def resolve(self,tool='rustscan'):
+        state=self.snapshot(tool);row=state['active']
+        if not row:raise ValueError('No managed '+tool+' package is active')
         compatible(row)
         current=next((p for p in state['catalogue'] if p['sha256']==row['sha256']),row)
         if current['state']=='revoked':raise ValueError('Managed package has been revoked')
         path=inspect_payload(self.path(row),row,readiness=False)
-        return dict(path=path,provider='managed',packageSha256=row['sha256'],executableSha256=row['inventory'][row['entrypoint']],version=row['version'],adapter=ADAPTER,lastCatalogueCheck=state['lastCatalogueCheck'],catalogueError=state['catalogueError'])
+        return dict(path=path,provider='managed',packageSha256=row['sha256'],executableSha256=row['inventory'][row['entrypoint']],version=row['version'],adapter=row['adapter'],lastCatalogueCheck=state['lastCatalogueCheck'],catalogueError=state['catalogueError'])
 
-    def acquire(self,owner):
+    def acquire(self,owner,tool='rustscan'):
         with self.lock(),self.database() as db:
             if self.client:
                 try:
@@ -297,7 +325,7 @@ class PackageRegistry:
                     from tuf.api.exceptions import RepositoryError,DownloadError
                     if not isinstance(error,(RepositoryError,DownloadError)):raise
                     db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogueError',str(error)));db.commit()
-            handle=self.resolve();lease=uuid.uuid4().hex;pid=os.getpid()
+            handle=self.resolve(tool);lease=uuid.uuid4().hex;pid=os.getpid()
             db.execute('INSERT INTO leases VALUES (?,?,?,?,?)',(lease,handle['packageSha256'],pid,self.process_identity(pid),owner))
             return dict(handle,lease=lease)
 
@@ -309,6 +337,8 @@ class PackageRegistry:
 
     def install(self,job,cancelled,notify=lambda:None,artifact=None):
         if not self.client:raise ValueError('Managed repository is not configured')
+        tool=job.get('addon','rustscan')
+        if tool not in PROFILES:raise ValueError('No approved managed package profile for this tool')
         def stage(name):
             job['stage']=name;self.persist_job(job);notify()
             if cancelled.is_set():raise InterruptedError('Installation cancelled before activation')
@@ -319,7 +349,7 @@ class PackageRegistry:
                 db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogueChecked',str(time.time())))
             candidates=[]
             for candidate in rows:
-                if candidate['state']!='approved' or artifact and candidate['sha256']!=artifact:continue
+                if candidate['tool']!=tool or candidate['state']!='approved' or artifact and candidate['sha256']!=artifact:continue
                 try:compatible(candidate)
                 except ValueError:continue
                 candidates.append(candidate)
@@ -353,7 +383,7 @@ class PackageRegistry:
                 with self.database() as db:
                     db.execute('INSERT OR REPLACE INTO packages VALUES (?,?,?)',(row['sha256'],json.dumps(row),time.time()))
                     db.execute('INSERT OR REPLACE INTO active VALUES (?,?)',(row['tool'],row['sha256']))
-                    db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('provider:rustscan','managed'))
+                    db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('provider:'+tool,'managed'))
                 job.update(status='ready',stage='ready',version=row['version'],path=str(final/row['entrypoint']))
                 journal['stage']='ready';atomic_json(journal_path,journal)
                 self.persist_job(job);notify()
@@ -362,20 +392,20 @@ class PackageRegistry:
                 archive.unlink(missing_ok=True)
                 if staging.exists():shutil.rmtree(staging)
 
-    def rollback(self,artifact):
+    def rollback(self,artifact,tool='rustscan'):
         with self.lock(),self.database() as db:
-            state=self.snapshot();current=state['active']
+            state=self.snapshot(tool);current=state['active']
             row=next((p for p in state['versions'] if p['sha256']==artifact),None)
             known=next((p for p in state['catalogue'] if p['sha256']==artifact),None)
             if not current or artifact not in current['recovery'] or not row or not known or known['state']!='approved':raise ValueError('Rollback requires a retained, approved recovery artifact')
             compatible(row);inspect_payload(self.path(row),row)
-            db.execute('INSERT OR REPLACE INTO active VALUES (?,?)',('rustscan',artifact))
-        return self.snapshot()
+            db.execute('INSERT OR REPLACE INTO active VALUES (?,?)',(tool,artifact))
+        return self.snapshot(tool)
 
-    def remove(self,artifact=None):
+    def remove(self,artifact=None,tool='rustscan'):
         with self.lock():
             with self.database() as db:
-                self.recover(db);state=self.snapshot();rows=[r for r in state['versions'] if artifact is None or r['sha256']==artifact]
+                self.recover(db);state=self.snapshot(tool);rows=[r for r in state['versions'] if artifact is None or r['sha256']==artifact]
                 if any(db.execute('SELECT 1 FROM leases WHERE digest=?',(r['sha256'],)).fetchone() for r in rows):raise ValueError('Removal blocked by an active execution lease')
                 for row in rows:db.execute('DELETE FROM active WHERE digest=?',(row['sha256'],))
             for row in rows:

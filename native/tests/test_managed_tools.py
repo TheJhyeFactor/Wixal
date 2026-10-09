@@ -90,6 +90,12 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
         from wixal.managed_tools import CatalogueClient
         for url in ('file:///etc/passwd','https://user:pass@127.0.0.1/a','https://other.example/a','http://127.0.0.1/a?secret=yes'):
             with self.assertRaisesRegex(ValueError,'policy'):self.registry.client.validate_url(url)
+        config=dict(self.config,metadataURL='https://github.com/metadata/',targetsURL='https://github.com/targets/',allowedHosts=['github.com','release-assets.githubusercontent.com'])
+        client=CatalogueClient(self.root/'redirect-test',config)
+        asset='https://release-assets.githubusercontent.com/github-production-release-asset/1/file?sig=short-lived'
+        client.validate_url(asset,redirect=True)
+        for url in (asset,'https://github.com/file?token=secret','https://other.example/file','http://release-assets.githubusercontent.com/file'):
+            with self.assertRaisesRegex(ValueError,'policy'):client.validate_url(url)
     async def test_archive_adversaries(self):
         for name,kind,mode in [('../outside',tarfile.REGTYPE,0o644),('/outside',tarfile.REGTYPE,0o644),('bin/rustscan',tarfile.SYMTYPE,0o644),('bin/rustscan',tarfile.LNKTYPE,0o644),('bin/rustscan',tarfile.CHRTYPE,0o644),('bin/rustscan',tarfile.REGTYPE,0o4755),('unexpected',tarfile.REGTYPE,0o644)]:
             archive=self.root/'evil.tar.gz'
@@ -173,6 +179,10 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
             result=job['structuredResult'];self.assertEqual(result['hosts'][0]['ports'],expected,result);self.assertTrue(result['handoffEligible'],result)
             inspected=await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],profile='ports',timeout_seconds=20),'chat')
             self.assertEqual(sorted(int(r['port']) for r in inspected['services']),expected)
+            blank=await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],source_run_id='',ports='',profile='ports',timeout_seconds=20),'chat')
+            self.assertEqual(sorted(int(r['port']) for r in blank['services']),expected)
+            with self.assertRaisesRegex(ValueError,'conflicting'):
+                await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],ports='22',profile='ports'),'chat')
             with self.assertRaisesRegex(ValueError,'conversation'):await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],profile='ports'),'other')
             with self.assertRaisesRegex(ValueError,'manual ports'):await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],ports='22'),'chat')
         finally:

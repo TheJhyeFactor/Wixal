@@ -50,16 +50,16 @@ struct WorkHistoryView:View {
     @ObservedObject var engine:EngineClient
     let messages:[[String:Any]]
     @Environment(\.wixalTheme) private var theme
-    @ViewState private var selected=0
+    @ViewState<String?> private var selected=nil
+    @ViewState private var expanded=false
     private var actions:[TimelineMilestone] {TimelineHistory.milestones(messages:messages,tasks:records(engine.state["tasks"]),sessionID:textValue(engine.state["activeSession"]),busy:engine.busy,review:engine.review?.details,activeTool:engine.currentTool)}
     var body:some View {
-        DisclosureGroup {
+        DisclosureGroup(isExpanded:$expanded) {
             VStack(alignment:.leading,spacing:12) {
                 ScrollView(.horizontal){HStack{ForEach(Array(actions.enumerated()),id:\.element.id){index,action in
-                    Button{selected=index}label:{VStack(alignment:.leading,spacing:4){Text(action.title);Text(action.status.capitalized).font(.system(size:9)).foregroundStyle(theme.muted)}}.buttonStyle(WixalButtonStyle(outlined:true)).accessibilityAddTraits(index==selected ? [.isSelected] : [])
+                    Button{selected=selected==action.id ? nil : action.id;engine.logUIEvent(selected==nil ? "action-deselect" : "action-select")}label:{VStack(alignment:.leading,spacing:4){Text(action.title);Text(action.status.capitalized).font(.system(size:9)).foregroundStyle(theme.muted)}}.buttonStyle(WixalButtonStyle(outlined:true)).background(selected==action.id ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6)).accessibilityAddTraits(action.id==selected ? [.isSelected] : [])
                 }}}
-                if !actions.isEmpty {
-                    let action=actions[min(selected,actions.count-1)]
+                if let action=actions.first(where:{$0.id==selected}) {
                     Text(action.command).font(.system(size:10,design:.monospaced)).textSelection(.enabled)
                     Text(action.output.isEmpty ? "Action "+action.status+" · no result yet" : action.output).font(.system(size:11,design:.monospaced)).textSelection(.enabled)
                     HStack{Spacer();Button("Copy output"){NSPasteboard.general.clearContents();NSPasteboard.general.setString(action.output,forType:.string)}.disabled(action.output.isEmpty)}
@@ -70,6 +70,7 @@ struct WorkHistoryView:View {
             }
         } label:{HStack(spacing:8){Text("Details");Spacer()}}
         .wixalFont(size:11).foregroundStyle(theme.muted).padding(.vertical,8)
+        .onChange(of:expanded){_,value in if !value{selected=nil};engine.logUIEvent(value ? "details-open" : "details-close")}
     }
 }
 struct StructuredToolResult:View {

@@ -16,14 +16,17 @@ ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('real',ROOT/'native/scripts/real-acceptance.py');real=importlib.util.module_from_spec(spec);spec.loader.exec_module(real)
 
 async def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');options=parser.parse_args()
-    art=ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged');art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
+    parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');parser.add_argument('--output',type=Path);parser.add_argument('--repository',type=Path);parser.add_argument('--scenario',choices=['naturalDiscovery','sourceInspection']);options=parser.parse_args()
+    if options.repository and not options.source:parser.error('Packaged helpers require embedded repository trust')
+    art=(options.output or ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged')).resolve();art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
     c=real.Client(options.source,helper=options.helper);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
     report=dict(schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE))
     def save():(art/'report.json').write_text(json.dumps(report,indent=2))
     async def start():
         command=[sys.executable,str(ROOT/'native/engine/engine_main.py')] if options.source else [str(options.helper)]
-        c.log=(art/'helper.log').open('a');c.child=await asyncio.create_subprocess_exec(*command,'--data',str(real.STATE),'--runtime',str(ROOT/'runtime/ollama'),'--endpoint','http://127.0.0.1:11434',stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=c.log,limit=32*1024*1024);c.reading=asyncio.create_task(c.read());await c.call('hello')
+        env=dict(os.environ,WIXAL_MANAGED_TOOLS_ROOT=str(art/'registry'))
+        if options.repository:env.update(WIXAL_NATIVE_ACCEPTANCE='1',WIXAL_ACCEPTANCE_REPOSITORY=str(options.repository.resolve()))
+        c.log=(art/'helper.log').open('a');c.child=await asyncio.create_subprocess_exec(*command,'--data',str(real.STATE),'--runtime',str(ROOT/'runtime/ollama'),'--endpoint','http://127.0.0.1:11434',env=env,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=c.log,limit=32*1024*1024);c.reading=asyncio.create_task(c.read());await c.call('hello')
     async def read(started):
         async with asyncio.timeout(90):
             while True:
@@ -35,6 +38,11 @@ async def main():
         connections.append(dict(port=writer.get_extra_info('sockname')[1],time=time.time()));writer.close();await writer.wait_closed()
     servers=[await asyncio.start_server(accept,'127.0.0.1',0) for _ in range(3)]
     expected=sorted(s.sockets[0].getsockname()[1] for s in servers);port_text=','.join(map(str,expected));report['listenerOracle']=dict(host='127.0.0.1',ports=expected)
+    def review(data):
+        if data.get('name')=='addon_install':return data.get('addon')=='rustscan' and data.get('provider')=='managed'
+        assessment=data.get('assessment',{})
+        return data.get('name')=='command_start' and assessment.get('capability') in ('network_discover','network_scan') and assessment.get('target')=='127.0.0.1' and bool(assessment.get('ports')) and set(assessment['ports'])<=set(expected)
+    c.review_policy=review
     try:
         await start();await c.call('project-add',dict(root=str(art)));hello=await c.call('hello');await c.call('settings',dict(enabledTools=[r['function']['name'] for r in hello['tools']]))
         await c.call('addon-managed-refresh')
@@ -61,6 +69,7 @@ async def main():
             metadata=await c.model(options.model);await c.call('settings',dict(contextSize=8192));report['model']=metadata
             scenarios=[('naturalDiscovery',f'Determine which of these TCP ports are open on my authorised loopback host 127.0.0.1: {port_text}. Use standalone TCP discovery and wait for its finished evidence. Do not install tools or inspect service versions. Report only observed ports and coverage limits.'),('sourceInspection',f'For my authorised loopback host 127.0.0.1, discover TCP ports {port_text} and then inspect only the discovered ports using the ports profile. Use the source session reference for inspection. Wait for both stages and report evidence. Do not install tools or use shell commands.')]
             for scenario,prompt in scenarios:
+                if options.scenario and scenario!=options.scenario:continue
                 base_prompt=prompt
                 for attempt in range(options.repeats):
                     for server in servers:server.close();await server.wait_closed()

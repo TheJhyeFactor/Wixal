@@ -40,8 +40,19 @@ def ipc_socket_path(directory):
 
 class Service:
     def __init__(self, directory, payload, emit, endpoint=None):
+        from .diagnostics import Diagnostics
+        self.diagnostics = None
+        transport_emit = emit
+        def emit(event, data):
+            if self.diagnostics:
+                try:self.diagnostics.event(event, data, getattr(self, 'store', None))
+                except Exception:pass
+            transport_emit(event, data)
         self.emit = emit
         self.store = Store(directory, startup=lambda info:emit("startup-progress",info))
+        self.diagnostics = Diagnostics(directory)
+        from .community_reports import CommunityReports
+        self.community_reports = CommunityReports(self)
         if not self.store.data.get("nativeInitialized"):
             self.store.data["enabledTools"] = [t["function"]["name"] for t in DEFINITIONS]
             self.store.data["nativeInitialized"] = True
@@ -139,6 +150,17 @@ class Service:
 
     async def dispatch(self, method, params):
         params = params or {}
+        if method.startswith('community-report-'):return await self.community_reports.dispatch(method,params)
+        if method == 'diagnostic-log': return self.diagnostics.snapshot()
+        if method == 'diagnostic-export':
+            from .bug_reports import dispatch
+            return await dispatch(self, params)
+        if method == 'diagnostic-ui-event':
+            event = params.get('event')
+            if event not in ('details-open', 'details-close', 'action-select', 'action-deselect'):
+                raise ValueError('Unknown diagnostic UI event')
+            self.diagnostics.write(event, sessionId=self.store.data.get('activeSession'))
+            return True
         if method.startswith('addon-'):return await self.addons.dispatch(method,params)
         if method.startswith('security-') and method != 'security-readiness':
             return await self.security_workspace.dispatch(method, params)
@@ -507,6 +529,7 @@ class Service:
         await self.model_manager.close()
         await self.runtime.stop()
         self.store.close()
+        self.diagnostics.close()
 
 
 async def serve(args):
@@ -524,7 +547,7 @@ async def serve(args):
                 writer.write((line+"\n").encode())
     service = Service(args.data, args.runtime, emit, args.endpoint)
     service.scheduler = asyncio.create_task(service.tick())
-    requests = Requests(service, emit)
+    requests = Requests(service, service.emit)
     async def connect(reader, writer):
         clients.add(writer)
         try:

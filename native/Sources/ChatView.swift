@@ -48,9 +48,9 @@ struct ChatView: View {
     private var workGroups:[[String:Any]] {
         var result:[[String:Any]]=[];var turn:[[String:Any]]=[]
         func appendTurn(current:Bool){
-            let final=turn.lastIndex{ textValue($0["role"])=="assistant" && records($0["tool_calls"]).isEmpty && !textValue($0["content"]).isEmpty }
-            if let final{result.append(turn[final])}
-            let work=turn.enumerated().filter{index,_ in index != final}.map(\.element)
+            let replies=turn.indices.filter{ textValue(turn[$0]["role"])=="assistant" && records(turn[$0]["tool_calls"]).isEmpty && !textValue(turn[$0]["content"]).isEmpty }
+            for index in replies{result.append(turn[index])}
+            let work=turn.enumerated().filter{index,_ in !replies.contains(index)}.map(\.element)
             if !work.isEmpty{result.append(["role":"work","steps":work,"current":current])}
             turn=[]
         }

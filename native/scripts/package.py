@@ -26,6 +26,7 @@ parser.add_argument("--executable-name",default="WixalNative")
 parser.add_argument("--preview-data",type=Path,help="Development preview workspace retained across Finder launches")
 parser.add_argument("--preview-endpoint",help="Loopback model endpoint for an isolated preview")
 parser.add_argument("--managed-repository",type=Path,help="Reviewed repository config and bootstrap root to embed; local preview endpoints require --development")
+parser.add_argument("--github-client-id",help="Registered public OAuth client ID with Device Flow enabled; no client secret")
 options=parser.parse_args()
 sys.path.insert(0,str(native/"engine"))
 managed_configuration=None
@@ -39,6 +40,9 @@ if options.managed_repository:
     managed_root=Path(managed_configuration["trustedRoot"]).read_bytes()
     from tuf.api.metadata import Metadata,Root
     if not isinstance(Metadata.from_bytes(managed_root).signed,Root):parser.error("Trusted bootstrap must be TUF root metadata")
+if options.github_client_id:
+    from wixal.github_reporting import GitHubReporting
+    GitHubReporting(options.github_client_id)
 sys.path.insert(0,str(native/"engine"))
 from wixal import VERSION
 if options.alpha and options.development:parser.error("Choose --alpha or --development")
@@ -85,6 +89,10 @@ if managed_configuration:
     (tool_resources/"managed-repository.json").write_text(json.dumps(configuration,indent=2))
     (tool_resources/"managed-root.json").write_bytes(managed_root)
     (resources/"TOOL_TRUST_MANIFEST.json").write_text(json.dumps(dict(configurationSha256=hashlib.sha256((tool_resources/"managed-repository.json").read_bytes()).hexdigest(),bootstrapRootSha256=hashlib.sha256(managed_root).hexdigest(),channel=configuration["channel"],preview=configuration["preview"]),indent=2))
+if options.github_client_id:
+    oauth_resource=resources/"engine/_internal/wixal/resources/github-oauth.json"
+    oauth_resource.parent.mkdir(parents=True,exist_ok=True)
+    oauth_resource.write_text(json.dumps(dict(clientId=options.github_client_id),indent=2))
 shutil.copytree(root/"runtime/ollama",resources/"ollama",symlinks=True)
 shutil.copytree(root/"assets/icon-variants",resources/"icon-variants",symlinks=True)
 shutil.copytree(root/"assets/audio",resources/"audio",symlinks=True)

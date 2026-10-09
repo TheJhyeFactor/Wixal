@@ -42,6 +42,8 @@ struct TimelineDock: View {
                 }
                 Button {
                     withAnimation(reduceMotion ? nil : .easeInOut(duration:0.22)){folded.toggle()}
+                    if folded{selectedID=nil}
+                    engine.logUIEvent(folded ? "details-close" : "details-open")
                 } label:{
                     HStack(spacing:5){Text("Details");Image(systemName:"chevron.right").font(.system(size:9)).rotationEffect(.degrees(folded ? 0 : 90))}
                 }.buttonStyle(.plain).foregroundStyle(theme.muted).accessibilityLabel(folded ? "Show response details" : "Hide response details")
@@ -58,7 +60,7 @@ struct TimelineDock: View {
                             }
                         }
                         ForEach(milestones){step in
-                            DisclosureGroup {
+                            DisclosureGroup(isExpanded:Binding(get:{selectedID==step.id},set:{value in selectedID=value ? step.id : nil;engine.logUIEvent(value ? "action-select" : "action-deselect")})) {
                                 VStack(alignment:.leading,spacing:9){
                                     if !step.command.isEmpty {Text(step.command).textSelection(.enabled)}
                                     if !step.output.isEmpty {Text(step.output).textSelection(.enabled)}

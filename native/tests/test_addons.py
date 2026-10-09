@@ -9,6 +9,7 @@ from wixal.storage import Store
 from wixal.tools import Tools
 from wixal.agent_context import profile, automatic
 from wixal.addon_execution import run
+from wixal.managed_tools import PackageRegistry
 
 class AddonTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -17,6 +18,7 @@ class AddonTests(unittest.IsolatedAsyncioTestCase):
         self.store.data['enabledTools']=[d['function']['name'] for d in definitions()]+['command_read','command_stop']
         self.service=SimpleNamespace(store=self.store,emit=lambda *_:None)
         self.manager=Addons(self.service);self.store.addons=self.manager
+        self.manager.managed=PackageRegistry(self.root/'managed-registry')
         self.store.data["addonPolicy"]["automaticInstall"]=False
         self.tools=Tools(self.store,AsyncMock(return_value=True),lambda *_:None,SimpleNamespace(definitions=lambda:[]))
         self.service.tools=self.tools

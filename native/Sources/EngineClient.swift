@@ -41,6 +41,12 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     let browser = BrowserController()
     private var process: Process?
     private let startupLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.wixal.native", category: "EngineStartup")
+    private let activityLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app.wixal.native", category: "ChatActivity")
+    func logUIEvent(_ event:String) {
+        activityLogger.info("Chat interaction: \(event, privacy:.public)")
+        guard connected else{return}
+        Task { _ = try? await call("diagnostic-ui-event",["event":event]) }
+    }
     private var startupDeadline: Task<Void, Never>?
     private var startupTimedOut = false
     private var input: FileHandle?
@@ -68,9 +74,11 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
     var messages: [[String: Any]] { records(session?["messages"]) }
     var sessions: [[String: Any]] { records(state["sessions"]).filter { textValue($0["projectId"]) == textValue(state["activeProject"]) } }
     var root: String { textValue(project?["root"]) }
+    var startupFailed: Bool { activity == "Engine failed to start" || activity == "Engine startup timed out" || activity.hasPrefix("Engine stopped (") }
 
     func start() {
         guard process == nil else { return }
+        StartupEvidence.record("engine-start")
         generation = UUID(); let currentGeneration = generation
         startupTimedOut = false
         let child = Process(), stdinPipe = Pipe(), stdoutPipe = Pipe(), stderrPipe = Pipe()
@@ -102,6 +110,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         } }
         do {
             try child.run(); process = child
+            StartupEvidence.record("engine-launched")
             // Start pipe readers after launch so Foundation cannot consume an unopened pipe.
             // One dedicated reader preserves JSON event order without blocking AppKit.
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -144,6 +153,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
                     startupDeadline?.cancel(); startupDeadline = nil
                     let elapsed = ContinuousClock.now - startupBegan
                     startupLogger.info("Workspace engine startup handshake completed in \(elapsed.components.seconds) seconds")
+                    StartupEvidence.record("engine-ready")
                     connected = true; activity = "Python engine ready"; restarting = false
                     heartbeat?.cancel()
                     heartbeat = Task { [weak self] in
@@ -203,7 +213,7 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         let data = try JSONSerialization.data(withJSONObject: ["id": id, "method": method, "params": params]) + Data([10])
         return try await withCheckedThrowingContinuation { continuation in
             pending[id] = continuation
-            let limits:[String:Double] = ["skill-evaluate":7215,"workflow-merge":315,"agent-verify":615,"agent-resume":1815,"agent-schedule-run":3615,"agent-run":1815,"workflow-run":3615,"workflow-resume":3615,"mcp-connect":315,"memory-recall":105,"memory-index":105,"memory-review":135,"chat":615,"task-start":615,"assessment-run":615,"tool":615,"session-handoff":125,"model-import":1815,"model-pull":1815,"legacy-import":195,"models":135,"model-status":135]
+            let limits:[String:Double] = ["community-report-prepare":165,"skill-evaluate":7215,"workflow-merge":315,"agent-verify":615,"agent-resume":1815,"agent-schedule-run":3615,"agent-run":1815,"workflow-run":3615,"workflow-resume":3615,"mcp-connect":315,"memory-recall":105,"memory-index":105,"memory-review":135,"chat":615,"task-start":615,"assessment-run":615,"tool":615,"session-handoff":125,"model-import":1815,"model-pull":1815,"legacy-import":195,"models":135,"model-status":135]
             let seconds = timeout ?? limits[method,default:75]
             deadlines[id] = Task { [weak self] in
                 do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
@@ -238,6 +248,9 @@ struct Review: Identifiable { let id: String; let details: [String: Any] }
         case "state":
             let oldCount=messages.count,oldSession=textValue(state["activeSession"])
             state = data
+            if messages.count != oldCount || textValue(state["activeSession"]) != oldSession {
+                activityLogger.info("Conversation snapshot applied; messages: \(oldCount) -> \(self.messages.count); session changed: \(textValue(self.state["activeSession"]) != oldSession)")
+            }
             busy = operationRunning || records(data["workflowRuns"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) } || records(data["tasks"]).contains { ["running", "waiting_review"].contains(textValue($0["status"])) }
             if messages.count != oldCount || textValue(state["activeSession"]) != oldSession || !busy {flushTokens();streaming="";thinking=""}
             refreshContext()

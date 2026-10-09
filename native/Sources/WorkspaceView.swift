@@ -56,6 +56,7 @@ struct WorkspaceView: View {
                                 case "Performance": PerformanceView(engine:engine)
                                 case "Projects": projectsPage
                                 case "Cybersecurity": CybersecurityAgentWorkspace(engine:engine,design:agentDesign)
+                                case "Tools": AddonLibraryView(engine:engine)
                                 case "Agents": agentsPage
                                 case "Tasks": TasksView(engine:engine,openConversation:{tab="Agents";agentPage="Conversation";drawer=nil})
                                 case "Settings": SettingsView(engine:engine,settings:settings,navigate:{select($0)},previewLaunch:{introFinished=false})
@@ -150,6 +151,7 @@ struct WorkspaceView: View {
             SidebarRailButton(title:"Chat",symbol:"◌",collapsed:sidebarIsCompact,selected:tab=="Chat"){openMode("chat")}.disabled(engine.busy)
             SidebarRailButton(title:"Agents",symbol:"◇",collapsed:sidebarIsCompact,selected:tab=="Agents"){openMode("agent",page:"Home")}.disabled(engine.busy)
             SidebarRailButton(title:"Cybersecurity",symbol:"⛨",collapsed:sidebarIsCompact,selected:tab=="Cybersecurity"){tab="Cybersecurity";drawer=nil}
+            SidebarRailButton(title:"Tools",symbol:"▦",collapsed:sidebarIsCompact,selected:tab=="Tools"){select("Tools")}
             if sidebarIsCompact{SidebarRailButton(title:"Projects",symbol:"▱",collapsed:true,selected:tab=="Projects"){tab="Projects"};SidebarRailButton(title:"Recents",symbol:"◷",collapsed:true){collapsed=false;recentsExpanded=true;engine.action("settings",["ui":["sidebarCollapsed":false]])}}
             if !sidebarIsCompact {
                 ScrollView {
@@ -228,6 +230,7 @@ struct WorkspaceView: View {
     private func dialog<Content:View>(_ label:String,close:@escaping()->Void,@ViewBuilder content:()->Content)->some View{VStack(spacing:0){HStack{Spacer();Button(action:close){Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel(label)}.padding(18);content()}.frame(width:min(720,windowSize.width-40),height:min(760,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
     private func openSettings(){drawer=nil;tab="Settings"}
     private func select(_ action:String){
-        if action.hasPrefix("Settings:") { settings.open(action == "Settings:Connections" ? "Connections & sharing" : "Data & sync");openSettings();return }
+        if action.hasPrefix("Settings:") { settings.open(action == "Settings:Connections" ? "Connections & sharing" : action == "Settings:Tools" ? "Tools & permissions" : "Data & sync");openSettings();return }
+        if action == "Tools" { drawer=nil;tab="Tools";return }
         switch action{case "Commands":palette=true;case "Settings":openSettings();case "Connections":settings.open("Connections & sharing",detail:"Companion");openSettings();case "Account":settings.open("Account");openSettings();case "Setup":setupPresented=true;case "Terms":legalDocument="terms";case "Privacy":legalDocument="privacy";case "Open project":engine.pickProject();case "New conversation":newConversation("chat");case "Chat":openMode("chat");case "Agents":openMode("agent",page:"Home");case "Tasks":tab="Agents";agentPage="Task inbox";case "Terminal":terminal.toggle();case "Tool kit":openMode("agent",page:"Live tools");case "Project memory":tab="Projects";drawer="Memory";case "Archived chats":archives=true;default:tab=action}}
 }

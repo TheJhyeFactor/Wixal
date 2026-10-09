@@ -1,0 +1,19 @@
+# Managed tools preview distribution
+
+The controlled source/build repository is now [TheJhyeFactor/wixal-tools](https://github.com/TheJhyeFactor/wixal-tools). It records exact source pins and license-file hashes for the eleven existing tools, links their controlled forks, retains the 104-family release contract, and builds unsigned RustScan candidates from vendored pinned source. Inherited workflows on the forks are disabled. Immutable releases are enabled on the central repository for future qualified promotions. These source/build contracts do not configure an approved download catalogue in the application.
+
+The first executable profile is RustScan on Apple Silicon. The native engine owns adapters, readiness procedures and parsers. A catalogue cannot supply executable Python/Swift integration code, installer commands or environment settings.
+
+`managed-preview-repository.py` creates a signed local TUF repository with two package revisions of a real supplied binary. It requires an explicit source commit, licence and separate key directory. It records the original binary digest and optional Homebrew receipt. This is a local repack recipe, not proof of a reproducible source build. No production keys are generated or published by application packaging.
+
+Run it with an output under `artifacts/`, and keep signing keys outside the served directory. Serve only the repository on loopback. `package.py --development --managed-repository <client.json>` embeds its configuration and public bootstrap root in the helper resources and records their hashes in `TOOL_TRUST_MANIFEST.json`. Preview endpoints are rejected for alpha/production builds.
+
+Ordinary builds without that option retain external providers and explain that managed downloads are unconfigured. There is no default download endpoint that learns its own trust key.
+
+The registry is per OS user under `~/Library/Application Support/Wixal/ManagedTools`. `WIXAL_MANAGED_TOOLS_ROOT` selects an isolated registry for tests. Project records retain invocation/evidence references; shared packages confer no scan authority. Updates retain immutable old payloads, leases block removal, and historical descriptor records survive removal. Explicit provider selection never removes Homebrew binaries.
+
+The catalogue schema is validated by `wixal.managed_tools.descriptor`. This preview permits one dependency-free Mach-O binary and required licence/provenance files, authenticated exact artifact sizes/digests, known readiness/adapter identities, explicit tested OS versions and allowed app versions. Additional executable/runtime profiles are rejected until their contracts are implemented and tested. Existing Nmap, ffuf, Nuclei, TShark, Trivy, OSV, testssl and specialist providers retain their existing integrations; they are not newly certified managed distributions.
+
+Publication is a separate promotion step. The controlled repository and initial RustScan candidate recipe are configured. Before a public catalogue is usable, it still needs reviewed redistribution/source provisions, final artifact acceptance, signing/notarization channel, real trust custody and root rotation/recovery evidence. Root/targets/snapshot/timestamp signing roles exist in the local preview, with one operator and threshold one. This does not claim independent custody or a production quorum. The current fetcher rejects redirects; GitHub release asset redirects must be handled by a reviewed hosting/fetch contract before using them as managed payload URLs.
+
+See [implementation and acceptance status](../MANAGED_TOOLS_IMPLEMENTATION_STATUS.md) for executed evidence and the uncompleted release gates.

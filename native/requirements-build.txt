@@ -7,3 +7,7 @@ setuptools==84.0.0
 mcp==2.3.0
 
 cryptography==50.0.2
+
+tuf==7.0.1
+securesystemslib==1.5.1
+urllib3==2.8.0

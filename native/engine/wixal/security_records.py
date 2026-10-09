@@ -9,6 +9,7 @@ from .website import website_plan
 
 COLLECTIONS = ('securityDiscoveries', 'securityFindings', 'securityResearch', 'securityPlans', 'securityTemplates', 'securityEvents', 'securityContracts')
 BUILTINS = {
+    'network_discover': dict(title='Discover TCP ports', types=['Website / API','Server','Network device'], tools=['network_discover'], inputs=['coverage','ports','pace','timeout_seconds']),
     'network_scan': dict(title='Network assessment', types=['Website / API','Network','Server','Network device'], tools=['network_scan'], inputs=['profile','ports','timeout_seconds']),
     'website_assess': dict(title='Website assessment', types=['Website / API'], tools=['website_assess'], inputs=['profile','max_pages','protected_paths']),
     'website_simulate': dict(title='Local simulations', types=['Website / API','Network','Server','Network device','Software'], tools=['website_simulate'], inputs=[]),
@@ -47,15 +48,36 @@ class SecurityRecords:
         for name, spec in BUILTINS.items():
             if target['type'] not in spec['types']:continue
             missing=[t for t in spec['tools'] if t not in enabled]
+            manager=getattr(self.store,'addons',None)
+            if name=='network_discover' and (not manager or not manager.executable(manager.spec('rustscan'))):missing.append('Install compatible RustScan')
             rows.append(dict(id=name,**spec,available=not missing,missing=missing))
+        manager=getattr(self.store,'addons',None)
+        if manager:
+            for identifier in ('ffuf','nuclei','trivy','osv-scanner','testssl','wireshark'):
+                contract=self.addon_contract(identifier)
+                if target['type'] not in contract['types']:continue
+                spec=manager.spec(identifier);missing=[] if manager.executable(spec) else ['Install '+spec['name']]
+                if 'addon_run' not in enabled:missing.append('addon_run')
+                rows.append(dict(id=contract['id'],title=contract['name'],types=contract['types'],tools=['addon_run'],available=not missing,missing=missing,inputs=definitions.get('addon_run',{}).get('parameters',{}),instructions=contract['instructions']))
         for contract in self.store.data['securityContracts']:
             if contract['projectId']!=target['projectId'] or target['type'] not in contract['types']:continue
             missing=[] if contract['tool'] in enabled and contract['tool'] in definitions else [contract['tool']]
             rows.append(dict(id=contract['id'],title=contract['name'],types=contract['types'],tools=[contract['tool']],available=not missing,missing=missing,inputs=definitions.get(contract['tool'],{}).get('parameters',{}),instructions=contract.get('instructions','')))
         return rows
 
+    def addon_contract(self,identifier):
+        manager=getattr(self.store,'addons',None)
+        if not manager:raise ValueError('Capability library is unavailable')
+        spec=manager.spec(identifier)
+        if identifier not in ('ffuf','nuclei','trivy','osv-scanner','testssl','wireshark'):raise ValueError('No structured investigation adapter')
+        types=['Software'] if identifier in ('trivy','osv-scanner','wireshark') else ['Website / API'] if identifier in ('ffuf','nuclei') else ['Website / API','Server','Network device']
+        return dict(id='addon:'+identifier,name=spec['name'],tool='addon_run',types=types,binding='path' if identifier in ('trivy','osv-scanner','wireshark') else 'target',defaults=dict(id=identifier),instructions=spec['description'])
+
     def contract(self, capability, target):
-        if capability in BUILTINS:
+        if not isinstance(capability,str):raise ValueError('Choose a capability')
+        if capability.startswith('addon:'):
+            row=self.addon_contract(capability.split(':',1)[1])
+        elif capability in BUILTINS:
             row=BUILTINS[capability]
         else:
             row=next((c for c in self.store.data['securityContracts'] if c['id']==capability and c['projectId']==target['projectId']),None)
@@ -71,7 +93,11 @@ class SecurityRecords:
             item=dict(id=identity(),projectId=run['projectId'],targetId=run['targetId'],kind=kind,key=key,firstSeen=now(),observations=[],simulation=run['capability']=='website_simulate')
             rows.append(item)
         previous=item.get('values')
-        item.update(values=copy.deepcopy(values),lastSeen=now(),change='new' if previous is None else 'changed' if previous!=values else 'unchanged')
+        projected=copy.deepcopy(values)
+        if kind=='service' and previous and previous.get('service') and not projected.get('service'):
+            projected['service']=copy.deepcopy(previous['service']);projected['identityHistorical']=True;projected['identitySourceRun']=item.get('identitySourceRun') or (item['observations'][-1]['runId'] if item['observations'] else None)
+        elif kind=='service' and projected.get('service'):projected.update(identitySourceRun=run['id'],identityHistorical=projected.get('state')!='open')
+        item.update(values=projected,lastSeen=now(),change='new' if previous is None else 'changed' if previous!=values else 'unchanged')
         if not any(o['runId']==run['id'] for o in item['observations']):
             item['observations']=(item['observations']+[stamp])[-30:]
         return item
@@ -156,13 +182,15 @@ class SecurityRecords:
         if len(ids)!=len(nodes) or any(not isinstance(i,str) or not i or len(i)>80 for i in ids) or len(set(ids))!=len(ids):raise ValueError('Step IDs must be unique text')
         available={c['id'] for c in self.capability_catalog(target)}
         for node in nodes:
-            if set(node)-{'id','name','stage','capability','arguments','prompt','dependencies','condition','reason','model','evidenceIds','bindings'}:raise ValueError('Unknown plan step field')
+            if set(node)-{'id','name','stage','capability','arguments','prompt','dependencies','condition','reason','model','evidenceIds','bindings','source_node_id'}:raise ValueError('Unknown plan step field')
             if node.get('capability') not in available or node.get('stage') not in ('Recon','Research','Attacks'):raise ValueError('Plan uses an unsupported stage or capability')
             if not isinstance(node.get('arguments',{}),dict) or len(json.dumps(node))>16000:raise ValueError('Step arguments exceed limits')
             for field in ('name','prompt','reason','model'):
                 if field in node and (not isinstance(node[field],str) or len(node[field])>8000):raise ValueError('Plan text field is invalid or too long')
             deps=node.get('dependencies',[])
             if not isinstance(deps,list) or any(d not in ids or d==node['id'] for d in deps):raise ValueError('Plan dependencies must refer to other steps')
+            source=node.get('source_node_id')
+            if source and (node['capability']!='network_scan' or source not in deps or next(n for n in nodes if n['id']==source)['capability']!='network_discover' or 'ports' in node.get('arguments',{})):raise ValueError('Inspection source must be an explicit discovery dependency without manual ports')
             self.validate_condition(node.get('condition',{}))
         remaining={n['id']:set(n.get('dependencies',[])) for n in nodes};ordered=[]
         while remaining:
@@ -247,11 +275,12 @@ class SecurityRecords:
                 catalog=next(c for c in self.capability_catalog(target) if c['id']==node['capability'])
                 if not catalog['available']:raise ValueError('Unavailable capability: enable '+', '.join(catalog['missing']))
                 payload=dict(node,targetId=target['id'],model=node.get('model') or target.get('models',{}).get(node['stage']) or params.get('model') or target.get('models',{}).get('default',''))
-                payload.pop('id',None);payload.pop('reason',None);payload['dependencies']=[]
+                payload.pop('id',None);payload.pop('reason',None);payload.pop('source_node_id',None);payload['dependencies']=[]
                 prepared.append(await self.prepare_run(payload))
             mapping={n['id']:r['id'] for n,r in zip(nodes,prepared)}
             for node,run in zip(nodes,prepared):
                 run.update(dependencies=[mapping[d] for d in node.get('dependencies',[])],planId=plan['id'],nodeId=node['id'],reason=node.get('reason',''))
+                if node.get('source_node_id'):run['arguments']['source_run_id']=mapping[node['source_node_id']]
                 run['status']='blocked' if run['dependencies'] else 'queued'
                 self.commit_run(run)
             plan.update(status='running',runIds=[r['id'] for r in prepared]);self.audit(target,'plan_started',dict(id=plan['id']));self.publish();self.pump();return True,plan

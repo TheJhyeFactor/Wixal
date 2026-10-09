@@ -25,7 +25,20 @@ parser.add_argument("--bundle-identifier",default="app.wixal.native.preview",hel
 parser.add_argument("--executable-name",default="WixalNative")
 parser.add_argument("--preview-data",type=Path,help="Development preview workspace retained across Finder launches")
 parser.add_argument("--preview-endpoint",help="Loopback model endpoint for an isolated preview")
+parser.add_argument("--managed-repository",type=Path,help="Reviewed repository config and bootstrap root to embed; local preview endpoints require --development")
 options=parser.parse_args()
+sys.path.insert(0,str(native/"engine"))
+managed_configuration=None
+managed_root=None
+if options.managed_repository:
+    managed_configuration=json.loads(options.managed_repository.read_text())
+    from urllib.parse import urlsplit
+    if managed_configuration.get("preview") and not options.development:parser.error("Preview tool repositories require --development")
+    from wixal.managed_tools import CatalogueClient
+    CatalogueClient(Path(tempfile.gettempdir()),managed_configuration)
+    managed_root=Path(managed_configuration["trustedRoot"]).read_bytes()
+    from tuf.api.metadata import Metadata,Root
+    if not isinstance(Metadata.from_bytes(managed_root).signed,Root):parser.error("Trusted bootstrap must be TUF root metadata")
 sys.path.insert(0,str(native/"engine"))
 from wixal import VERSION
 if options.alpha and options.development:parser.error("Choose --alpha or --development")
@@ -45,7 +58,7 @@ destination.parent.mkdir(parents=True,exist_ok=True)
 staging=Path(tempfile.mkdtemp(prefix="wixal-native-package-",dir=destination.parent))
 app=staging/app.name
 
-source_paths=sorted(list((native/"Sources").rglob("*.swift"))+list((native/"ActivitySources").rglob("*.swift"))+list((native/"MarkdownSources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))+list((native/"engine/wixal/resources").rglob("*.json"))+[native/"Package.swift",native/"Package.resolved",native/"requirements-build.txt",Path(__file__).resolve()])
+source_paths=sorted(list((native/"Sources").rglob("*.swift"))+list((native/"ActivitySources").rglob("*.swift"))+list((native/"MarkdownSources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))+list((native/"engine/wixal/resources").rglob("*.json"))+list((native/"engine/wixal/resources").rglob("*.md"))+[native/"Package.swift",native/"Package.resolved",native/"requirements-build.txt",Path(__file__).resolve()])
 source_hashes={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
 
 def run(*args):
@@ -55,6 +68,7 @@ run("swift", "build", "--build-system", "native", "-c", "release")
 bin_path = Path(subprocess.check_output(["swift", "build", "--build-system", "native", "-c", "release", "--show-bin-path"], cwd=native, text=True).strip())
 signing=["--codesign-identity",options.identity] if options.identity else []
 run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", *signing, "--name", "wixal-engine", "--paths", native/"engine",
+    "--hidden-import", "wixal.tool_qualification", "--collect-all", "tuf", "--collect-all", "securesystemslib", "--collect-all", "cryptography", "--collect-all", "urllib3",
     "--add-data", str(native/"engine/wixal/resources")+":wixal/resources", native/"engine/engine_main.py")
 if app.exists():
     shutil.rmtree(app)
@@ -64,6 +78,13 @@ shutil.copy2(bin_path/"WixalNative",macos/options.executable_name)
 for bundle in bin_path.glob("*.bundle"):
     shutil.copytree(bundle,resources/bundle.name,symlinks=True)
 shutil.copytree(native/"dist/wixal-engine",resources/"engine",symlinks=True)
+if managed_configuration:
+    tool_resources=resources/"engine/_internal/wixal/resources"
+    tool_resources.mkdir(parents=True,exist_ok=True)
+    configuration=dict(managed_configuration,trustedRoot="managed-root.json")
+    (tool_resources/"managed-repository.json").write_text(json.dumps(configuration,indent=2))
+    (tool_resources/"managed-root.json").write_bytes(managed_root)
+    (resources/"TOOL_TRUST_MANIFEST.json").write_text(json.dumps(dict(configurationSha256=hashlib.sha256((tool_resources/"managed-repository.json").read_bytes()).hexdigest(),bootstrapRootSha256=hashlib.sha256(managed_root).hexdigest(),channel=configuration["channel"],preview=configuration["preview"]),indent=2))
 shutil.copytree(root/"runtime/ollama",resources/"ollama",symlinks=True)
 shutil.copytree(root/"assets/icon-variants",resources/"icon-variants",symlinks=True)
 shutil.copytree(root/"assets/audio",resources/"audio",symlinks=True)

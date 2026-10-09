@@ -8,7 +8,11 @@ def capture(task,name,args,result):
     if not isinstance(result,dict):return
     report=result.get('report',result)
     if not isinstance(report,dict):return
-    if name=='network_read':
+    if name=='network_read' and result.get('structuredResult'):
+        discovery=result['structuredResult']
+        report=dict(summary=dict(coverage=discovery['coverage'],openPorts=len(discovery['services']),interpretation=discovery['interpretation']),findings=[],rawEvidence=discovery.get('evidence'),sourceResultSha256=discovery['resultSha256'])
+        args=dict(target=discovery['invocation']['target'])
+    elif name=='network_read':
         if result.get('state')!='completed' or result.get('exitCode')!=0:return
         import xml.etree.ElementTree as ET
         output=result.get('output','');report=dict(summary=dict(partial=bool(result.get('more') or result.get('offset')),format='Nmap XML'),findings=[])

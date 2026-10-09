@@ -223,6 +223,13 @@ struct SettingsView: View {
     }
     private var permissions: some View {
         Group {
+            WixalSection(title:"Tool installation") {
+                SettingsRow(title:"Allow AI to install tools automatically",detail:"Chat and agents can install missing programs from the approved catalogue. Applies to all projects on this Mac.",scope:"Global") {
+                    Toggle("Allow AI to install tools automatically",isOn:Binding(get:{(engine.state["addonPolicy"] as? [String:Any])?["automaticInstall"] as? Bool ?? false},set:{save("addon-policy",["automaticInstall":$0])})).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                }.wixalCard().disabled(locked)
+                Text("When off, AI requests ask before installation. Installed tools are available in Cybersecurity, Chat and Agents. New download sources and system setup still need review; execution follows the task's existing permissions.").wixalFont(size:11).foregroundStyle(colours.muted)
+                Button("Open Tools →") { navigate("Tools") }.buttonStyle(WixalButtonStyle(outlined:true))
+            }
             WixalSection(title:"Action review") {
                 SettingsRow(title:"Review policy",detail:"Edits, commands and network actions follow this workspace’s policy.",scope:projectScope) {
                     Picker("Review policy",selection:Binding(get:{textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"]).isEmpty ? "review" : textValue(engine.project?["approvalMode"] ?? engine.state["personalApprovalMode"])},set:{save("settings",["approvalMode":$0])})) { Text("Review each action").tag("review"); Text("Allow without individual review").tag("bypass") }.labelsHidden()

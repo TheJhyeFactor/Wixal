@@ -10,7 +10,7 @@ jobs:
     # Match the Swift 6.4 toolchain used for the published native alpha.
     # https://github.com/actions/runner-images/issues/14404
     runs-on: xcode-27
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,9 +19,23 @@ jobs:
           cache: pip
           cache-dependency-path: native/requirements-build.txt
       - run: python -m pip install -r native/requirements-build.txt
+      - name: Fetch the reviewed managed-tools build setup
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: TheJhyeFactor/wixal-tools
+          ref: 3afcf0dfb5afc476f553ec63814908929e3c54ee
+          path: .managed-tools-build
+          persist-credentials: false
+      - name: Build the real pinned RustScan test artifact
+        working-directory: .managed-tools-build
+        run: python scripts/build-rustscan.py
+      - name: Install external Nmap for source-bound handoff tests
+        run: brew install nmap
       - name: Engine regression tests
         env:
           PYTHONPATH: native/engine:native/tests
+          WIXAL_TEST_RUSTSCAN_BINARY: ${{ github.workspace }}/.managed-tools-build/artifacts/rustscan-darwin-arm64/bin/rustscan
+          WIXAL_TEST_RUSTSCAN_LICENSE: ${{ github.workspace }}/.managed-tools-build/artifacts/rustscan-darwin-arm64/LICENSE
         run: python -m unittest discover -s native/tests -v
       - name: Swift toolchain
         run: swift --version

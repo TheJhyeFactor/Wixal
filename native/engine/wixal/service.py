@@ -69,6 +69,15 @@ class Service:
             if 'search_history' in enabled and 'recall_memory' not in enabled:enabled.append('recall_memory')
             if 'save_memory' in enabled and 'forget_memory' not in enabled:enabled.append('forget_memory')
             self.store.data['memoryToolsVersion']=1;self.store.save()
+        from .addons import Addons
+        self.addons=Addons(self)
+        self.store.addons=self.addons
+        if not self.store.data.get('networkDiscoveryVersion'):
+            self.store.data['enabledTools']=list(dict.fromkeys(self.store.data['enabledTools']+['network_discover','network_read','network_stop']))
+            self.store.data['networkDiscoveryVersion']=1;self.store.save()
+        if not self.store.data.get('addonToolsVersion'):
+            self.store.data['enabledTools']=list(dict.fromkeys(self.store.data['enabledTools']+[t['function']['name'] for t in DEFINITIONS if t['function']['name'].startswith('addon_')]))
+            self.store.data['addonToolsVersion']=1;self.store.save()
         self.tools.runtime=self.runtime
         self.agent = Agent(self.store, self.runtime, self.tools, emit)
         self.tools.delegate = self.delegate
@@ -101,6 +110,10 @@ class Service:
             self.emit("request-closed", dict(id=request_id))
 
     async def approve(self, details):
+        # Install requests follow the global installation preference, independently
+        # of a project's command/execution bypass setting.
+        if details.pop('installationReview',False):
+            return bool(await self.ask('review',details))
         # Bypass is an explicit user preference; default is review.
         if self.store.approval_mode() == "bypass":
             return True
@@ -126,6 +139,7 @@ class Service:
 
     async def dispatch(self, method, params):
         params = params or {}
+        if method.startswith('addon-'):return await self.addons.dispatch(method,params)
         if method.startswith('security-') and method != 'security-readiness':
             return await self.security_workspace.dispatch(method, params)
         if method == "hello":
@@ -219,7 +233,7 @@ class Service:
         if method == "security-readiness":
             import shutil
             path = shutil.which("nmap") or "/opt/homebrew/bin/nmap"
-            return dict(installed=os.path.isfile(path) and os.access(path, os.X_OK), discoveryEnabled="security_tools" in self.store.data["enabledTools"])
+            return dict(installed=os.path.isfile(path) and os.access(path, os.X_OK), discoveryEnabled="security_tools" in self.store.data["enabledTools"], rustscan=self.addons.snapshot("rustscan")["packages"])
         if method == "respond":
             future = self.pending.get(params["id"])
             if not future or future.done():
@@ -478,6 +492,7 @@ class Service:
                     self.store.data['syncState']['warnings']=[str(error)];self.store.save();self.emit('state',self.store.data)
 
     async def close(self):
+        await self.addons.close()
         await self.security_workspace.close()
         if self.scheduler:
             self.scheduler.cancel()

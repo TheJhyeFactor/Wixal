@@ -16,6 +16,9 @@ from pathlib import Path
 from .storage import identity, now
 
 DEFINITIONS = json.loads((Path(__file__).parent / "resources/tools.json").read_text())
+from .addons import definitions as addon_definitions
+DEFINITIONS += addon_definitions()
+
 SKIP = {".git", "node_modules", ".venv", "venv", "release", ".next", "dist", ".build", ".wixal-tmp"}
 
 
@@ -219,18 +222,17 @@ class Tools:
                     return result
         return result
 
-    async def start_command(self, command, seconds, session_id, argv=None):
+    async def start_command(self, command, seconds, session_id, argv=None, assessment=None, environment=None, on_finished=None, retain_evidence=False):
         if sum(j["state"]=="running" for j in self.jobs.values()) >= 8:
             raise ValueError("Eight commands are already running")
         project = self.store.project()
         if not project or not command.strip() or len(command)>8000:
             raise ValueError("A project and valid command are required")
-        if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds,**({"networkTarget":argv[-1]} if argv and Path(argv[0]).name=="nmap" else {}))):
+        if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds,**({"assessment":assessment} if assessment else {}))):
             return "User declined this command."
         from .agent_context import profile
         branch=(profile.get() or {}).get("_branchRoot")
         invocation=argv or ["/bin/zsh", "-l", "-c", command]
-        environment=None
         if branch:
             if not Path("/usr/bin/sandbox-exec").is_file():raise ValueError("Isolated commands require the macOS sandbox backend")
             policy="(version 1) (allow default) (deny file-write*) (deny network*) (allow file-write* (subpath "+json.dumps(str(Path(branch).resolve()))+")) (allow file-write* (literal \"/dev/null\"))"
@@ -238,32 +240,55 @@ class Tools:
             temporary=Path(branch)/".wixal-tmp";temporary.mkdir(exist_ok=True)
             environment={**os.environ,"TMPDIR":str(temporary),"PYTHONDONTWRITEBYTECODE":"1"}
         child = await asyncio.create_subprocess_exec(*invocation, cwd=project["root"],env=environment,
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True)
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE if retain_evidence else asyncio.subprocess.STDOUT, start_new_session=True)
         job_id = identity()
         job = dict(id=job_id, owner=session_id, projectId=project["id"], command=command, started=now(), state="running",
                    output="", base=0, exitCode=None, child=child, reason=None)
         self.jobs[job_id] = job
+        if assessment: job['assessment']=assessment
+        if retain_evidence:
+            directory=self.store.directory/'tool-evidence'/project['id']/job_id
+            directory.mkdir(parents=True,mode=0o700)
+            job['evidence']=dict(stdoutPath=str(directory/'stdout'),stderrPath=str(directory/'stderr'),incomplete=False,limitBytes=16*1024*1024)
         async def collect():
-            decoder=codecs.getincrementaldecoder('utf-8')(errors='replace')
+            async def drain(stream,label):
+                decoder=codecs.getincrementaldecoder('utf-8')(errors='replace')
+                captured=0
+                output=Path(job['evidence'][label+'Path']).open('wb') if retain_evidence else None
+                try:
+                    while chunk:=await stream.read(8192):
+                        if output:
+                            captured+=len(chunk)
+                            if captured>job['evidence']['limitBytes']:
+                                job['evidence']['incomplete']=True;self.stop_job(job,'evidence_limit');break
+                            output.write(chunk)
+                        text=decoder.decode(chunk)
+                        job['output']+=text
+                        extra=max(0,len(job['output'])-1024*1024)
+                        job['base']+=len(job['output'][:extra].encode('utf-16-le'))//2
+                        job['output']=job['output'][extra:]
+                        self.emit('command-output',dict(text=text,session_id=job_id))
+                    tail=decoder.decode(b'',final=True)
+                    if tail:job['output']+=tail
+                finally:
+                    if output:
+                        output.flush();os.fsync(output.fileno());output.close()
+                        from .managed_tools import digest
+                        job['evidence'][label+'Sha256']=digest(job['evidence'][label+'Path'])
             try:
                 async with asyncio.timeout(seconds):
-                    while chunk := await child.stdout.read(8192):
-                        text = decoder.decode(chunk)
-                        job["output"] += text
-                        extra = max(0, len(job["output"])-1024*1024)
-                        job["base"] += len(job['output'][:extra].encode('utf-16-le'))//2
-                        job["output"] = job["output"][extra:]
-                        self.emit("command-output", dict(text=text, session_id=job_id))
-                    tail=decoder.decode(b'',final=True)
-                    if tail:job['output']+=tail;self.emit('command-output',dict(text=tail,session_id=job_id))
-                    job["exitCode"] = await child.wait()
-                    job["state"] = "stopped" if job["reason"] else "completed"
+                    await asyncio.gather(drain(child.stdout,'stdout'),*([drain(child.stderr,'stderr')] if retain_evidence else []))
+                    job['exitCode']=await child.wait()
+                    job['state']='stopped' if job['reason'] else 'completed'
             except TimeoutError:
-                self.stop_job(job, "timeout")
-                await child.wait()
-                job["state"] = "stopped"
+                if retain_evidence:job['evidence']['incomplete']=True
+                self.stop_job(job,'timeout');await child.wait();job['exitCode']=child.returncode;job['state']='stopped'
+            except BaseException:
+                self.stop_job(job,'collector_error');await child.wait();job['exitCode']=child.returncode;job['state']='stopped'
+                raise
             finally:
-                job["finished"] = now()
+                job['finished']=now()
+                if on_finished:await on_finished(job)
         job["collector"] = asyncio.create_task(collect())
         return dict(session_id=job_id, state="running")
 
@@ -293,7 +318,7 @@ class Tools:
         except UnicodeDecodeError:
             try:output=data[:-2].decode('utf-16-le')
             except UnicodeDecodeError as error:raise ValueError('Output offset must align to a character boundary') from error
-        return dict(session_id=job["id"], command=job["command"], state=job["state"], exitCode=job["exitCode"],
+        return dict(**({"structuredResult":job["structuredResult"]} if job.get("structuredResult") else {}), **({"evidence":job["evidence"]} if job.get("evidence") else {}), session_id=job["id"], command=job["command"], state=job["state"], exitCode=job["exitCode"],
                     reason=job["reason"], output=output, offset=start, next_offset=start+len(output.encode('utf-16-le'))//2,
                     more=start+len(output.encode('utf-16-le'))//2<job["base"]+units, earliest_offset=job["base"], started=job["started"], finished=job.get("finished"))
 
@@ -303,17 +328,32 @@ class Tools:
         if not definition:raise ValueError("Unknown tool name. Inspect workspace_info for the exact available tool names.")
         if name not in available_names(self,self.store):
             raise ValueError(f"{name} is switched off or outside this agent task boundary")
+        if name in ("network_scan","network_discover") and name not in self.store.data.get("enabledTools",[]):raise ValueError(name+" is switched off")
         validate(args, definition["function"]["parameters"])
         from .agent_context import profile
         from .agent_authority import enforce_target
         enforce_target(profile.get(),name,args)
-        if (profile.get() or {}).get("_branchRoot") and (name.startswith("mcp_") or name.startswith("browser_") or name in ("terminal_exec","delegate_task","http_request","web_search","website_assess","network_scan")):
+        if (profile.get() or {}).get("_branchRoot") and (name.startswith("mcp_") or name.startswith("browser_") or name in ("terminal_exec","delegate_task","http_request","web_search","website_assess","network_scan","network_discover")):
             raise ValueError("External actions are unavailable in an isolated change branch")
         root = (self.store.project() or {}).get("root")
         from .context_policy import requires_project
         if requires_project(name) and (self.store.project() or {}).get('syncRootRequired'):raise ValueError('Locate this synced project folder in Settings before using project tools')
         if getattr(self,"management",None) and name in self.management.names:
             return await self.management.tool(name,args)
+        if name.startswith("addon_"):
+            manager=getattr(self.store,"addons",None)
+            if not manager:raise ValueError("Capability library is unavailable in this workspace")
+            if name=="addon_discover":return await manager.discover(args["query"])
+            if name=="addon_catalog":return manager.snapshot(args.get("query",""))
+            if name=="addon_install":return await manager.install(args,self,session_id)
+            if name=="addon_job":return await manager.job(args,session_id)
+            if name=="addon_workflow":
+                if (profile.get() or {}).get("_branchRoot"):raise ValueError("Workflow installation is unavailable in an isolated change branch")
+                if not await self.approve(dict(name="addon_workflow",id=args["id"])):return "User declined this workflow installation."
+                return manager.workflow(args["id"])
+            if name=="addon_run":
+                from .addon_execution import run
+                return await run(manager,self,args,session_id)
         if name == "load_skill":
             skill = next((s for s in self.store.data["skills"] if s["name"]==args["name"]),None)
             if not skill: raise ValueError("Unknown skill")
@@ -411,14 +451,29 @@ class Tools:
             if args.get("close_stdin"):
                 job["child"].stdin.close()
             return dict(inputSent=True)
-        if name == "security_tools":
-            return dict(installed=bool(shutil.which("nmap") or Path("/opt/homebrew/bin/nmap").is_file()), profiles=list(PROFILES), interpretation="Scan observations need verification")
-        if name == "network_scan":
-            executable = shutil.which("nmap") or ("/opt/homebrew/bin/nmap" if Path("/opt/homebrew/bin/nmap").exists() else None)
-            if not executable:
-                raise ValueError("Install Nmap to use network assessment")
-            argv = [executable, *scan_plan(args)]
-            return await self.start_command(" ".join(argv), args.get("timeout_seconds", 180), session_id, argv)
+        if name == 'security_tools':
+            manager=getattr(self.store,'addons',None)
+            rustscan=manager.snapshot('rustscan')['packages'] if manager else []
+            return dict(installed=bool(shutil.which('nmap') or Path('/opt/homebrew/bin/nmap').is_file()),profiles=list(PROFILES),rustscan=rustscan,interpretation='Installation, capability readiness and model evaluation are separate states')
+        if name == 'network_discover':
+            from .network_discovery import start
+            return await start(self,args,session_id)
+        if name == 'network_scan':
+            if args.get('source_run_id') or args.get('source_session_id'):
+                from .network_discovery import inspect
+                return await inspect(self,args,session_id)
+            executable=shutil.which('nmap') or ('/opt/homebrew/bin/nmap' if Path('/opt/homebrew/bin/nmap').exists() else None)
+            if not executable:raise ValueError('Install Nmap to use network assessment')
+            from .agent_context import profile
+            active=profile.get() or {}
+            if active.get('restrictTargets'):
+                from .network_discovery import plan
+                await plan(dict(target=args['target'],ports=args.get('ports','22,53,80,443,445,3389,8080,8443')),active)
+            argv=[executable,*scan_plan(args)]
+            from .network_discovery import ports
+            from .managed_tools import controlled_environment,digest
+            assessment=dict(capability='network_scan',target=args['target'],ports=ports(args.get('ports','22,53,80,443,445,3389,8080,8443')),executableSha256=await asyncio.to_thread(digest,executable))
+            return await self.start_command(' '.join(argv),args.get('timeout_seconds',180),session_id,argv,assessment=assessment,retain_evidence=True,environment=controlled_environment(Path(executable).parent))
         if name in ("http_request", "web_search"):
             if not await self.approve(dict(name=name, **args, **({"providers": ["lite.duckduckgo.com", "www.bing.com"]} if name == "web_search" else {}))):
                 return "User declined this network request."

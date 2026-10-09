@@ -89,7 +89,7 @@
     "type": "function",
     "function": {
       "name": "network_scan",
-      "description": "Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence.",
+      "description": "Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence. Optional source_run_id (investigation) or source_session_id (this chat) derives exact ports from completed discovery. Omit ports for source-bound inspection.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -118,6 +118,14 @@
             "type": "integer",
             "minimum": 10,
             "maximum": 600
+          },
+          "source_run_id": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "source_session_id": {
+            "type": "string",
+            "maxLength": 100
           }
         },
         "required": [
@@ -900,6 +908,49 @@
           "id"
         ],
         "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "network_discover",
+      "description": "Discover observed open TCP ports using isolated RustScan. Selected ports is the default; all_tcp requires an explicit user request. Does not identify services. Poll network_read; stop with network_stop. Follow up through network_scan source_session_id, without manual ports.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "selected",
+              "all_tcp"
+            ]
+          },
+          "ports": {
+            "type": "string",
+            "maxLength": 8000
+          },
+          "pace": {
+            "type": "string",
+            "enum": [
+              "careful",
+              "balanced"
+            ]
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 600
+          }
+        },
+        "required": [
+          "target"
+        ]
       }
     }
   }

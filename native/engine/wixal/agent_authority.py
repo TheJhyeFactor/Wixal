@@ -39,7 +39,7 @@ def target_allowed(target,allowed):
 
 def enforce_target(profile,name,args):
     if not profile or not profile.get('restrictTargets'):return
-    if name in ('http_request','website_assess','browser_open','browser_inspect','network_scan','nmap_scan'):
+    if name in ('http_request','website_assess','browser_open','browser_inspect','network_scan','network_discover','nmap_scan'):
         target=args.get('url') or args.get('target')
         if not target or not target_allowed(target,profile.get('authority',{}).get('targets',[])):raise ValueError('Target is outside the agent authorised scope')
     if name in ('run_command','command_start') and args.get('command') not in profile.get('authority',{}).get('commands',[]):raise ValueError('Commands in target-restricted runs require an exact approved command')
@@ -61,7 +61,16 @@ def permits(details,authority,project):
     if name in ('write_file','edit_file','make_directory'):return write_allowed(details.get('path',''))
     if name=='save_website_evidence':return bool(details.get('paths')) and all(write_allowed(p) for p in details['paths'])
     if name=='command_start':
-        if details.get('networkTarget') and target_allowed(details['networkTarget'],authority['targets']):return True
+        assessment=details.get('assessment')
+        if assessment and assessment.get('capability') in ('network_scan','network_discover'):
+            from .network_discovery import authorize
+            try:
+                target=assessment['target']
+                from .network_discovery import target_host
+                host,_=target_host(target)
+                authorize(dict(target=target,addresses=assessment.get('addresses',[host]),ports=assessment.get('ports',[])),dict(restrictTargets=True,authority=authority))
+                return True
+            except (ValueError,KeyError):return False
         return details.get('command') in authority['commands'] and details.get('root')==root
     if name in ('http_request','website_assess'):return target_allowed(details.get('url',''),authority['targets'])
     return False

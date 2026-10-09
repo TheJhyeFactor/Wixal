@@ -106,6 +106,15 @@ class SecurityWorkspace(SecurityRecords):
             elif run['status'] in ('queued', 'blocked'):
                 run.update(status='cancelled', finished=now()); self.publish(); self.pump()
             return True
+        if method=='security-discover-inspect':
+            target=self.target(params.get('targetId'))
+            arguments=params.get('arguments',{})
+            nodes=[dict(id='discover',name='Discover TCP ports',stage='Recon',capability='network_discover',arguments=arguments,dependencies=[])]
+            if params.get('inspect',False):
+                if not self.service.addons.executable(self.service.addons.spec('nmap')):raise ValueError('Install Nmap before queuing linked inspection')
+                nodes.append(dict(id='inspect',name='Inspect discovered ports',stage='Recon',capability='network_scan',arguments=dict(profile=params.get('profile','services'),timeout_seconds=arguments.get('timeout_seconds',180)),source_node_id='discover',dependencies=['discover']))
+            plan=await self.dispatch('security-plan-save',dict(targetId=target['id'],name='TCP discovery and inspection',nodes=nodes))
+            return await self.dispatch('security-plan-run',dict(id=plan['id']))
         if method != 'security-run-add': raise ValueError('Unknown security workspace action')
         if self.service.active and not self.service.active.done():
             raise ValueError('Finish the current chat or agent task before queuing security work')
@@ -132,7 +141,10 @@ class SecurityWorkspace(SecurityRecords):
         if not isinstance(model, str) or len(model) > 200: raise ValueError('Choose a model name below 200 characters')
         prompt = params.get('prompt', '').strip()
         if len(prompt) > 8000: raise ValueError('Instructions exceed 8,000 characters')
-        if capability == 'network_scan':
+        if capability == 'network_discover':
+            from .network_discovery import plan
+            args['target']=target['address'];await plan(args)
+        elif capability == 'network_scan':
             if target['type'] == 'Software': raise ValueError('Software targets need project analysis')
             args['target'] = target['address']; scan_plan(args)
         elif capability == 'website_assess':
@@ -157,6 +169,7 @@ class SecurityWorkspace(SecurityRecords):
         if capability not in CAPABILITIES:
             definitions={d['function']['name']:d['function'] for d in self.service.tools.catalog()}
             bound=dict(contract['defaults'],**args)
+            if capability.startswith('addon:'):bound['id']=contract['defaults']['id']
             if contract.get('binding'):bound[contract['binding']]=target['address']
             from .tools import validate
             validate(bound,definitions[contract['tool']]['parameters'])
@@ -172,6 +185,7 @@ class SecurityWorkspace(SecurityRecords):
         dependency = params.get('dependency', '')
         for parent_id in dependencies:
             if not any(r['id']==parent_id and r['targetId']==target['id'] for r in self.runs):raise ValueError('Dependency belongs to another target')
+        if args.get('source_run_id') and args['source_run_id'] not in dependencies+([dependency] if dependency else []):raise ValueError('Source-bound inspection requires an explicit dependency')
         if dependency and not any(r['id'] == dependency and r['targetId'] == target['id'] for r in self.runs):
             raise ValueError('Chain dependencies must belong to this target')
         session = dict(id=identity(), projectId=target['projectId'], title='Security · '+name,
@@ -226,6 +240,7 @@ class SecurityWorkspace(SecurityRecords):
             def observe(owner, kind, value):
                 if kind == 'report': run['partialReport'] = copy.deepcopy(value)
             tools.assessment_observer = observe
+            tools.security_target_id=run['targetId']
             capability = run['capability']
             if capability in ('research', 'analysis','planner'):
                 context = self.evidence_context(run)
@@ -253,12 +268,13 @@ class SecurityWorkspace(SecurityRecords):
                             schema=dict(type='object',properties={},additionalProperties=False)
                         elif name=='research':
                             schema=dict(type='object',properties=dict(urls=dict(type='array',maxItems=3,items=dict(type='string')),automatic=dict(type='boolean')),additionalProperties=False)
-                        elif name in ('network_scan','website_assess','website_simulate'):
+                        elif name in ('network_scan','network_discover','website_assess','website_simulate'):
                             schema=copy.deepcopy(definitions[name]);schema['properties']={k:v for k,v in schema['properties'].items() if k not in ('target','url','report_prefix')}
                             schema['required']=[k for k in schema.get('required',[]) if k in schema['properties']]
                         else:
                             contract=self.contract(name,target);schema=copy.deepcopy(definitions[contract['tool']])
                             schema['properties'].pop(contract.get('binding',''),None)
+                            if name.startswith('addon:'):schema['properties'].pop('id',None)
                             schema['required']=[k for k in schema.get('required',[]) if k in schema['properties'] and k not in contract['defaults']]
                         properties=dict(id=dict(type='string',maxLength=60),name=dict(type='string',maxLength=160),stage=dict(type='string',enum=['Recon','Research','Attacks']),capability=dict(type='string',const=name),
                             arguments=schema,prompt=dict(type='string',maxLength=1600),dependencies=dict(type='array',maxItems=6,items=dict(type='string')),reason=dict(type='string',maxLength=600))
@@ -307,30 +323,55 @@ class SecurityWorkspace(SecurityRecords):
                     target=next(t for t in self.store.data['securityTargets'] if t['id']==run['targetId'])
                     result=await self.software_inventory(target,tools,run['sessionId'])
                 else:
+                    if run['arguments'].get('source_run_id') not in (None,*run.get('dependencies',[])):raise ValueError('Inspection source must remain an explicit dependency')
                     tool=capability if capability in CAPABILITIES else self.contract(capability,next(t for t in self.store.data['securityTargets'] if t['id']==run['targetId']))['tool']
                     result = await tools.execute(tool, run['arguments'], run['sessionId'])
+                if isinstance(result,dict) and result.get('state')=='failed':
+                    run['result']=result;raise ValueError(result.get('error','Inspection failed; evidence retained'))
                 if isinstance(result,str):
                     if capability in CAPABILITIES or result.startswith('User declined'):raise ValueError(result)
                     result=dict(text=result)
-                if capability == 'network_scan' or (capability not in CAPABILITIES and tool=='network_scan'):
+                if isinstance(result,dict) and result.get('session_id') in tools.jobs:
                     job = tools.jobs[result['session_id']]
                     while job['state'] == 'running':
                         run['output'] = job['output'][-100000:]; emit('progress', {})
                         await asyncio.sleep(.3)
+                    await job['collector']
                     result = await tools.read_job(dict(session_id=job['id'], wait_ms=0, max_chars=100000), run['sessionId'])
                     run['output'] = result.get('output', '')
-                    if job['state'] != 'completed' or job.get('exitCode') != 0:
+                    if capability=='network_discover':
+                        result=job['structuredResult'];run['result']=result
+                    accepted=(0,1) if run['arguments'].get('id')=='osv-scanner' else (0,)
+                    if job['state'] != 'completed' or job.get('exitCode') not in accepted:
                         run['result'] = result
-                        raise ValueError('Scanner failed or timed out; captured output retained')
+                        raise ValueError('Tool process failed or timed out; captured output retained')
+                if (capability == 'network_scan' or (capability not in CAPABILITIES and tool=='network_scan')) and 'services' not in result:
                     import xml.etree.ElementTree as ET
                     try:
-                        parsed = ET.fromstring(job['output'])
+                        parsed = ET.fromstring(Path(job['evidence']['stdoutPath']).read_text() if job.get('evidence') else job['output'])
                         result['services'] = [dict(host=host.find('address').get('addr', '') if host.find('address') is not None else '',
                             port=p.get('portid'), protocol=p.get('protocol'), state=p.find('state').get('state', '') if p.find('state') is not None else '',
                             service=dict(p.find('service').attrib) if p.find('service') is not None else {})
                             for host in parsed.findall('host') for p in host.findall('./ports/port')]
                     except ET.ParseError:
                         result['parseWarning'] = 'Scanner output could not be parsed; inspect raw evidence.'
+                if capability.startswith('addon:'):
+                    evidence=result.get('evidence',{})
+                    raw=Path(evidence['stdoutPath']).read_text(errors='replace') if isinstance(evidence,dict) and evidence.get('stdoutPath') else result.get('output','')
+                    result['evidenceText']=raw[:20000]
+                    result['evidenceExcerpt']=len(raw)>20000 or bool(result.get('more'))
+                    if capability=='addon:ffuf':
+                        from urllib.parse import urlsplit
+                        expected=urlsplit(run['address']);requests=[]
+                        for line in raw.splitlines():
+                            start=line.find('{')
+                            if start<0:continue
+                            try:item,_=json.JSONDecoder().raw_decode(line[start:])
+                            except ValueError:continue
+                            if not isinstance(item,dict) or not isinstance(item.get('url'),str):continue
+                            parsed=urlsplit(item['url'])
+                            if (parsed.scheme,parsed.hostname,parsed.port)==(expected.scheme,expected.hostname,expected.port):requests.append(dict(url=item['url'],method='GET',status=item.get('status')))
+                        result['requests']=requests[:200]
                 run['result'] = result
             run.update(status='completed', outcome='Evidence collected; interpretation required')
             self.ingest(run)
@@ -340,7 +381,11 @@ class SecurityWorkspace(SecurityRecords):
         except Exception as error:
             run.update(status='failed', error=str(error))
         finally:
-            if tools: await tools.close(run['sessionId'])
+            if tools:
+                await tools.close(run['sessionId'])
+                for job in tools.jobs.values():
+                    if job.get('structuredResult') and run['capability']=='network_discover' and 'result' not in run:run['result']=job['structuredResult']
+                if run.get('result',{}).get('coverage') in ('partial','indeterminate'):self.ingest(run)
             agent_profile.reset(profile_token);automatic.reset(automatic_token)
             run['finished'] = now()
             self.tasks.pop(run['id'], None)

@@ -56,6 +56,13 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
         target=self.root/'repository/metadata/targets.json';value=json.loads(target.read_text());value['signed']['version']=123;target.write_text(json.dumps(value))
         with self.assertRaises(Exception):await self.install()
         self.assertFalse(self.registry.snapshot()['installed'])
+    async def test_successful_refresh_clears_previous_offline_warning(self):
+        first,_=await self.install()
+        with self.registry.database() as db:db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogueError','Previous catalogue outage'))
+        await asyncio.to_thread(self.registry.refresh)
+        state=self.registry.snapshot()
+        self.assertIsNone(state['catalogueError'])
+        self.assertEqual(state['active']['sha256'],first['sha256'])
     async def test_bad_artifact_preserves_active(self):
         first,_=await self.install(self.rows[0]['sha256'])
         target=self.root/'repository/targets'/self.rows[1]['target'];target.write_bytes(b'tampered')

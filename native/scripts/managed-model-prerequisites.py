@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('real',Path(__file__).with_name('real-acceptance.py'));real=importlib.util.module_from_spec(spec);spec.loader.exec_module(real)
 
 async def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--helper',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--model',default='gpt-oss:20b');o=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--helper',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--model',default='gpt-oss:20b');p.add_argument('--alternate-model',default='gemma3:12b',help='Already installed conversation model; never downloaded by this case');o=p.parse_args()
     art=o.output.resolve();art.mkdir(parents=True,exist_ok=False);real.ART=art;real.STATE=art/'workspace';project=art/'project';project.mkdir()
     for source in ['README.md','native/engine/wixal/network_discovery.py']:
         (project/Path(source).name).write_bytes((ROOT/source).read_bytes())
@@ -105,6 +105,16 @@ async def main():
         old=await attempt('MOD-18-initial',f'Discover TCP {ports[0]},{ports[1]} on my host 127.0.0.1. Wait for completed evidence. Do not inspect services.',lambda o,v,l,r:any(x.get('structuredResult',{}).get('handoffEligible') for _,x in v))
         ports=await fresh();expected=set(ports)
         await attempt('MOD-18',f'The listener configuration changed. Check TCP {ports[0]},{ports[1]} on 127.0.0.1 now. Report these newly observed ports, without reusing the earlier result as a fresh scan.',lambda o,v,l,r:any(x.get('structuredResult',{}).get('handoffEligible') and set(x['structuredResult']['hosts'][0]['ports'])==expected for _,x in v) and all(str(p) in o['answer'] for p in expected),new_session=False)
+        available=await c.call('models')
+        if any(m['name']==o.alternate_model for m in available):
+            retained=await c.session();session_id=retained['id'];checkpoint_count=len(retained['messages'])
+            alternate=await c.model(o.alternate_model);await c.call('settings',dict(contextSize=8192))
+            report['alternateModel']=alternate;save()
+            switched=await attempt('MOD-12',f'Summarise the retained discovery evidence for TCP {ports[0]},{ports[1]} on 127.0.0.1 from this conversation. State that these are prior observations. Do not scan, install or execute commands.',lambda output,values,connections,reviews:output['sessionId']==session_id and no_effect(output,values,connections,reviews) and all(str(p) in output['answer'] for p in expected),new_session=False)
+            switched.update(modelConfiguration=alternate,retainedMessageCount=checkpoint_count,evidenceClasses=['M','L'],limitation='Backend model transition only; installed UI evidence is still required')
+            await c.model(o.model);await c.call('settings',dict(contextSize=8192));save()
+        else:
+            report['modelSwitch']=dict(status='not_run',reason='Alternate model is not already installed; no model downloaded')
         report.update(status='passed' if all(r['status']=='passed' for r in report['cases']) else 'failed',finished=time.time(),ledger=ledger);save()
     finally:
         for server in servers:server.close();await server.wait_closed()

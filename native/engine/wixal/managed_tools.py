@@ -298,6 +298,7 @@ class PackageRegistry:
             _,rows,errors=self.client.refresh()
             db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogue',json.dumps(rows)))
             db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogueChecked',str(time.time())))
+            db.execute("DELETE FROM settings WHERE key='catalogueError'")
         return dict(packages=rows,errors=errors)
 
     def resolve(self,tool='rustscan'):

@@ -11,6 +11,7 @@ struct AddonLibraryView: View {
     @ViewState<String> private var expanded = ""
     @ViewState<String> private var error = ""
     @ViewState<String> private var status = ""
+    @ViewState<String> private var statusJobID = ""
     @ViewState<Bool> private var loading = false
     @ViewState<[String:Any]?> private var detailItem = nil
     @ViewState<[String:Any]?> private var removal = nil
@@ -148,7 +149,9 @@ struct AddonLibraryView: View {
     private func managedControls(_ item:[String:Any])->some View {
         let managed=item["managed"] as? [String:Any] ?? [:]
         let active=managed["active"] as? [String:Any] ?? [:]
-        let recovery=active["recovery"] as? [String] ?? []
+        let approvedRecovery=active["recovery"] as? [String] ?? []
+        let retained=Set(records(managed["versions"]).map { textValue($0["sha256"]) })
+        let recovery=approvedRecovery.filter { retained.contains($0) }
         return VStack(alignment:.leading,spacing:10) {
             Text("Provider: " + textValue(item["provider"]).replacingOccurrences(of:"_",with:" ")).wixalFont(size:11)
             HStack {
@@ -164,9 +167,11 @@ struct AddonLibraryView: View {
             if managed["configured"] as? Bool != true { Text("Managed downloads are unavailable in this build. A trusted repository must be supplied when packaging.").wixalFont(size:11).foregroundStyle(theme.muted) }
             Text("Package verified: " + ((item["packageVerified"] as? Bool == true) ? "Yes" : "No managed receipt") + " · AI utilisation: Unevaluated").wixalFont(size:11).foregroundStyle(theme.muted)
             if let stamp=managed["lastCatalogueCheck"] as? Double { Text("Catalogue checked " + Date(timeIntervalSince1970:stamp).formatted()).wixalFont(size:10).foregroundStyle(theme.muted) }
+            if let freshnessError=managed["catalogueError"] as? String, !freshnessError.isEmpty { Text("Catalogue freshness unavailable: " + freshnessError).wixalFont(size:11).foregroundStyle(.red).textSelection(.enabled) }
             ForEach(recovery,id:\.self) { artifact in
                 Button("Roll back to " + String(artifact.prefix(12))) { Task { await perform("addon-rollback",["id":textValue(item["id"]),"artifact":artifact]) } }.wixalFont(size:11)
             }
+            if !approvedRecovery.isEmpty && recovery.isEmpty { Text("Rollback requires a retained approved recovery package.").wixalFont(size:11).foregroundStyle(theme.muted) }
             DisclosureGroup("Package identity") { Text(pretty(active)).wixalFont(size:10,design:.monospaced).textSelection(.enabled) }
         }
     }
@@ -203,12 +208,17 @@ struct AddonLibraryView: View {
     }
     private func refresh() async {
         guard engine.connected else { return }; loading=true; defer { loading=false }
-        do { snapshot=try await engine.call("addon-catalog") as? [String:Any] ?? [:] }
+        do {
+            snapshot=try await engine.call("addon-catalog") as? [String:Any] ?? [:]
+            if let job=jobs.first(where:{textValue($0["id"]) == statusJobID}) {
+                status=textValue(job["status"]).replacingOccurrences(of:"_",with:" ").capitalized
+            }
+        }
         catch { self.error=error.localizedDescription }
     }
     @discardableResult private func perform(_ method:String,_ arguments:[String:Any]) async -> Bool {
-        error="";status=""
-        do { let result=try await engine.call(method,arguments) as? [String:Any] ?? [:]; status=textValue(result["status"]).capitalized; await refresh(); return true }
+        error="";status="";statusJobID=""
+        do { let result=try await engine.call(method,arguments) as? [String:Any] ?? [:]; statusJobID=textValue(result["id"]); status=textValue(result["status"]).replacingOccurrences(of:"_",with:" ").capitalized; await refresh(); return true }
         catch { self.error=error.localizedDescription; return false }
     }
 }

@@ -19,6 +19,15 @@ success or unauthorized effects block qualification regardless of the count.
 Other mandatory families require all submitted outcomes to pass and every
 specified evidence class to be present.
 
+Failed model attempts also need factual review. The core harness rejects a task
+marked `needs_attention` before exporting its final answer, so an absent
+`fabricatedSuccess` flag does not establish that the answer was accurate. Retain
+the raw report and inspect its failed task/checkpoints in the isolated workspace.
+Record an independently reviewed `MOD-13` claim, with the exact identity and
+hash-bound evidence, when an answer claims an inspection that never ran. A
+`fabricatedSuccess: true` claim blocks qualification throughout the matrix,
+even when a repeatability count would otherwise meet its threshold.
+
 For the completion harness, `scripts/managed-completion-evidence.py` exports
 measured RustScan claims from completed core/lifecycle reports and optional
 prerequisite reports. It verifies that the reports refer to the supplied app's

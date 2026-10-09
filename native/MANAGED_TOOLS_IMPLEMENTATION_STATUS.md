@@ -2,7 +2,7 @@
 
 Date: 9 October 2026.
 
-**Continuation, 10 October 2026:** the installed primary native app now includes four additional managed standalone profiles, contributor OAuth reporting, cross-engine socket reservations, bounded inference recovery and current scan handles. The current source passed **269 engine tests**. The final installed helper passed eight real Go-package/capability cases, three discovery lifecycle cases and five splash/startup cases. Installed Tools and Recon interactions also succeeded. See [current implementation evidence and remaining configuration](MANAGED_TOOLS_CONTINUATION_2026-10-10.md). The historical results below describe the earlier RustScan preview; they do not supersede that continuation record.
+**Continuation, 10 October 2026:** the installed primary native app now includes four additional managed standalone profiles, contributor OAuth reporting, cross-engine socket reservations, bounded inference recovery and current scan handles. The current source passed **277 engine tests**. The final installed helper passed eight real Go-package/capability cases, three discovery lifecycle cases and five splash/startup cases. Installed Tools and Recon interactions also succeeded. See [current implementation evidence and remaining configuration](MANAGED_TOOLS_CONTINUATION_2026-10-10.md). The historical results below describe the earlier RustScan preview; they do not supersede that continuation record.
 
 Implemented as a native development preview. This document records implementation and measured evidence; it does not mark the entire 104-family release matrix passed.
 

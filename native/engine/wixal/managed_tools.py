@@ -409,7 +409,11 @@ class PackageRegistry:
     def remove(self,artifact=None,tool='rustscan'):
         with self.lock():
             with self.database() as db:
-                self.recover(db);state=self.snapshot(tool);rows=[r for r in state['versions'] if artifact is None or r['sha256']==artifact]
+                self.recover(db)
+                # Removal also cleans damaged payloads whose entrypoint is gone.
+                # The snapshot only offers retained executables for recovery.
+                rows=[json.loads(r['descriptor']) for r in db.execute('SELECT descriptor FROM packages')]
+                rows=[r for r in rows if r['tool']==tool and (artifact is None or r['sha256']==artifact)]
                 if any(db.execute('SELECT 1 FROM leases WHERE digest=?',(r['sha256'],)).fetchone() for r in rows):raise ValueError('Removal blocked by an active execution lease')
                 for row in rows:db.execute('DELETE FROM active WHERE digest=?',(row['sha256'],))
             for row in rows:

@@ -69,6 +69,13 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
         with self.registry.database() as db:
             self.assertIsNotNone(db.execute('SELECT 1 FROM packages WHERE digest=?',(first['sha256'],)).fetchone())
         self.assertEqual(self.registry.resolve()['packageSha256'],second['sha256'])
+    async def test_removal_cleans_damaged_payload_with_missing_entrypoint(self):
+        row,_=await self.install()
+        (self.registry.path(row)/row['entrypoint']).unlink()
+        self.assertEqual(self.registry.snapshot()['versions'],[])
+        self.registry.remove()
+        self.assertFalse(self.registry.snapshot()['installed'])
+        self.assertFalse(self.registry.path(row).exists())
     async def test_successful_refresh_clears_previous_offline_warning(self):
         first,_=await self.install()
         with self.registry.database() as db:db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('catalogueError','Previous catalogue outage'))

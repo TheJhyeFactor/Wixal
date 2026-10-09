@@ -109,6 +109,13 @@ class MemoryQualityTests(unittest.TestCase):
         result=self.store.memory.recall('invoice schema')[0]
         self.assertEqual(result['sourceRole'],'tool');self.assertEqual(result['tool'],'read_file')
         s['memoryOwner']='account:another';self.store.save();self.store.memory.sync();self.assertEqual(self.store.memory.recall('invoice schema'),[])
+    def test_fresh_natural_scan_excludes_previous_task_constraints(self):
+        prior=self.store.session();prior['messages']=[dict(role='user',content='Discover TCP ports on 127.0.0.1. Do not inspect services.'),dict(role='assistant',content='TCP discovery completed. No inspection requested.')];self.store.save()
+        self.store.memory.save('I prefer careful TCP discovery for owned hosts')
+        current=self.store.new_session()
+        text,sources=self.store.memory.context('For my host 127.0.0.1, discover TCP ports 18795 and then inspect the discovered ports.',current,2400)
+        self.assertTrue(sources);self.assertTrue(all(source['kind']=='saved' for source in sources));self.assertNotIn('Do not inspect services',text)
+        self.assertTrue(any(source['kind']=='history' for source in self.store.memory.recall('previous TCP discovery')))
 
     def test_literal_repeat_excludes_recall_but_retains_searchable_history(self):
         prior=self.store.session();prior['messages']=[dict(role='user',content='Reply with exactly: Wixal background scheduling works.'),dict(role='assistant',content='My background scheduling system is functional.')];self.store.save()

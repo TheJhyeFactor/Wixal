@@ -156,7 +156,9 @@ class Memory:
         # same command can confuse small models, and remain searchable separately.
         if re.match(r'(?is)^\s*(?:reply|respond|say|return|output|repeat)\s+(?:with\s+)?exactly\s*:',query):return '',[]
         wants_history=bool(re.search(r'(?i)\b(?:history|earlier|previous|did we|did i)\b',query))
-        fresh_action=bool(re.search(r'(?:^|\s)@[a-zA-Z][a-zA-Z0-9_]*',query)) and not wants_history
+        named_action=bool(re.search(r'(?:^|\s)@[a-zA-Z][a-zA-Z0-9_]*',query))
+        natural_action=bool(re.search(r'(?i)\b(?:discover|scan|inspect|check|determine|fetch|read|execute|run)\b',query) and re.search(r'(?i)\b(?:tcp|ports?|host|http|https|file|command|tool|loopback)\b',query))
+        fresh_action=(named_action or natural_action) and not wants_history
         results=self.recall(query,limit=12,exclude_session=session['id'],include_history=not fresh_action)
         wants_questions=bool(re.search(r'(?i)\b(?:did i ask|previous questions?|earlier questions?|conversation history)\b',query))
         if not wants_questions:

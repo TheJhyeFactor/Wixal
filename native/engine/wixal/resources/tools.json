@@ -121,11 +121,13 @@
           },
           "source_run_id": {
             "type": "string",
-            "maxLength": 100
+            "maxLength": 100,
+            "description": "Security investigation run ID only. Never put a chat network session ID here. Choose exactly one source field and omit manual ports."
           },
           "source_session_id": {
             "type": "string",
-            "maxLength": 100
+            "maxLength": 100,
+            "description": "Copy the complete session_id returned by network_discover in this chat after network_read confirms completion. Do not also provide source_run_id; omit manual ports."
           }
         },
         "required": [

@@ -227,6 +227,16 @@ class Agent:
                         required={'workspace_info',*requested}
                         last_calls=next((m.get('tool_calls',[]) for m in reversed(session['messages']) if m.get('tool_calls')),[])
                         required.update(c['function']['name'] for c in last_calls)
+                        # Context fitting must retain schemas needed to finish
+                        # the current workflow, including after a final-answer
+                        # verification retry. Discovering them again is not a
+                        # substitute for preserving the live continuation.
+                        if required & {'network_discover','network_scan','network_read'}:
+                            required.update({'network_read','network_stop'})
+                        from .outcomes import discovery_follow_up
+                        task=next((t for t in reversed(self.store.data['tasks']) if t.get('sessionId')==session['id'] and t.get('status')=='running'),{})
+                        pending=discovery_follow_up(task)
+                        if pending and pending['status']=='failed':required.update({'network_scan','network_read','network_stop'})
                         definitions=[d for d in definitions if d['function']['name'] in required]
                         messages=self.context(session,skill,resolve_images,trim_history,len(json.dumps(definitions)))
                         messages[0]['content']+='\nTool schemas are loaded progressively to fit this local model. Use workspace_info with tool or category to discover a missing schema.'

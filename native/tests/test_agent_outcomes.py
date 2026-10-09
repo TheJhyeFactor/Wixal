@@ -121,6 +121,22 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
         with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Write files total.json',successCriteria=[dict(kind='json_equals',path='total.json',pointer='/total',value=21)]))
         self.assertEqual(task['verification']['status'],'passed');self.assertEqual(task['verification']['checks'][0]['actual'],21)
         self.assertEqual(len(task['verification']['checks'][0]['sha256']),64)
+    async def test_context_fallback_keeps_pending_inspection_and_lifecycle(self):
+        from wixal.context_policy import fit_request,token_estimate
+        agent=self.service.agent;agent.model_info=dict(name='fixture',capabilities=['tools']);agent.effective_context=lambda:8192
+        agent.selected_tools={'workspace_info','network_discover','network_scan','network_read','network_stop','addon_catalog'}
+        await self.service.dispatch('settings',dict(enabledTools=sorted(agent.selected_tools)))
+        session=self.service.store.session();prompt='Discover TCP ports on 127.0.0.1 and then inspect only the discovered ports.'
+        session['messages']=[dict(role='user',content=prompt),dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments={'session_id':'owned-source'}))]),dict(role='tool',tool_name='network_read',content='Completed owned discovery')]
+        self.service.store.data['tasks'].append(dict(id='current-chain',sessionId=session['id'],status='running',prompt=prompt,checkpoints=[dict(name='network_read',status='finished',result=json.dumps(dict(session_id='owned-source',state='completed',structuredResult=dict(handoffEligible=True))))]))
+        def pressured(messages,definitions,limit,reserve):
+            if len(definitions)>4:raise ValueError('Controlled schema-pressure regression')
+            return fit_request(messages,definitions,limit,reserve)
+        with patch('wixal.agent.fit_request',pressured):body=agent.request_body(session,supports_tools=True)
+        names={tool['function']['name'] for tool in body['tools']}
+        self.assertTrue({'network_scan','network_read','network_stop','workspace_info'}<=names)
+        self.assertLessEqual(token_estimate(body['messages'],body['tools'])[0]+body['options']['num_predict'],8192)
+        self.assertEqual(self.service.store.data['tasks'][-1]['checkpoints'][0]['name'],'network_read')
     async def test_completed_without_checks_is_explicitly_unverified(self):
         context,_=self.scripted([])
         with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Explain the project'))

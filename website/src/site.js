@@ -29,3 +29,28 @@ document.querySelectorAll('[data-preview]').forEach(button => {
 previewDialog?.querySelector('[data-preview-close]').addEventListener('click', () => previewDialog.close());
 previewDialog?.addEventListener('click', event => { if (event.target === previewDialog) previewDialog.close(); });
 previewDialog?.addEventListener('close', () => previewTrigger?.focus());
+
+// Demos start only from their native controls, including with reduced motion.
+document.querySelectorAll('video[data-demo]').forEach(video => {
+  let visible = true;
+  let resume = false;
+  function updatePlayback() {
+    if (document.hidden || !visible) {
+      if (!video.paused) {
+        resume = true;
+        video.pause();
+      }
+    } else if (resume) {
+      resume = false;
+      video.play().catch(() => {});
+    }
+  }
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => {
+      visible = entries[0].isIntersecting;
+      updatePlayback();
+    });
+    observer.observe(video);
+  }
+  document.addEventListener('visibilitychange', updatePlayback);
+});

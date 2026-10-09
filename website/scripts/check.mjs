@@ -16,7 +16,7 @@ for (const [file,html] of documents) {
   assert.match(html, /<html lang="en">/);
   assert.equal((html.match(/<h1[ >]/g)||[]).length,1,`${file}: expected one h1`);
   assert.match(html, /name="viewport"/);
-  for (const match of html.matchAll(/(?:href|src)="([^"\s]+)"/g)) {
+  for (const match of html.matchAll(/(?:href|src|poster)="([^"\s]+)"/g)) {
     const value = match[1];
     if (/^https?:/.test(value)) continue;
     const [pathWithQuery,hash] = value.split('#');

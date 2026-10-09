@@ -4,7 +4,7 @@
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 
-The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. These changes do not update the already published alpha download.
+The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. These changes do not update the already published alpha download.
 
 ## Build and run
 

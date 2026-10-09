@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import WixalInteractions
 
 // Editable profiles register with the engine; the engine owns execution and durable runs.
 struct AgentProfileDraft: Identifiable, Codable, Equatable {
@@ -85,7 +86,8 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
     private var subscription:AnyCancellable?
     @Published var notice = ""
     @Published var error = ""
-    @Published var saving = false
+    @Published private var saveSubmission = AcknowledgedSubmission()
+    var saving:Bool {saveSubmission.isSubmitting}
     private let file: URL
     init() {
         let location = ProcessInfo.processInfo.environment["WIXAL_AGENTS_DESIGN_DATA"] ?? (Bundle.main.object(forInfoDictionaryKey:"WixalPreviewData") as? String).map{$0+"/drafts"}
@@ -143,9 +145,9 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
     }
     private func send<T:Encodable>(_ method:String,_ value:T,completion:((Bool)->Void)?=nil){
         guard let engine,engine.connected else{error="Connect the engine before saving. Your editor remains open.";completion?(false);return}
-        guard !saving else{completion?(false);return}
-        saving=true;error=""
-        Task{defer{saving=false};do{_ = try await engine.call(method,encoded(value));notice="Saved to the local agent engine.";self.error="";completion?(true)}catch{self.error=error.localizedDescription;completion?(false)}}
+        guard let request=saveSubmission.begin() else{completion?(false);return}
+        error=""
+        Task{do{_ = try await engine.call(method,encoded(value));saveSubmission.finish(request);notice="Saved to the local agent engine.";self.error="";completion?(true)}catch{saveSubmission.finish(request,error:error.localizedDescription);self.error=error.localizedDescription;completion?(false)}}
     }
     func run(_ agent:AgentProfileDraft,_ prompt:String,_ checks:[AgentSuccessCheck]?=nil){
         guard let engine else{return}
@@ -159,9 +161,12 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
             let result=try await engine.call("agent-run",params) as? [String:Any] ?? [:];liveSelection=textValue(result["id"])
         }catch{self.error=error.localizedDescription}}
     }
-    func enqueue(_ agent:AgentProfileDraft,_ prompt:String,_ checks:[AgentSuccessCheck]){
-        guard let engine else{return}
-        Task{do{let data=try JSONEncoder().encode(checks);var params:[String:Any]=["agentID":agent.id,"prompt":prompt,"successCriteria":try JSONSerialization.jsonObject(with:data)];if let project=engine.project{params["projectId"]=project["id"]};_ = try await engine.call("agent-enqueue",params);notice="Task queued. Its agent configuration is retained."}catch{self.error=error.localizedDescription}}
+    func enqueue(_ agent:AgentProfileDraft,_ prompt:String,_ checks:[AgentSuccessCheck],completion:((Bool)->Void)?=nil){
+        guard let engine,engine.connected else{error="Connect the engine before queueing. Your task draft remains open.";completion?(false);return}
+        guard let request=saveSubmission.begin() else{completion?(false);return}
+        error=""
+        let params:[String:Any]=["agentID":agent.id,"prompt":prompt,"successCriteria":checks.map{encoded($0)},"projectId":engine.project?["id"] ?? NSNull()]
+        Task{do{_ = try await engine.call("agent-enqueue",params);saveSubmission.finish(request);notice="Task queued. Its agent configuration is retained.";completion?(true)}catch{saveSubmission.finish(request,error:error.localizedDescription);self.error=error.localizedDescription;completion?(false)}}
     }
     func runWorkflow(_ flow:AgentWorkflowDraft){
         guard let engine else{return}

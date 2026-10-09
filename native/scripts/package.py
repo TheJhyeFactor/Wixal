@@ -62,7 +62,7 @@ destination.parent.mkdir(parents=True,exist_ok=True)
 staging=Path(tempfile.mkdtemp(prefix="wixal-native-package-",dir=destination.parent))
 app=staging/app.name
 
-source_paths=sorted(list((native/"Sources").rglob("*.swift"))+list((native/"ActivitySources").rglob("*.swift"))+list((native/"MarkdownSources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))+list((native/"engine/wixal/resources").rglob("*.json"))+list((native/"engine/wixal/resources").rglob("*.md"))+[native/"Package.swift",native/"Package.resolved",native/"requirements-build.txt",Path(__file__).resolve()])
+source_paths=sorted(list((native/"Sources").rglob("*.swift"))+list((native/"ActivitySources").rglob("*.swift"))+list((native/"InteractionSources").rglob("*.swift"))+list((native/"MarkdownSources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))+list((native/"engine/wixal/resources").rglob("*.json"))+list((native/"engine/wixal/resources").rglob("*.md"))+[native/"Package.swift",native/"Package.resolved",native/"requirements-build.txt",Path(__file__).resolve()])
 source_hashes={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
 
 def run(*args):

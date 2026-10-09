@@ -46,3 +46,5 @@ jobs:
           swift run --package-path native --build-system native -c release MarkdownAcceptance
       - name: Activity evidence and job-state acceptance
         run: swift run --package-path native --build-system native -c release ActivityAcceptance --self-test
+      - name: Acknowledged saves and guidance acceptance
+        run: swift run --package-path native --build-system native -c release InteractionAcceptance

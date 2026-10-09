@@ -9,8 +9,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "WixalActivity", path: "ActivitySources"),
+        .target(name: "WixalInteractions", path: "InteractionSources"),
         .target(name: "WixalMarkdown", dependencies: [.product(name: "Markdown", package: "swift-markdown")], path: "MarkdownSources"),
-        .executableTarget(name: "WixalNative", dependencies: ["SwiftTerm", "WixalMarkdown", "WixalActivity"], path: "Sources"),
+        .executableTarget(name: "WixalNative", dependencies: ["SwiftTerm", "WixalMarkdown", "WixalActivity", "WixalInteractions"], path: "Sources"),
+        .executableTarget(name: "InteractionAcceptance", dependencies: ["WixalInteractions"], path: "InteractionChecks"),
         .executableTarget(name: "ActivityAcceptance", dependencies:["WixalActivity"], path:"ActivityChecks"),
         .executableTarget(name: "MarkdownAcceptance", dependencies: ["WixalMarkdown"], path: "SwiftTests")
     ]

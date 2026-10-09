@@ -169,8 +169,8 @@ class Service:
             return dict(version=VERSION, protocol=1, state=self.store.data, tools=self.tools.catalog(), storage=str(self.store.directory))
         if method == "ping": return True
         if method == 'agent-guide':
-            task=next((t for t in self.store.data['tasks'] if t['id']==params.get('id') and t.get('agentId') and t['status'] in ('running','waiting_review')),None)
-            if not task or not self.active or self.active.done():raise ValueError('No active agent run accepts guidance')
+            task=self.agents.find('tasks',params.get('id'))
+            if not task.get('agentId') or task['status'] not in ('running','waiting_review') or self.agent.current_task_id!=task['id'] or not self.active or self.active.done():raise ValueError('No active agent run accepts guidance')
             from .agents import text
             task.setdefault('pendingGuidance',[]).append(text(params.get('text'),'guidance',4000))
             self.store.save();self.emit('state',self.store.data);return dict(queued=True)
@@ -263,12 +263,15 @@ class Service:
             future.set_result(params.get("value"))
             return True
         if method == "stop":
+            if params.get('taskId') and params.get('runId'):raise ValueError('Choose a single active run to stop')
             if params.get('taskId') or params.get('runId'):
                 row=self.agents.find('workflowRuns' if params.get('runId') else 'tasks',params.get('runId') or params['taskId'])
                 if row.get('status') not in ('running','waiting_review'):
                     raise ValueError('This run has already stopped; no other run was cancelled')
                 if params.get('taskId') and row.get('workflowRunId'):
                     raise ValueError('Stop this run from its parent workflow')
+                current=self.agents.active_workflow_id if params.get('runId') else self.agent.current_task_id
+                if current!=row['id'] or not self.active or self.active.done():raise ValueError('This is not the active run; no other run was cancelled')
             if self.active and not self.active.done():
                 self.active.cancel()
                 await asyncio.gather(self.active, return_exceptions=True)

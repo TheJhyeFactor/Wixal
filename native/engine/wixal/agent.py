@@ -91,6 +91,7 @@ class Agent:
         self.turn_budget = 20
         self.selected_tools = None
         self.model_info = {}
+        self.current_task_id = None
         from .model_manager import hardware
         self.device=hardware()
 
@@ -343,6 +344,7 @@ class Agent:
             self.store.save()
             self.emit("state", self.store.data)
             skill = next((s for s in self.store.data["skills"] if s["name"] == skill_name), None)
+            self.current_task_id=task['id']
             try:
                 endpoint = await self.runtime.endpoint()
                 await self.store.memory.prepare(text,self.runtime,exclude_session=session["id"])
@@ -494,6 +496,7 @@ class Agent:
                 task.update(status="failed", error=str(error))
                 raise
             finally:
+                self.current_task_id=None
                 if task['status'] in ('failed','paused','interrupted','needs_attention'):
                     await self.tools.close(session['id'])
                 task["updated"] = now()

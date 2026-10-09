@@ -29,11 +29,14 @@ public enum TimelineHistory {
         if state=="cancelled" || textValue(value["status"])=="cancelled" {return "cancelled"}
         if readable.hasPrefix("User declined") {return "declined"}
         if readable.hasPrefix("Execution interrupted") {return "interrupted"}
-        if readable.hasPrefix("Error:") || value["error"] != nil || state=="failed" || textValue(value["status"])=="failed" || (value["exitCode"] as? Int ?? 0) != 0 || (value["status"] as? Int ?? 0)>=400 {return "failed"}
-        if value["stopped"] as? Bool == true || state=="stopped" {return "stopped"}
         let progress=state.isEmpty ? textValue(value["status"]) : state
-        if ["queued","paused","stopped","interrupted","needs_attention","waiting_review","waiting_model"].contains(progress){return progress.replacingOccurrences(of:"_",with:" ")}
-        return progress=="running" ? "running" : "completed"
+        // Pauses, user stops and attention states often carry an explanatory
+        // error or signal exit. Preserve that state rather than relabelling it.
+        if ["queued","paused","stopped","interrupted","needs_attention","waiting_review","waiting_model","running","failed"].contains(progress){return progress.replacingOccurrences(of:"_",with:" ")}
+        if value["stopped"] as? Bool == true {return "stopped"}
+        let hasError=(value["error"] as? String).map{!$0.isEmpty} ?? (value["error"] != nil && !(value["error"] is NSNull))
+        if readable.hasPrefix("Error:") || hasError || (value["exitCode"] as? Int ?? 0) != 0 || (value["status"] as? Int ?? 0)>=400 {return "failed"}
+        return "completed"
     }
     public static func milestones(messages:[[String:Any]],tasks:[[String:Any]],sessionID:String,busy:Bool,review:[String:Any]?,activeTool:[String:Any]=[:]) -> [TimelineMilestone] {
         var rows:[TimelineMilestone]=[],turn=0,updates:[String]=[],sessions:[String:Int]=[:],pending:[String:[Int]]=[:]
@@ -54,9 +57,10 @@ public enum TimelineHistory {
                     let callID=textValue(call["id"]),id=callID.isEmpty ? "\(sessionID):\(index):\(offset)" : callID
                     let checkpoint=checkpointsByID[id]
                     let checkpointStatus=textValue(checkpoint?["status"])
+                    let retainedStatus=["queued","paused","needs_attention","waiting_review","waiting_model","stopped"].contains(checkpointStatus) ? checkpointStatus.replacingOccurrences(of:"_",with:" ") : nil
                     let awaiting=review != nil && textValue(review?["name"])==name && turn==finalTurn
                     let running=busy && textValue(activeTool["name"])==name && turn==finalTurn
-                    let status=awaiting ? "awaiting review" : running ? "running" : checkpointStatus=="error" ? "failed" : checkpointStatus=="cancelled" ? "cancelled" : checkpointStatus=="interrupted" ? "interrupted" : checkpointStatus=="started" ? (busy ? "running" : "interrupted") : busy && turn==finalTurn ? "pending" : "no result"
+                    let status=awaiting ? "awaiting review" : running ? "running" : retainedStatus ?? (checkpointStatus=="error" ? "failed" : checkpointStatus=="cancelled" ? "cancelled" : checkpointStatus=="interrupted" ? "interrupted" : checkpointStatus=="started" ? (busy ? "running" : "interrupted") : busy && turn==finalTurn ? "pending" : "no result")
                     let title=textValue(args["path"]).isEmpty ? name.replacingOccurrences(of:"_",with:" ").capitalized : "\(name.replacingOccurrences(of:"_",with:" ").capitalized) · \(textValue(args["path"]))"
                     pending[name,default:[]].append(rows.count)
                     rows.append(TimelineMilestone(id:id,title:title,subtitle:"Request \(turn)",status:status,command:textValue(args["command"]).isEmpty ? pretty(args) : textValue(args["command"]),output:"",turn:turn,rawEvents:[pretty(call)],updates:updates,name:name))

@@ -5,6 +5,7 @@ project selection are scoped to a serialized run and restored in finally blocks.
 """
 import asyncio
 import copy
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from .storage import identity, now
@@ -42,6 +43,7 @@ class Agents:
     names={'schedule_manage','skill_manage','workflow_manage'}
     def __init__(self,service):
         self.service=service;self.store=service.store
+        self.active_workflow_id=None
         for key in ('agentProfiles','agentWorkflows','workflowRuns','notifications','agentJobs','skillCandidates'):
             self.store.data.setdefault(key,[])
         for run in self.store.data['workflowRuns']:
@@ -113,7 +115,8 @@ class Agents:
     def save_schedule(self,source):
         agent=self.find('agentProfiles',source.get('agentID'))
         flow=self.find('agentWorkflows',source['workflowID']) if source.get('workflowID') else None
-        project=source.get('projectId',self.store.data['activeProject'])
+        existing=next((s for s in self.store.data['schedules'] if s['id']==source.get('id') and s.get('owner','guest')==owner(self.store)),None)
+        project=source.get('projectId',existing.get('projectId') if existing else self.store.data['activeProject'])
         if project is not None and not any(p['id']==project for p in self.store.data['projects']):raise ValueError('Choose an existing project')
         value=dict(id=text(source.get('id') or identity(),'id',100),name=text(source.get('name'),'name',100),agentID=agent['id'],prompt=text(source.get('prompt'),'prompt'),projectId=project,owner=owner(self.store),timezone=source.get('timezone','Australia/Sydney'),notification=source.get('notification','Completion, failure or review'),enabled=source.get('enabled',True),missedRunPolicy='skip' if source.get('missed')=='Skip missed runs' else source.get('missedRunPolicy','latest'),timing=source.get('timing','Every day'),time=source.get('time','09:00'))
         if flow:value['workflowID']=flow['id']
@@ -135,13 +138,17 @@ class Agents:
         self.upsert('schedules',value);return value
     async def run(self,identifier,prompt,project_id=None,source='Agent',workflow_id=None,snapshot=None,checks=None,authority=None,resume_task=None):
         if resume_task:
+            project_id=resume_task.get('projectId')
             retained=next((s for s in self.store.data['sessions'] if s['id']==resume_task.get('sessionId') and s.get('projectId')==resume_task.get('projectId')),None)
-            if retained is None:raise ValueError('The retained run conversation is unavailable; start a new task after inspecting its evidence')
+            if retained is None or retained.get('memoryOwner','guest')!=owner(self.store):raise ValueError('The retained run conversation is unavailable; start a new task after inspecting its evidence')
         agent=copy.deepcopy(snapshot or self.find('agentProfiles',identifier))
         if agent.get('archived'):raise ValueError('Restore this agent before running it')
         if agent.get('projectScope')=='Current project only':
             if project_id is not None and project_id!=agent.get('projectId'):raise ValueError('This agent is bound to another project')
             project_id=agent.get('projectId')
+        if project_id is not None:
+            project=next((p for p in self.store.data['projects'] if p['id']==project_id),None)
+            if not project or project.get('syncRootRequired') or not Path(project['root']).is_dir():raise ValueError('Choose an available local project before running or resuming this agent')
         catalog=await self.service.runtime.catalog()
         if not any(m['name']==agent['model'] and 'tools' in m.get('capabilities',[]) for m in catalog):raise ValueError('Choose an installed model marked Tools for this agent')
         missing=[s for s in agent.get('skills',[]) if not any(v['name']==s for v in self.store.data['skills'])]
@@ -150,9 +157,9 @@ class Agents:
         original=self.service.tools.approve
         token=active_profile.set(agent)
         try:
-            if project_id is not None:
-                if not any(p['id']==project_id and not p.get('syncRootRequired') for p in self.store.data['projects']):raise ValueError('Choose an available local project')
-                self.store.select_project(project_id)
+            if resume_task:
+                self.store.data.update(activeProject=project_id,activeSession=retained['id'])
+            else:self.store.select_project(project_id)
             self.store.data.update(model=agent['model'],mode='agent')
             if not resume_task:self.store.new_session()
             session=self.store.session();session['agentId']=agent['id'];session['scheduledRun']=source in ('Schedule','Background schedule')
@@ -160,8 +167,6 @@ class Agents:
             task=resume_task or dict(id=identity(),owner=owner(self.store),agentId=agent['id'],agentSnapshot=agent,source=source,workflowRunId=workflow_id,prompt=text(prompt,'task brief'),status='queued',created=now(),checkpoints=[],successCriteria=criteria(checks if checks is not None else agent.get('successCriteria')))
             if authority is None and source not in ('Schedule','Background schedule'):authority=agent.get('authority',{})
             if resume_task:
-                retained=next((s for s in self.store.data['sessions'] if s['id']==task.get('sessionId')),None)
-                if retained:self.store.data['activeSession']=retained['id']
                 prompt='Continue after inspecting the retained state and tool evidence. Do not replay uncertain actions.\n'+prompt
             if not resume_task:self.store.data['tasks'].append(task)
             self.store.save()
@@ -193,10 +198,11 @@ class Agents:
             run['profiles']={s['agentID']:copy.deepcopy(self.find('agentProfiles',s['agentID'])) for s in definition['stages']}
             self.store.data['workflowRuns'].append(run)
         run.update(status='running',error='');self.store.save();self.service.emit('state',self.store.data)
-        if definition.get('execution')=='Dependency graph':
-            from .workflow_graph import execute
-            return await execute(self,run)
+        self.active_workflow_id=run['id']
         try:
+            if definition.get('execution')=='Dependency graph':
+                from .workflow_graph import execute
+                return await execute(self,run)
             for index,stage in enumerate(definition['stages']):
                 existing=next((s for s in run['stages'] if s['id']==stage['id']),None)
                 if existing and existing['status']=='completed':continue
@@ -236,6 +242,7 @@ class Agents:
         except Exception as error:
             run.update(status='failed',error=str(error));raise
         finally:
+            self.active_workflow_id=None
             run['updated']=now();self.store.save();self.service.emit('state',self.store.data)
     async def dispatch(self,method,params):
         if method=='agent-enqueue':
@@ -284,7 +291,8 @@ class Agents:
                     except Exception as error:row['lastRun'].update(status='failed',error=str(error));raise
                     finally:self.routine_authority=None;row['lastRun']['finished']=now();self.store.save();self.service.emit('state',self.store.data)
                 self.service.active=asyncio.create_task(routine());return await self.service.active
-            job=self.run(params['id'],params['prompt'],params.get('projectId'),checks=params.get('successCriteria')) if method=='agent-run' else self.workflow(params.get('id'),params.get('projectId'),params.get('runId') if method=='workflow-resume' else None)
+            project_id=params.get('projectId',self.store.data['activeProject'])
+            job=self.run(params['id'],params['prompt'],project_id,checks=params.get('successCriteria')) if method=='agent-run' else self.workflow(params.get('id'),project_id,params.get('runId') if method=='workflow-resume' else None)
             self.service.active=asyncio.create_task(job);return await self.service.active
         self.service.idle()
         if method in ('skill-propose','skill-promote','skill-rollback'):

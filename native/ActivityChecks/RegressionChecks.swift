@@ -21,5 +21,21 @@ func activityRegressionChecks() throws -> Int {
     for (key,value,expected) in [("status","queued","queued"),("state","paused","paused"),("status","needs_attention","needs attention"),("state","interrupted","interrupted"),("status","waiting_review","waiting review"),("status","waiting_model","waiting model"),("status","running","running"),("status","stopped","stopped")]{
         guard TimelineHistory.resultStatus(try encoded([key:value]))==expected else{throw CocoaError(.coderInvalidValue)}
     }
-    return 15
+    let explained:[([String:Any],String)]=[
+        (["state":"paused","error":"Time budget reached"],"paused"),
+        (["status":"needs_attention","error":"Verification needs inspection"],"needs attention"),
+        (["state":"interrupted","exitCode":-9],"interrupted"),
+        (["status":"stopped","exitCode":-9],"stopped"),
+        (["status":"queued","error":"Waiting for bounded retry"],"queued"),
+        (["state":"completed","error":""],"completed"),
+        (["state":"completed","error":NSNull()],"completed"),
+        (["state":"completed","exitCode":1],"failed")
+    ]
+    for (value,expected) in explained{guard TimelineHistory.resultStatus(try encoded(value))==expected else{throw CocoaError(.coderInvalidValue)}}
+    for status in ["queued","paused","needs_attention","waiting_review","waiting_model","stopped"]{
+        let tasks:[[String:Any]]=[["sessionId":"regression","checkpoints":[["id":"pending","status":status]]]]
+        let rows=TimelineHistory.milestones(messages:messages,tasks:tasks,sessionID:"regression",busy:false,review:nil)
+        guard rows.first(where:{$0.id=="pending"})?.status==status.replacingOccurrences(of:"_",with:" ") else{throw CocoaError(.coderInvalidValue)}
+    }
+    return 15+explained.count+6
 }

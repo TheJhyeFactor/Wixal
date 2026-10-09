@@ -44,14 +44,14 @@ struct AgentsHubView:View {
         .sheet(item:$editor){draft in editorContent { AgentBuilderView(engine:engine,draft:draft,save:{value in design.save(value,completion:{success in if success{selectedAgent=value.id;editor=nil}})},close:{editor=nil}) }.environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
         .sheet(item:$workflowEditor){draft in editorContent { AgentWorkflowEditor(agents:design.agents,draft:draft,save:{value in design.save(value,completion:{success in if success{workflowEditor=nil}})},close:{workflowEditor=nil}) }.environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
         .sheet(item:$scheduleEditor){draft in editorContent { AgentScheduleEditor(agents:design.agents,workflows:design.workflows,draft:draft,save:{value in design.save(value,completion:{success in if success{scheduleEditor=nil}})},close:{scheduleEditor=nil}) }.environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
-        .sheet(item:$taskAgent){agent in AgentTaskSheet(agent:agent,project:engine.project.map{textValue($0["name"])} ?? "Personal workspace",start:{title,checks in selectedRun=nil;design.run(agent,title,checks);taskAgent=nil;page="Runs"},queue:{title,checks in design.enqueue(agent,title,checks);taskAgent=nil;page="Runs"},close:{taskAgent=nil}).environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
+        .sheet(item:$taskAgent){agent in editorContent { AgentTaskSheet(agent:agent,project:engine.project.map{textValue($0["name"])} ?? "Personal workspace",canStart:engine.connected && !engine.busy,start:{title,checks in selectedRun=nil;design.run(agent,title,checks);taskAgent=nil;page="Runs"},queue:{title,checks in design.enqueue(agent,title,checks,completion:{success in if success{taskAgent=nil;page="Runs"}})},close:{taskAgent=nil}) }.environment(\.wixalTheme,theme).environment(\.agentDesignReduceMotion,motion == nil)}
     }
     private func editorContent<Content:View>(@ViewBuilder content:()->Content)->some View{
         VStack(spacing:0){
             if !design.error.isEmpty{Text(design.error).wixalFont(size:12).foregroundStyle(.orange).textSelection(.enabled).padding(14).frame(maxWidth:.infinity,alignment:.leading)}
             if design.saving{ProgressView("Saving…").padding(8)}
             content().disabled(design.saving)
-        }
+        }.interactiveDismissDisabled(design.saving).onAppear{design.error=""}
     }
     private var toolbar:some View{
         ViewThatFits(in:.horizontal){
@@ -102,10 +102,10 @@ struct AgentsHubView:View {
         let selection=selectedRun ?? design.liveSelection
         if let run=tasks.first(where:{textValue($0["id"])==selection}){
             Button("All runs"){selectedRun=nil;design.liveSelection=nil}.buttonStyle(WixalButtonStyle())
-            AgentLiveRunView(engine:engine,run:run,workflow:false)
+            AgentLiveRunView(engine:engine,run:run,workflow:false).id(textValue(run["id"]))
         }else if let run=flows.first(where:{textValue($0["id"])==selection}){
             Button("All runs"){selectedRun=nil;design.liveSelection=nil}.buttonStyle(WixalButtonStyle())
-            AgentLiveRunView(engine:engine,run:run,workflow:true)
+            AgentLiveRunView(engine:engine,run:run,workflow:true).id(textValue(run["id"]))
         }else{
             if tasks.isEmpty && flows.isEmpty{Text("No runs yet. Give a saved agent a task or start a workflow.").foregroundStyle(theme.muted)}
             ForEach(Array(flows.reversed().enumerated()),id:\.offset){_,run in Button{selectedRun=textValue(run["id"])}label:{HStack{Text(textValue((run["definition"] as? [String:Any])?["name"]));Spacer();Text(agentOutcomeLabel(run))}.wixalCard()}.buttonStyle(.plain)}

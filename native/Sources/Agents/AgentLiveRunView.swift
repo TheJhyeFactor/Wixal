@@ -1,4 +1,5 @@
 import SwiftUI
+import WixalInteractions
 
 struct AgentLiveRunView:View {
     @ObservedObject var engine:EngineClient
@@ -6,8 +7,7 @@ struct AgentLiveRunView:View {
     let workflow:Bool
     @Environment(\.wixalTheme) private var theme
     @ViewState private var showContext=false
-    @ViewState private var guidance=""
-    @ViewState private var sendingGuidance=false
+    @ViewState private var guidance=AcknowledgedDraft()
     private var status:String{textValue(run["status"])}
     private var active:Bool{["running","waiting_review","queued"].contains(status)}
     var body:some View{VStack(alignment:.leading,spacing:20){
@@ -24,7 +24,7 @@ struct AgentLiveRunView:View {
             if records(run["checkpoints"]).isEmpty && !workflow{Text("No tool calls recorded for this run.").wixalFont(size:12).foregroundStyle(theme.muted)}
             ForEach(Array(records(run["checkpoints"]).enumerated()),id:\.offset){_,event in DisclosureGroup(textValue(event["name"])+" · "+textValue(event["status"])){VStack(alignment:.leading,spacing:10){Text(pretty(event["arguments"] ?? [:])).wixalFont(size:11,design:.monospaced);Text(textValue(event["result"])).wixalFont(size:12)}.textSelection(.enabled).padding(.top,10)}.wixalCard()}
         }
-        if active && !workflow{HStack{TextField("Guide this run…",text:$guidance).wixalField();Button("Queue guidance"){let submitted=guidance;sendingGuidance=true;engine.action("agent-guide",["id":textValue(run["id"]),"text":submitted],completion:{success in sendingGuidance=false;if success && guidance==submitted{guidance=""}})}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(sendingGuidance || guidance.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)};if !((run["pendingGuidance"] as? [String]) ?? []).isEmpty{Text("Guidance queued for the next model step.").wixalFont(size:11).foregroundStyle(theme.muted)}}
+        if active && !workflow{HStack{TextField("Guide this run…",text:$guidance.text).wixalField().accessibilityLabel("Run guidance");Button("Queue guidance"){let previousError=guidance.submission.error;guard let submitted=guidance.begin() else{return};engine.action("agent-guide",["id":textValue(run["id"]),"text":submitted.text],completion:{success in if success && engine.error==previousError{engine.error=""};guidance.finish(submitted.id,error:success ? nil : engine.error)})}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(guidance.submission.isSubmitting || guidance.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)};if !guidance.submission.error.isEmpty{Text(guidance.submission.error).wixalFont(size:11).foregroundStyle(.orange).textSelection(.enabled)};if !((run["pendingGuidance"] as? [String]) ?? []).isEmpty{Text("Guidance queued for the next model step.").wixalFont(size:11).foregroundStyle(theme.muted)}}
         if !active && !workflow && !(records(run["successCriteria"]).isEmpty){Button("Recheck outcomes"){engine.action("agent-verify",["id":textValue(run["id"])])}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy)}
         if active{Button("Stop run",role:.destructive){let parent=textValue(run["workflowRunId"]);engine.action("stop",workflow ? ["runId":textValue(run["id"])] : parent.isEmpty ? ["taskId":textValue(run["id"])] : ["runId":parent])}.buttonStyle(WixalButtonStyle(outlined:true))}
         else if workflow && ["paused","interrupted","failed","cancelled","needs_attention"].contains(status){Button("Inspect and continue workflow"){engine.action("workflow-resume",["runId":textValue(run["id"])])}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy)}

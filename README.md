@@ -1,13 +1,10 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="assets/motion/logo-reveal-still.png">
-    <img src="assets/motion/logo-reveal.gif" alt="Wixal" width="760">
-  </picture>
+  <img src="assets/motion/logo-reveal-still.png" alt="Wixal" width="320">
 </p>
 
-<h3 align="center">A native local AI workspace for your Mac.</h3>
+<h3 align="center">Local AI for your projects.</h3>
 
-<p align="center">Chat with local models. Build agents and workflows. Inspect tools, actions and results.</p>
+<p align="center">A native Mac workspace for local models, agents, workflows and project tools.</p>
 
 <p align="center">
   <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.2/Wixal-0.7.10-alpha.2-macOS-arm64.zip"><strong>Download native alpha ↓</strong></a> &nbsp;·&nbsp;
@@ -17,11 +14,20 @@
   <br><sub>0.7.10 Alpha 2 · Apple Silicon · macOS 14+ · Ad-hoc signed, not notarised</sub>
 </p>
 
-![Native Wixal workspace](website/public/assets/native-workspace.png)
+<p align="center">
+  <a href="https://thejhyefactor.github.io/Wixal/" aria-label="Watch the full-quality Wixal demo">
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcset="assets/motion/wixal-demo-still.png">
+      <img src="assets/motion/wixal-demo.gif" alt="Wixal demo: typed download commands, local model setup, a project task and an authorised cybersecurity investigation" width="800" height="450">
+    </picture>
+  </a>
+</p>
+
+<p align="center"><a href="https://thejhyefactor.github.io/Wixal/">Watch the full-quality demo ↗</a></p>
+
+From a typed download command to a local model working with project files, then an authorised cybersecurity investigation. The install sequence is animated; the app footage shows real local runs with elapsed time shortened.
 
 ## The current app
-
-The source branch now includes a native tools library and managed RustScan development pilot. Controlled forks, exact source pins and unsigned build candidates live in [wixal-tools](https://github.com/TheJhyeFactor/wixal-tools). See the [implementation and measured acceptance status](native/MANAGED_TOOLS_IMPLEMENTATION_STATUS.md) for the current limits. This work is not yet included in the alpha download linked above, and a public managed installer catalogue has not been qualified.
 
 The current download is **Wixal.app**, built with SwiftUI, AppKit and a persistent Python engine. The app includes its Python runtime and local Ollama inference engine. No Node, Electron or separately installed Python is required to run it. Model weights are downloaded or imported separately.
 
@@ -44,6 +50,19 @@ The current download is **Wixal.app**, built with SwiftUI, AppKit and a persiste
 3. Open **Models** and download a tool-capable model, import compatible Ollama weights or configure an external Ollama server.
 4. Open a project with **⌘O**. Start a conversation or open **Agents** to create an agent or workflow.
 
+Prefer the command line? Download and extract the same release:
+
+```sh
+version=0.7.10-alpha.2
+base=https://github.com/TheJhyeFactor/Wixal/releases/download
+curl -fL -o Wixal.zip \
+  "$base/v$version/Wixal-$version-macOS-arm64.zip"
+ditto -x -k Wixal.zip .
+open Wixal.app
+```
+
+The macOS first-launch review above still applies. Move the extracted app to **Applications** when you are ready to keep it.
+
 Updates are manual downloads from GitHub. Existing native workspaces remain at `~/Library/Application Support/Wixal Native`. Earlier Electron data can be imported explicitly; original data is retained.
 
 ## Alpha status
@@ -57,6 +76,8 @@ Remaining work includes remote/off-Mac execution, messaging and voice gateways, 
 ## Build from source
 
 The canonical development and release source is `native/` on `main`.
+
+The source branch also includes a native tools library and managed RustScan development pilot. Controlled forks, exact source pins and unsigned build candidates live in [wixal-tools](https://github.com/TheJhyeFactor/wixal-tools). See the [implementation and measured acceptance status](native/MANAGED_TOOLS_IMPLEMENTATION_STATUS.md) for the current limits. This work is not yet included in the alpha download linked above, and a public managed installer catalogue has not been qualified.
 
 ```sh
 python3 -m venv native/.venv

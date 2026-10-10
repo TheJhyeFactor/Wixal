@@ -16,6 +16,54 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
     scripted=fixtures.AgentRuntimeTests.scripted
+
+    async def test_multiple_file_evidence_checks_use_each_files_latest_read(self):
+        from wixal.outcomes import verify
+        (self.root/'one.txt').write_text('FIRST-SOURCE')
+        (self.root/'two.txt').write_text('SECOND-SOURCE')
+        context,_=self.scripted([('read_file',dict(path='one.txt')),('read_file',dict(path='two.txt'))],'Both sources read')
+        with context:
+            task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Read files one.txt and two.txt',successCriteria=[dict(kind='tool_contains',tool='read_file',value='FIRST-SOURCE'),dict(kind='tool_contains',tool='read_file',value='SECOND-SOURCE')]))
+        self.assertEqual(task['verification']['status'],'passed')
+        self.assertEqual(len({r['checkpointId'] for r in task['verification']['checks']}),2)
+        # An alias of the same file must supersede the earlier observation.
+        (self.root/'one.txt').write_text('CHANGED-SOURCE')
+        task['checkpoints'].append(dict(id='later-read',name='read_file',arguments=dict(path='./one.txt'),status='finished',result=json.dumps(dict(content='CHANGED-SOURCE'))))
+        report=await verify(self.service.store,self.service.tools,task)
+        self.assertEqual(report['status'],'failed')
+        self.assertEqual(report['checks'][0]['status'],'failed')
+        self.assertEqual(report['checks'][1]['status'],'passed')
+
+    async def test_graph_retry_retains_failed_child_and_completed_branch(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Recover branches',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect'),dict(id='two',name='Two',agentID='coder',goal='Inspect')]))
+        calls=0
+        async def first(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==2:raise ValueError('Branch provider failed')
+            return dict(role='assistant',content='Retained branch evidence')
+        with patch('wixal.agent.stream_chat',first):run=await self.service.dispatch('workflow-run',dict(id=flow['id']))
+        failed=copy.deepcopy(next(s for s in run['stages'] if s['status']=='failed'))
+        completed=copy.deepcopy(next(s for s in run['stages'] if s['status']=='completed'))
+        context,seen=self.scripted([],'Recovered branch')
+        with context:run=await self.service.dispatch('workflow-resume',dict(runId=run['id']))
+        recovered=next(s for s in run['stages'] if s['id']==failed['id'])
+        self.assertEqual(run['status'],'completed');self.assertEqual(len(seen),1)
+        self.assertEqual(next(s for s in run['stages'] if s['id']==completed['id']),completed)
+        self.assertEqual(recovered['attemptHistory'],[failed])
+        self.assertTrue((self.service.store.directory/'workflow-children'/failed['childId']/'workspace.sqlite3').exists())
+
+    async def test_promotion_rejects_changed_candidate_or_baseline(self):
+        from wixal.skill_learning import procedure_digest
+        candidate=await self.service.dispatch('skill-propose',dict(name='Bound procedure',content='Read the current source.'))
+        candidate['evaluations']=[dict(id=str(i),status='passed',candidateSha256=procedure_digest(candidate),baselineSha256=procedure_digest(None)) for i in range(2)]
+        candidate['content']='Unevaluated replacement'
+        with self.assertRaisesRegex(ValueError,'changed'):await self.service.dispatch('skill-promote',dict(id=candidate['id']))
+        candidate['content']='Read the current source.'
+        self.service.store.data['skills'].append(dict(id='new-baseline',name=candidate['name'],owner='guest',content='New baseline'))
+        with self.assertRaisesRegex(ValueError,'changed'):await self.service.dispatch('skill-promote',dict(id=candidate['id']))
+        self.assertEqual(self.service.store.data['skills'][-1]['content'],'New baseline')
+
     async def test_empty_completed_inference_retries_once_without_effects(self):
         calls=0
         async def stream(endpoint,body,emit):

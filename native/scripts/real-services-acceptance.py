@@ -13,15 +13,15 @@ ROOT=Path(__file__).resolve().parents[2]
 spec=spec_from_file_location('real_acceptance',Path(__file__).with_name('real-acceptance.py'));module=module_from_spec(spec);spec.loader.exec_module(module)
 
 async def main():
- parser=argparse.ArgumentParser();parser.add_argument('--reset-email');parser.add_argument('--target',help='Explicitly authorised public domain; checks only TCP 443 and public GET baseline');args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--reset-email');parser.add_argument('--helper',type=Path,default=ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine');parser.add_argument('--output',type=Path,default=ROOT/'artifacts/native/real-services');parser.add_argument('--endpoint');parser.add_argument('--target',help='Explicitly authorised public domain; checks only TCP 443 and public GET baseline');args=parser.parse_args()
  # Independent durable acceptance storage, without competing with the model suite.
- module.STATE=ROOT/'artifacts/native/real-services/workspace';module.ART=module.STATE.parent;module.ART.mkdir(parents=True,exist_ok=True)
- helper=ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'
+ module.ART=args.output.resolve();module.STATE=module.ART/'workspace';module.ART.mkdir(parents=True,exist_ok=False)
+ helper=args.helper.resolve()
  report=dict(status='running',helperSHA256=hashlib.sha256(helper.read_bytes()).hexdigest(),started=time.time(),cases={},chatGPTTunnel='Deferred by user; no credential created and no external connection claimed')
  destination=module.ART/'packaged.json'
  def record(name,data):
   report['cases'][name]=dict(status='passed',observed=data);destination.write_text(json.dumps(report,indent=2));print(name+': PASSED',flush=True)
- client=module.Client(False);client.allowed.update(('web_search','http_request','network_scan','write_file','website_assess','save_website_evidence'))
+ client=module.Client(False,helper=helper,endpoint=args.endpoint);client.allowed.update(('web_search','http_request','network_scan','write_file','website_assess','save_website_evidence'))
  try:
   await client.start();await client.call('project-add',dict(root=str(ROOT)))
   package=await client.call('tool',dict(name='read_file',arguments=dict(path='native/Package.swift')))
@@ -54,7 +54,7 @@ async def main():
   state=await client.state();project=next(p for p in state['projects'] if p['root']==str(ROOT))
   await client.call('companion-settings',dict(sharedProjects=[project['id']],shareMemory=False))
   companion=await client.call('companion-start')
-  child=await asyncio.create_subprocess_exec(str(ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'),'--companion',companion['connectionFile'],stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=4*1024*1024)
+  child=await asyncio.create_subprocess_exec(str(helper),'--companion',companion['connectionFile'],stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL,limit=4*1024*1024)
   counter=0
   async def mcp(method,params):
    nonlocal counter

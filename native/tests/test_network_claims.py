@@ -1,10 +1,37 @@
 """Current tool facts, contradictory answers and host/stage boundaries."""
 import json
 import unittest
-from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote
+from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_unfinished_native_attempt_cannot_support_completion_claim(self):
+        task=dict(checkpoints=[dict(id='failed-read',name='network_read',status='finished',result=json.dumps(dict(error='Unknown session')))])
+        for answer in ['The scan found no open ports.','The evidence is complete Nmap XML from network_scan.','I have inspected the ports.']:
+            task['result']=answer;self.assertEqual(execution_claim(task)['status'],'failed')
+        for answer in ['The scan failed and found no usable evidence.','The scan returned an error.','The scan produced a declined review.','The scan has not completed.','No scan completed.','The scan produced no evidence.','An earlier scan found no open ports.','Example: the scan found no open ports.']:
+            task['result']=answer;self.assertIsNone(execution_claim(task))
+        task['result']='The scan completed.'
+        task['checkpoints'][0]['result']=json.dumps(dict(state='completed',exitCode=0,services=[]))
+        self.assertIsNone(execution_claim(task))
+        self.assertIsNone(execution_claim(dict(result='The scan completed.',checkpoints=[])))
+    def test_explicit_disabled_tool_claim_uses_actual_controller_scope(self):
+        for answer in ['The environment does not have the `network_discover` tool enabled.','network_discover is disabled.']:
+            self.assertEqual(availability_claim(dict(result=answer),['network_discover'])['status'],'failed')
+            self.assertIsNone(availability_claim(dict(result=answer),[]))
+        for answer in ['RustScan is not installed.','network_discover needs your approval.','I cannot claim network_discover is disabled.']:
+            self.assertIsNone(availability_claim(dict(result=answer),['network_discover']))
+    def test_standalone_discovery_starts_with_discovery_schemas(self):
+        available=[dict(function=dict(name=n)) for n in ['workspace_info','read_file','list_files','recall_memory','load_skill','network_discover','network_read','network_stop','network_scan','addon_catalog','addon_install','addon_run','security_tools','command_read','command_stop']]
+        prompt='Which of TCP 9021,9022 currently accept connections on my loopback machine? Use bounded standalone discovery without installing programs.'
+        names={t['function']['name'] for t in select_tools(available,prompt)}
+        self.assertIn('network_discover',names);self.assertIn('network_read',names)
+        self.assertNotIn('network_scan',names);self.assertNotIn('addon_install',names)
+        loaded={t['function']['name'] for t in select_tools(available,prompt,load_name='network_scan')}
+        self.assertIn('network_scan',loaded)
+        chained={t['function']['name'] for t in select_tools(available,prompt+' Then inspect the discovered ports.')}
+        self.assertIn('network_scan',chained)
+
     def task(self,answer,services=None):
         return dict(result=answer,checkpoints=[dict(id='owned-inspection',name='network_scan',status='finished',result=json.dumps(dict(state='completed',sourceSessionId='owned-discovery',services=services or [dict(host='192.0.2.1',port='9021',state='open')])) )])
     def test_denial_is_checked_against_current_actual_open_ports(self):
@@ -72,6 +99,40 @@ from unittest.mock import patch
 class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
+
+    async def test_failed_read_completion_claim_is_retained_but_not_presented_as_verified(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_read']))
+        count=0
+        async def stream(endpoint,body,emit):
+            nonlocal count
+            count+=1
+            if count==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='nonexistent-session')))])
+            return dict(role='assistant',content='The scan found no open ports. The evidence is complete Nmap XML from network_scan.')
+        with patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('chat',dict(text='Read the existing network session nonexistent-session. Do not start a scan.'))
+        self.assertEqual(count,4)
+        self.assertEqual(task['status'],'needs_attention')
+        self.assertIn('No completed current-task scanner observations',task['result'])
+        self.assertTrue(any(r['check']['kind']=='network_execution_claim' for r in task['verification']['checks']))
+        self.assertEqual(len(task['checkpoints']),1,'Correction must not replay any scanner action')
+        self.assertTrue(any('scan found no open ports' in m.get('unverifiedModelContent','') for m in self.service.store.session()['messages']))
+
+    async def test_false_enabled_scope_claim_gets_bounded_feedback_without_effects(self):
+        await self.service.dispatch('settings',dict(mode='chat'))
+        count=0
+        async def stream(endpoint,body,emit):
+            nonlocal count
+            count+=1
+            if count>1:self.assertIn('tool_scope_claim',body['messages'][-1]['content'])
+            return dict(role='assistant',content='The environment does not have the network_discover tool enabled.')
+        with patch('wixal.agent.stream_chat',stream),patch.object(self.service.tools,'execute') as effects:
+            task=await self.service.dispatch('chat',dict(text='Explain whether network_discover is enabled. Do not scan.'))
+        self.assertEqual(count,3);effects.assert_not_called()
+        self.assertEqual(task['status'],'needs_attention')
+        self.assertIn('native tool schema is enabled',task['result'])
+        self.assertIn('No completed current-task scanner observations',task['result'])
+        messages=self.service.store.session()['messages']
+        self.assertTrue(any('does not have' in m.get('unverifiedModelContent','') for m in messages))
 
     async def run_claim(self,recover):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_scan']))

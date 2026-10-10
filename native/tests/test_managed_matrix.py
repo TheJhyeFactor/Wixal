@@ -6,10 +6,21 @@ from wixal.managed_tools import digest
 spec=importlib.util.spec_from_file_location('matrix',Path(__file__).resolve().parents[1]/'scripts/managed-acceptance-matrix.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 class MatrixTests(unittest.TestCase):
+    def identity(self):
+        return dict(helperSha256='a'*64,sourceManifestSha256='b'*64,packageSha256='c'*64,executableSha256='d'*64,adapter='fixture.v1',architecture='fixture-arm64',macOS='fixture-14',model=dict(name='fixture-model',digest='e'*64),contextSize=8192)
+
+    def test_empty_suite_and_incomplete_identity_cannot_qualify(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);file=root/'oracle';file.write_text('Controlled fixture, not installed acceptance')
+            with self.assertRaisesRegex(ValueError,'empty'):module.matrix(dict(schemaVersion=1,families=[]),[],self.identity(),root)
+            suite=dict(schemaVersion=1,families=[dict(id='case',gate='installed',mandatory=True,evidenceClasses=['I'])])
+            identity={};envelope=dict(identity=identity,cases=[dict(id='case',status='passed',evidenceClasses=['I'],evidence=[dict(path='oracle',sha256=digest(file))])])
+            result=module.matrix(suite,[envelope],identity,root)
+            self.assertFalse(result['releaseQualified']);self.assertTrue(result['identityErrors'])
     def test_partial_classes_and_other_tuple_cannot_qualify(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);file=root/'oracle';file.write_text('controlled regression fixture')
-            identity=dict(tuple='fixture');suite=dict(schemaVersion=1,families=[dict(id='case',gate='installed',mandatory=True,evidenceClasses=['R','I'])])
+            identity=self.identity();suite=dict(schemaVersion=1,families=[dict(id='case',gate='installed',mandatory=True,evidenceClasses=['R','I'])])
             envelope=dict(identity=identity,cases=[dict(id='case',status='passed',evidenceClasses=['R'],evidence=[dict(path='oracle',sha256=digest(file))])])
             result=module.matrix(suite,[envelope],identity,root);self.assertEqual(result['status'],'incomplete');self.assertFalse(result['releaseQualified'])
             envelope['cases'][0]['evidenceClasses'].append('I')
@@ -18,7 +29,7 @@ class MatrixTests(unittest.TestCase):
             file.write_text('changed after measurement');self.assertFalse(module.matrix(suite,[envelope],identity,root)['releaseQualified'])
     def test_deferred_release_is_retained_and_critical_failure_blocks(self):
         with tempfile.TemporaryDirectory() as temp:
-            root=Path(temp);file=root/'oracle';file.write_text('controlled fixture');identity=dict(tuple='fixture')
+            root=Path(temp);file=root/'oracle';file.write_text('controlled fixture');identity=self.identity()
             suite=dict(schemaVersion=1,families=[dict(id='core',gate='model',mandatory=True,evidenceClasses=['M']),dict(id='release',gate='release',mandatory=True,evidenceClasses=['P'])])
             envelope=dict(identity=identity,cases=[dict(id='core',status='passed',evidenceClasses=['M'],evidence=[dict(path='oracle',sha256=digest(file))])])
             result=module.matrix(suite,[envelope],identity,root,['release']);self.assertEqual(result['status'],'passed_for_requested_gates');self.assertFalse(result['releaseQualified']);self.assertEqual(result['families'][1]['status'],'deferred_by_request')
@@ -27,7 +38,7 @@ class MatrixTests(unittest.TestCase):
     def test_repeatability_is_per_core_and_cannot_drop_failed_attempts(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);file=root/'trace';file.write_text('repeatability fixture')
-            identity=dict(model=dict(digest='fixture-model',context=8192))
+            identity=self.identity()
             suite=dict(schemaVersion=1,families=[dict(id='MOD-15',gate='model',mandatory=True,evidenceClasses=['M'])])
             rows=[dict(id='MOD-15',scenario=scenario,attempt=i,status='passed',evidenceClasses=['M'],evidence=[dict(path='trace',sha256=digest(file))]) for scenario in ('naturalDiscovery','sourceInspection') for i in range(1,31)]
             envelope=dict(identity=identity,cases=rows);rows[0]['status']='failed'

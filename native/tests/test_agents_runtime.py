@@ -149,8 +149,11 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run['status'],'failed');self.assertEqual(run['stages'][0]['status'],'completed')
         self.assertEqual(run['stages'][1]['error'],'Provider unavailable');self.assertTrue(run['stages'][1]['taskId'])
         completed=run['stages'][0]['taskId'];context,seen=self.scripted([],'Recovered second stage')
+        failed_task=run['stages'][1]['taskId']
         with context:result=await self.service.dispatch('workflow-resume',dict(runId=run['id']))
         self.assertEqual(result['status'],'completed');self.assertEqual(result['stages'][0]['taskId'],completed);self.assertEqual(len(seen),1)
+        self.assertEqual(result['stages'][1]['attemptHistory'][0]['taskId'],failed_task)
+        self.assertEqual(result['stages'][1]['attemptHistory'][0]['error'],'Provider unavailable')
     async def test_read_only_workflow_retry_is_bounded(self):
         flow=await self.service.dispatch('workflow-save',dict(name='Retry',stages=[dict(name='Read',agentID='coder',goal='Read files',failurePolicy='Retry once, then stop')]))
         attempts=0

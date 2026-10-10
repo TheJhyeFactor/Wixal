@@ -116,9 +116,15 @@ class Store:
         self.save()
 
     def close(self):
-        self.save()
-        self.db.close()
-        self.owner_lock.close()
+        # A failed final write must still release SQLite and the workspace
+        # owner lock, so a corrected disk/lock condition can be retried.
+        try:
+            self.save()
+        finally:
+            try:
+                self.db.close()
+            finally:
+                self.owner_lock.close()
 
     def active_memory(self):
         account = self.data.get("account", {})

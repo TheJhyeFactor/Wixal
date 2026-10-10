@@ -51,6 +51,42 @@ def inspection_claim(answer):
         if re.search(r'\binspection\b',sentence,re.I) and re.search(r'\b(?:completed?|finished|successful(?:ly)?|done)\b',sentence,re.I):return True
     return False
 
+def availability_claim(task,available):
+    """Check explicit adapter-enabled claims against controller-owned scope.
+
+    This does not infer executable installation, readiness or authorization
+    from a schema name. It covers only a named native tool being disabled.
+    """
+    contradictions=[]
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r"\b(?:cannot|can't)\s+(?:say|claim|establish)\b|\bnot\s+saying\b",sentence,re.I):continue
+        if re.search(r'\b(?:if|whether|earlier|previous|historical|quoted|example)\b',sentence,re.I):continue
+        for name in sorted(set(available)&{'network_discover','network_scan'}):
+            label=r'`?'+re.escape(name)+r'`?(?:\s+tool)?'
+            if re.search(label+r"\s+(?:is\s+)?(?:disabled|not\s+enabled)\b",sentence,re.I) or re.search(r"\b(?:not|doesn't|does\s+not)\s+have\s+(?:the\s+)?"+label+r'\s+enabled\b',sentence,re.I):contradictions.append(name)
+    if not contradictions:return None
+    return dict(check=dict(kind='tool_scope_claim'),status='failed',availableTools=sorted(set(contradictions)),error='These named native tools are enabled in the current controller scope. Installation, readiness and action approval remain separate; do not claim that an available adapter is disabled. Use its native schema or report the actual readiness/review error.')
+
+
+def execution_claim(task):
+    """Reject explicit scan completion claims after only unsuccessful attempts.
+
+    Restricted to current-task native scanner checkpoints. A completed empty
+    scan is still completion; this check does not reinterpret its port states.
+    """
+    attempts=[c for c in task.get('checkpoints',[]) if c.get('name') in ('network_discover','network_scan','network_read')]
+    if not attempts:return None
+    for checkpoint in attempts:
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if checkpoint.get('status')=='finished' and isinstance(value,dict) and not value.get('error') and value.get('state')=='completed' and value.get('exitCode') in (None,0):return None
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r"\b(?:not|never|unable|cannot|can't|failed|error|declined|stopped|cancelled|running|unfinished|incomplete|pending|if|whether|would|could|example|historical|previous|earlier)\b",sentence,re.I):continue
+        if re.search(r'\b(?:no|neither)\s+(?:(?:native|scanner|network)\s+)?(?:scan|discovery|inspection)\b|\b(?:returned|produced)\s+no\s+(?:results|evidence|output)\b',sentence,re.I):continue
+        if re.search(r'\b(?:scan|discovery|inspection)\b.{0,100}\b(?:completed|finished|found|observed|returned|produced)\b|\b(?:I|we)\s+(?:have\s+)?(?:scanned|inspected)\b|\b(?:complete|actual|retained|verified)\s+(?:Nmap\s+)?XML\b',sentence,re.I):
+            return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='No current-task native scanner attempt completed successfully. Do not describe completed scans, observed port results or retained XML evidence. Report the actual failed or unfinished attempt; do not replay an action to justify this answer.')
+    return None
+
 
 def check(task):
     hosts,sources=facts(task)
@@ -106,10 +142,14 @@ def evidence_quote(task):
 
 def corrected_summary(task):
     hosts,sources=facts(task)
-    lines=['The generated interpretation did not pass the controller checks. Recorded scanner observations:']
+    lines=['The generated interpretation did not pass the controller checks.']
+    lines.append('Recorded scanner observations:' if hosts else 'No completed current-task scanner observations support this interpretation.')
     for host,states in hosts.items():
         ports=sorted(port for port,state in states.items() if state=='open')
         lines.append(f"- {host}: observed open TCP ports {', '.join(map(str,ports)) or 'none in this evidence' }.")
-    lines.append('These are observations from the selected scan coverage. Inspect the retained tool evidence; they do not prove service safety or a vulnerability.')
+    if hosts:lines.append('These are observations from the selected scan coverage. Inspect the retained tool evidence; they do not prove service safety or a vulnerability.')
+    for row in task.get('verification',{}).get('checks',[]):
+        if row.get('check',{}).get('kind')=='tool_scope_claim' and row['status']=='failed':
+            lines.append('The native tool schema is enabled for this task: '+', '.join(row['availableTools'])+'. This does not establish executable readiness or action approval. The requested action still needs completed tool evidence.')
     if any(r.get('check',{}).get('kind')=='requested_discovery_inspection' and r['status']=='failed' for r in task.get('verification',{}).get('checks',[])):lines.append('The requested source-bound inspection did not complete. Discovery alone does not finish that task.')
     return '\n'.join(lines)

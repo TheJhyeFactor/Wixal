@@ -151,18 +151,41 @@ async def verify(store,tools,task,checks=None):
             else:
                 matching=[c for c in task['checkpoints'] if c['name']==check['tool']]
                 if not matching or not successful(matching[-1]):raise ValueError('No successful final outcome for the required tool')
-                result=matching[-1].get('resolvedOutcome',decode(matching[-1].get('result','')))
-                evidence=(str(result['output'])+json.dumps(result.get('structuredResult',{}),ensure_ascii=False)) if isinstance(result,dict) and 'output' in result else json.dumps(result,ensure_ascii=False) if not isinstance(result,str) else result
-                if kind=='tool_contains' and check['value'] not in evidence:raise ValueError('Required evidence is absent from the tool result')
-                row['checkpointId']=matching[-1]['id']
+                candidates=[matching[-1]]
+                if kind=='tool_contains' and check['tool']=='read_file':
+                    # Different files are independent evidence. A later read
+                    # of the same canonical path supersedes its earlier bytes.
+                    from .tools import safe_path
+                    latest_reads={}
+                    for checkpoint in matching:
+                        path=checkpoint.get('arguments',{}).get('path')
+                        key=str(safe_path((store.project() or {}).get('root'),path)) if path else None
+                        latest_reads[key]=checkpoint
+                    candidates=list(reversed(list(latest_reads.values())))
+                for candidate in candidates:
+                    if not successful(candidate):continue
+                    result=candidate.get('resolvedOutcome',decode(candidate.get('result','')))
+                    evidence=(str(result['output'])+json.dumps(result.get('structuredResult',{}),ensure_ascii=False)) if isinstance(result,dict) and 'output' in result else json.dumps(result,ensure_ascii=False) if not isinstance(result,str) else result
+                    if kind!='tool_contains' or check['value'] in evidence:
+                        row['checkpointId']=candidate['id'];break
+                else:raise ValueError('Required evidence is absent from the final tool result for each file')
             row['status']='passed'
         except (ValueError,OSError,KeyError,IndexError,TypeError,UnicodeError) as error:row['error']=str(error)
         rows.append(row)
-    from .network_claims import check as network_claim_check,evidence_quote
+    from .network_claims import check as network_claim_check,evidence_quote,execution_claim
+    execution=execution_claim(task)
+    if execution:rows.append(execution)
     contradiction=network_claim_check(task)
     if contradiction:rows.append(contradiction)
     quote=evidence_quote(task)
     if quote:rows.append(quote)
+    if hasattr(tools,'catalog'):
+        from .agent_context import available_names
+        from .context_policy import eligible
+        from .network_claims import availability_claim
+        available=eligible(tools.catalog(),available_names(tools,store),store.project())
+        availability=availability_claim(task,[t['function']['name'] for t in available])
+        if availability:rows.append(availability)
     follow_up=discovery_follow_up(task)
     if follow_up:rows.append(follow_up)
     latest={}

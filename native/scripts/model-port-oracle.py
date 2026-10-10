@@ -21,10 +21,12 @@ def contradictions(answer,open_ports):
 
 def claims_inspection(answer):
     for sentence in re.split(r'[\n.!?]',answer):
-        if re.search(r"\b(?:not|never|unable|cannot|can't|declined|failed|unavailable|only)\b",sentence,re.I):continue
+        if re.search(r"\b(?:not|never|unable|cannot|can't|declined|failed|unavailable|pending|planned|hypothetical|earlier|previous)\b",sentence,re.I):continue
         if re.search(r'\b(?:I|we)\s+(?:have\s+)?inspected\b|\b(?:ports|services)\s+(?:were|are|have been)\s+inspected\b',sentence,re.I):return True
         if re.search(r'\binspection(?:\s+step)?\s+(?:(?:was|is|has been|had been)\s+)?(?:performed|conducted|carried out)\b|\bused\s+for\s+inspection\b',sentence,re.I):return True
         if re.search(r'\binspection\b',sentence,re.I) and re.search(r'\b(?:completed?|finished|successful(?:ly)?|done)\b',sentence,re.I):return True
+        if re.search(r'\binspection\s+(?:confirms?|confirmed|showed|found|identified)\b',sentence,re.I):return True
+        if re.search(r'\bsatisfies\s+(?:the\s+)?inspection\s+requirement\b|\bdiscovery\s+output\s+itself\s+is\s+the\s+inspection\s+evidence\b',sentence,re.I):return True
     return False
 
 def quoted_xml_errors(answer,outputs):

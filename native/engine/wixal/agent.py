@@ -122,6 +122,8 @@ class Agent:
             prompt += "Keep actions focused on the current request. Do not save transient file counts, reports or task progress as memory; memory writes are for durable user preferences and decisions.\n"
         inventory=eligible(self.tools.catalog(),available_names(self.tools,self.store),self.store.project()) if self.tools else []
         names=[t['function']['name'] for t in inventory]
+        if 'network_discover' in names:
+            prompt += 'For standalone TCP discovery, use network_discover and poll network_read to completion. Do not guess a shell scanner invocation when this native adapter is available. Report every observed open port from the completed evidence; copy any quoted output exactly.\n'
         prompt += "Available tool names within the current task scope: " + json.dumps(names[:100]) + "\nUse workspace_info with tool or category to load a schema not yet supplied. Additional connected tools can be discovered through workspace_info.\n"
         if self.tools:
             prompt += 'Observed command environment: '+json.dumps(self.tools.environment())+'\nUse an observed installed executable (for example python3 when python is absent). Inspect the project test configuration and never invent a passing command result.\n'
@@ -422,7 +424,7 @@ class Agent:
                             self.store.save()
                             continue
                         from .network_claims import corrected_summary
-                        network_failed=any(r['status']=='failed' and r.get('check',{}).get('kind') in ('network_port_claim','network_evidence_quote','requested_discovery_inspection') for r in report['checks'])
+                        network_failed=any(r['status']=='failed' and r.get('check',{}).get('kind') in ('network_port_claim','network_evidence_quote','network_execution_claim','requested_discovery_inspection','tool_scope_claim') for r in report['checks'])
                         if network_failed:
                             message['unverifiedModelContent']=message.get('content','')
                             message['content']=corrected_summary(task);task['result']=message['content'];self.store.save()

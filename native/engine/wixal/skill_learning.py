@@ -1,7 +1,14 @@
 """Candidates earn promotion through independently checked repeated executions."""
 import copy
+import hashlib
+import json
 from .storage import identity, now
 from .memory import owner
+
+def procedure_digest(skill):
+    """Bind evaluation to the procedure bytes, including a missing baseline."""
+    value=None if skill is None else {key:skill.get(key,'') for key in ('name','description','content')}
+    return hashlib.sha256(json.dumps(value,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
 def manage(agents,method,params):
     from .agents import text
@@ -22,6 +29,8 @@ def manage(agents,method,params):
     if any(e.get('baselineFailures',0)==0 and e.get('candidateFailures',0)>0 for e in evidence[-2:]):raise ValueError('The candidate regresses against its baseline')
     existing=next((s for s in store.data['skills'] if s['name']==candidate['name']),None)
     if existing and existing.get('owner','guest')!=owner(store):raise ValueError('Skill belongs to another owner')
+    if any(e.get('candidateSha256')!=procedure_digest(candidate) or e.get('baselineSha256')!=procedure_digest(existing) for e in evidence[-2:]):
+        raise ValueError('The candidate or baseline changed; run two fresh evaluations before promotion')
     versions=copy.deepcopy((existing or {}).get('versions',[]))
     if existing:versions.append(dict(content=existing['content'],description=existing.get('description',''),created=now(),reason='Before evaluated promotion'))
     value=dict(id=(existing or {}).get('id',identity()),owner=owner(store),name=candidate['name'],description=candidate['description'],content=candidate['content'],versions=versions[-10:],created=(existing or {}).get('created',now()),updated=now(),source='Evaluated agent procedure',evaluationIds=[e['id'] for e in evidence[-2:]])
@@ -40,6 +49,7 @@ async def evaluate(agents,params):
         if any(c['kind']=='command_exit' for case in cases for c in case['successCriteria']):raise ValueError('Read-only skill evaluation cannot run commands')
         if any(not any(c['kind'] in ('tool_succeeded','tool_contains') for c in case['successCriteria']) for case in cases):raise ValueError('Read-only evaluations require real tool evidence checks')
     original=next((s for s in agents.store.data['skills'] if s['name']==candidate['name']),None)
+    candidate_hash=procedure_digest(candidate);baseline_hash=procedure_digest(original)
     # Replace only this skill in standing instructions; never expose candidate changes as established skill memory.
     profile['skills']=[s for s in profile.get('skills',[]) if s!=candidate['name']]
     rows=[]
@@ -59,5 +69,5 @@ async def evaluate(agents,params):
                 item[label]=dict(taskId=entry['taskId'],verification=entry.get('verification'),status=entry['status'],isolatedRoot=entry.get('isolatedRoot'),changes=entry.get('changes',[]))
         rows.append(item)
     failures=lambda label:sum(row[label].get('verification',{}).get('status')!='passed' for row in rows)
-    report=dict(id=identity(),created=now(),cases=rows,baselineFailures=failures('baseline'),candidateFailures=failures('candidate'),status='passed' if failures('candidate')==0 else 'failed')
+    report=dict(id=identity(),created=now(),cases=rows,candidateSha256=candidate_hash,baselineSha256=baseline_hash,agentSnapshot=copy.deepcopy(profile),baselineFailures=failures('baseline'),candidateFailures=failures('candidate'),status='passed' if failures('candidate')==0 else 'failed')
     candidate['evaluations'].append(report);candidate['evaluations']=candidate['evaluations'][-20:];agents.store.save();agents.service.emit('state',agents.store.data);return report

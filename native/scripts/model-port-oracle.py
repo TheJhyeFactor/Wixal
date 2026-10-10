@@ -15,3 +15,10 @@ def contradictions(answer,open_ports):
         for port in open_ports:
             if re.search(r'(?<!\d)'+str(port)+r'(?!\d)',sentence):failures.append(f'Answer assigns closed/filtered status to observed open port {port}')
     return failures
+
+def claims_inspection(answer):
+    for sentence in re.split(r'[\n.!?]',answer):
+        if re.search(r"\b(?:not|never|unable|cannot|can't|declined|failed|unavailable|only)\b",sentence,re.I):continue
+        if re.search(r'\b(?:I|we)\s+(?:have\s+)?inspected\b|\b(?:ports|services)\s+(?:were|are|have been)\s+inspected\b',sentence,re.I):return True
+        if re.search(r'\binspection\b',sentence,re.I) and re.search(r'\b(?:completed?|finished|successful(?:ly)?|done)\b',sentence,re.I):return True
+    return False

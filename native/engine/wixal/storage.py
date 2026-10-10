@@ -87,6 +87,12 @@ class Store:
         for task in self.data["tasks"]:
             if task.get("status") in ("running", "waiting_review"):
                 task["status"] = "interrupted"
+        for run in self.data['workflowRuns']:
+            if run.get('status') in ('running','waiting_review'):
+                run.update(status='interrupted',error='Engine restarted; inspect retained stage evidence before resuming')
+                for stage in run.get('stages',[]):
+                    if stage.get('status') in ('running','waiting_review'):
+                        stage.update(status='interrupted',error='Stage interrupted by engine restart')
         for job in self.data['agentJobs']:
             if job.get('status')=='running':job.update(status='interrupted',error='Engine restarted; inspect retained effects before restarting')
         for schedule in self.data['schedules']:

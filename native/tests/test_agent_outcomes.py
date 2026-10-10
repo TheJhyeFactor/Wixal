@@ -17,6 +17,36 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
     scripted=fixtures.AgentRuntimeTests.scripted
 
+    async def test_graph_persists_branch_identity_before_model_execution(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Durable branch',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
+        entered=asyncio.Event()
+        async def waiting(*args):entered.set();await asyncio.Event().wait()
+        with patch('wixal.agent.stream_chat',waiting):
+            current=asyncio.create_task(self.service.dispatch('workflow-run',dict(id=flow['id'])))
+            await asyncio.wait_for(entered.wait(),5)
+            try:
+                persisted=json.loads(self.service.store.db.execute('SELECT value FROM state').fetchone()[0])
+                stage=persisted['workflowRuns'][-1]['stages'][0]
+                self.assertTrue(stage['childId']);self.assertEqual(stage['status'],'running')
+                task=next(t for t in persisted['tasks'] if t['id']==stage['taskId'])
+                self.assertEqual(task['workflowRunId'],persisted['workflowRuns'][-1]['id'])
+            finally:
+                self.service.active.cancel();await asyncio.gather(current,return_exceptions=True)
+
+    async def test_uncertain_workflow_recovery_decline_keeps_effects_and_stage(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Uncertain recovery',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
+        context,_=self.scripted([],'Recorded result')
+        with context:run=await self.service.dispatch('workflow-run',dict(id=flow['id']))
+        run['status']='interrupted';stage=run['stages'][0];stage['status']='interrupted'
+        task=next(t for t in self.service.store.data['tasks'] if t['id']==stage['taskId'])
+        task['checkpoints']=[dict(id='uncertain',name='command_start',status='interrupted',arguments=dict(command='effect'),result='')]
+        before=copy.deepcopy(stage)
+        async def decline(details):self.assertEqual(details['name'],'workflow_recovery');return False
+        with patch.object(self.service.tools,'approve',decline),patch('wixal.agent.stream_chat') as model:
+            result=await self.service.dispatch('workflow-resume',dict(runId=run['id']))
+            model.assert_not_called()
+        self.assertEqual(result['status'],'paused');self.assertEqual(result['stages'][0],before)
+
     async def test_multiple_file_evidence_checks_use_each_files_latest_read(self):
         from wixal.outcomes import verify
         (self.root/'one.txt').write_text('FIRST-SOURCE')

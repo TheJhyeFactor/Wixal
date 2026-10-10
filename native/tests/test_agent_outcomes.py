@@ -48,6 +48,22 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
                 model.assert_not_called()
             self.assertEqual(result['status'],'paused');self.assertEqual(result['stages'][0],before)
 
+    async def test_stop_during_interrupted_effect_review_targets_parent_workflow(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Stoppable recovery',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
+        context,_=self.scripted([],'Recorded result')
+        with context:run=await self.service.dispatch('workflow-run',dict(id=flow['id']))
+        run['status']='interrupted';run['stages'][0]['status']='interrupted'
+        task=next(t for t in self.service.store.data['tasks'] if t['id']==run['stages'][0]['taskId'])
+        task['checkpoints']=[dict(id='uncertain',name='command_start',status='interrupted',result='')]
+        entered=asyncio.Event()
+        async def review(details):entered.set();await asyncio.Event().wait()
+        with patch.object(self.service.tools,'approve',review),patch('wixal.agent.stream_chat') as model:
+            current=asyncio.create_task(self.service.dispatch('workflow-resume',dict(runId=run['id'])))
+            await asyncio.wait_for(entered.wait(),5)
+            await self.service.dispatch('stop',dict(runId=run['id']))
+            await asyncio.gather(current,return_exceptions=True);model.assert_not_called()
+        self.assertEqual(run['status'],'interrupted');self.assertIsNone(self.service.agents.active_workflow_id)
+
     async def test_multiple_file_evidence_checks_use_each_files_latest_read(self):
         from wixal.outcomes import verify
         (self.root/'one.txt').write_text('FIRST-SOURCE')

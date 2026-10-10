@@ -40,6 +40,10 @@ The `294bc44` installed helper passed 13/14 model prerequisites, including the e
 
 The same `294bc44` development helper passed a real testssl.sh invocation against a disposable owned TLS endpoint: the independent server recorded a TLS handshake, then the engine stopped the owned command with terminal `user_stop` evidence. `testssl/results.json` explicitly records `completedTLSAssessment=false`; this is execution/cancellation evidence, not completed TLS coverage. The fixture private key was temporary and excluded from reports. Its helper SHA-256 is `88a4db9dc4d720efafded1c2439ccd9ac2c74d0b3f0e084c4ce367b759896790`; source-manifest SHA-256 is `b239b981f1b1c895c44b779f0886cf42d01e40db0e58940419648fdfada36a6d`. All 542 installed files and 125 declared source files matched the frozen staged package/source; strict signature verification passed. The source at that identity passed 343 engine tests. Subsequent fixes require a new package identity and fresh model qualification.
 
+The corrected package freezes source `4d03d62`, helper SHA-256 `fc10eb42a6ccdc9403df6aa4883d00c051763f8652dddad312e077f0ff1402d6` and source-manifest SHA-256 `6e3ec5db0b9f8ac0acb44e1a265cabba9efca2b67a9de994201182532b7c29fc`. Its 542 installed files and 125 source entries matched the staged payload and frozen Git commit, with strict signatures verified. The final engine suite passed **345 tests**. Fresh prerequisite qualification is recorded separately for this exact identity.
+
+Installed backup acceptance on that helper passed four checks over a SQLite-backed copy of the prior real-model workspace: export preserved conversation/notes/project content; preview did not mutate storage; altered source bytes were refused using the preview digest; restore retained saved content without enabling tools, and duplicate import plus restart preserved records. `backup-restore/results.json` records the unencrypted JSON boundary and explicitly excludes account/credential/image restoration claims. This does not establish physical power-loss recovery or every long-session case.
+
 ## Every remaining issue
 
 | Issue | Work performed or available evidence | Still required for closure |

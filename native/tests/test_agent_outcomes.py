@@ -17,6 +17,20 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
     scripted=fixtures.AgentRuntimeTests.scripted
 
+    async def test_invalid_self_source_does_not_poison_corrected_independent_verification(self):
+        (self.root/'source.json').write_text('{"value":7319}')
+        (self.root/'output.json').write_text('{"value":7319}')
+        context,_=self.scripted([('verify_json',dict(path='output.json',pointer='/value',sourcePath='./output.json',sourcePointer='/value',transform='identity')),('verify_json',dict(path='output.json',pointer='/value',sourcePath='source.json',sourcePointer='/value',transform='identity'))],'The independent source check passed.')
+        with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Verify output.json against the separate source.json.'))
+        self.assertEqual(task['status'],'completed');self.assertEqual(task['verification']['status'],'passed')
+        self.assertEqual(task['checkpoints'][0]['status'],'error')
+        self.assertIn('separate source artifact',task['checkpoints'][0]['result'])
+        self.assertEqual(task['successCriteria'],[dict(kind='json_matches_source',path='output.json',pointer='/value',sourcePath='source.json',sourcePointer='/value',transform='identity')])
+        # An actual independent mismatch must still fail.
+        (self.root/'source.json').write_text('{"value":17}')
+        from wixal.outcomes import verify
+        self.assertEqual((await verify(self.service.store,self.service.tools,task))['status'],'failed')
+
     async def test_graph_persists_branch_identity_before_model_execution(self):
         flow=await self.service.dispatch('workflow-save',dict(name='Durable branch',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
         entered=asyncio.Event()

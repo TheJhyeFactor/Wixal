@@ -42,10 +42,11 @@ The public Alpha 3 package was rebuilt separately and checked against its exact 
 | Production Swift acceptance | 29 activity, 16 submission/guidance and 5 Markdown checks passed |
 | Installed startup | 5/5 passed: animated, animation off, reduced motion, delayed database and failed-database recovery |
 | Installed real-model agents | 3/3 passed with gpt-oss:20b: source review, reviewed artifact/readback and a closed-helper background task |
+| Additional installed Chat model check | 2/4 passed: source inspection and declined-write handling. Report generation produced empty name/version fields; independent comparison failed and the run required attention. |
 | Package provenance | 124 source files match; installed helper, executable, metadata and source-manifest hashes match the package; deep strict signature verified |
 | Website | Link/analytics checks and 20 browser cases passed at exact desktop/mobile widths in light/dark appearance with reduced motion |
 
-The release provenance records exact hashes and results. Controlled-response UI tests establish application behaviour; real-model tests provide bounded evidence for the cases exercised. Neither establishes reliability for every model or task. Earlier scanner interpretation failures remain documented rather than treated as passing evidence.
+The release provenance records exact hashes and results. Controlled-response UI tests establish application behaviour; real-model tests provide bounded evidence for the cases exercised. Neither establishes reliability for every model or task. The additional Chat report was marked unverified by the controller despite the model’s initial “verified” prose. The independent comparison rejected it. This is a retained model failure, not passing Chat acceptance; inspect artifacts and configure independent success criteria before relying on an answer. Earlier scanner interpretation failures also remain documented.
 
 ## What remains gated
 

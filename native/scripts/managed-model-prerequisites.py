@@ -15,6 +15,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('real',Path(__file__).with_name('real-acceptance.py'));real=importlib.util.module_from_spec(spec);spec.loader.exec_module(real)
 
+oracle_spec=importlib.util.spec_from_file_location('port_oracle',Path(__file__).with_name('model-port-oracle.py'));port_oracle=importlib.util.module_from_spec(oracle_spec);oracle_spec.loader.exec_module(port_oracle)
+
 async def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--helper',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--model',default='gpt-oss:20b');p.add_argument('--alternate-model',default='gemma3:12b',help='Already installed conversation model; never downloaded by this case');o=p.parse_args()
     art=o.output.resolve();art.mkdir(parents=True,exist_ok=False);real.ART=art;real.STATE=art/'workspace';project=art/'project';project.mkdir()
@@ -97,7 +99,7 @@ async def main():
                 discovered=[v['structuredResult'] for _,v in values if isinstance(v.get('structuredResult'),dict)]
                 scans=[v for n,v in values if n=='network_scan' and v.get('services') is not None]
                 facts=any(set(h['ports'])==expected for v in discovered if v.get('handoffEligible') for h in v.get('hosts',[])) or (identifier=='MOD-17' and any({int(s['port']) for s in v['services']}==expected for v in scans))
-                return output['taskStatus']=='completed' and facts and all(str(port) in output['answer'] for port in expected) and not any(r['name']=='addon_install' and r['approved'] for r in reviews) and (identifier!='MOD-14-c' or any(v.get('sourceSessionId') for v in scans))
+                return output['taskStatus']=='completed' and facts and not port_oracle.contradictions(output['answer'],expected) and all(str(port) in output['answer'] for port in expected) and not any(r['name']=='addon_install' and r['approved'] for r in reviews) and (identifier!='MOD-14-c' or any(v.get('sourceSessionId') for v in scans))
             await attempt(identifier,variant.format(ports=','.join(map(str,ports))),observed)
         ports=await fresh();closed=ports[0];servers[0].close();await servers[0].wait_closed();approved_ports.clear();approved_ports.add(closed)
         await attempt('MOD-07',f'Use selected TCP discovery on my loopback host 127.0.0.1, port {closed}. If no ports are open, report that limited empty result without claiming services or scanning other ports.',lambda o,v,l,r:any(x.get('structuredResult',{}).get('handoffEligible') and x['structuredResult']['hosts'][0]['ports']==[] for _,x in v))

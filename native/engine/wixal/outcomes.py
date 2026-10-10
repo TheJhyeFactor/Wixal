@@ -5,7 +5,7 @@ import json
 import re
 from .storage import identity, now
 
-KINDS=('file_exists','file_contains','json_equals','command_exit','tool_succeeded','tool_contains')
+KINDS=('file_exists','file_contains','json_equals','command_exit','tool_succeeded','tool_contains','json_matches_source')
 
 def criteria(value):
     if value is None:return []
@@ -13,10 +13,10 @@ def criteria(value):
     checked=[]
     for raw in value:
         if not isinstance(raw,dict) or raw.get('kind') not in KINDS:raise ValueError('Invalid outcome check')
-        row={k:v for k,v in raw.items() if k in ('kind','path','value','pointer','command','tool','label')}
-        for key in ('path','pointer','command','tool','label'):
+        row={k:v for k,v in raw.items() if k in ('kind','path','value','pointer','command','tool','label','sourcePath','sourcePointer','transform')}
+        for key in ('path','pointer','command','tool','label','sourcePath','sourcePointer'):
             if key in row and (not isinstance(row[key],str) or len(row[key])>8000):raise ValueError('Invalid check '+key)
-        if row['kind'].startswith('file_') or row['kind']=='json_equals':
+        if row['kind'].startswith('file_') or row['kind'] in ('json_equals','json_matches_source'):
             from pathlib import PurePath
             path=row.get('path','')
             if not path or PurePath(path).is_absolute() or '..' in PurePath(path).parts:raise ValueError('Checks require a project-relative path')
@@ -24,6 +24,10 @@ def criteria(value):
         if row['kind']=='json_equals' and ('value' not in row or len(json.dumps(row['value']))>24000):raise ValueError('Choose a bounded JSON value')
         if row['kind']=='command_exit' and not row.get('command'):raise ValueError('Choose a verification command')
         if row['kind'] in ('tool_succeeded','tool_contains') and not row.get('tool'):raise ValueError('Choose a tool outcome')
+        if row['kind']=='json_matches_source':
+            source=row.get('sourcePath','')
+            if not source or PurePath(source).is_absolute() or '..' in PurePath(source).parts:raise ValueError('Source checks require a project-relative path')
+            if row.get('transform','identity') not in ('identity','length'):raise ValueError('Unsupported source transform')
         checked.append(row)
     return checked
 
@@ -75,6 +79,24 @@ def discovery_follow_up(task):
                           label='Complete the inspection requested in the current task using its discovery source_session_id'),
                 status='failed' if missing else 'passed',sourceSessions=missing,checked=now())
 
+def json_pointer(value,pointer=''):
+    if pointer and not pointer.startswith('/'):raise ValueError('Use a JSON pointer beginning with /')
+    for component in pointer[1:].split('/') if pointer else []:
+        component=component.replace('~1','/').replace('~0','~')
+        if isinstance(value,list):
+            if not re.fullmatch(r'0|[1-9][0-9]*',component):raise ValueError('Invalid array index')
+            value=value[int(component)]
+        else:value=value[component]
+    return value
+
+def unsupported_artifact_claim(task):
+    if not any(c.get('name') in ('write_file','edit_file') and successful(c) for c in task.get('checkpoints',[])):return False
+    text=re.sub(r'```.*?```','',task.get('result',''),flags=re.S)
+    for sentence in re.split(r'[.!?\n]',text):
+        if re.search(r"\b(?:not|unverified|cannot|can't|unable|failed|unavailable|unconfirmed|never)\b",sentence,re.I):continue
+        if re.search(r'\b(?:verified|validated)\b',sentence,re.I):return True
+    return False
+
 async def verify(store,tools,task,checks=None):
     checks=criteria(task.get('successCriteria',[]) if checks is None else checks)
     rows=[]
@@ -89,19 +111,27 @@ async def verify(store,tools,task,checks=None):
         row=dict(check=check,status='failed',checked=now())
         try:
             kind=check['kind']
-            if kind in ('file_exists','file_contains','json_equals'):
+            if kind in ('file_exists','file_contains','json_equals','json_matches_source'):
                 from .tools import safe_path
                 path=safe_path((store.project() or {}).get('root'),check['path'])
                 if not path.is_file() or path.stat().st_size>4*1024*1024:raise ValueError('Artifact is missing or exceeds 4 MB')
                 raw=path.read_bytes();row.update(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
                 if kind=='file_contains' and check['value'] not in raw.decode():raise ValueError('Required text is absent')
-                if kind=='json_equals':
-                    value=json.loads(raw)
-                    for component in check.get('pointer','').strip('/').split('/') if check.get('pointer') else []:
-                        component=component.replace('~1','/').replace('~0','~')
-                        value=value[int(component)] if isinstance(value,list) else value[component]
+                if kind in ('json_equals','json_matches_source'):
+                    value=json_pointer(json.loads(raw),check.get('pointer',''))
                     row['actual']=value
-                    if not equal(value,check['value']):raise ValueError('JSON value differs from the required result')
+                    expected=check.get('value')
+                    if kind=='json_matches_source':
+                        source=safe_path((store.project() or {}).get('root'),check['sourcePath'])
+                        if source==path:raise ValueError('Verification requires a separate source artifact')
+                        if not source.is_file() or source.stat().st_size>4*1024*1024:raise ValueError('Source is missing or exceeds 4 MB')
+                        source_raw=source.read_bytes()
+                        expected=json_pointer(json.loads(source_raw),check.get('sourcePointer',''))
+                        if check.get('transform')=='length':
+                            if not isinstance(expected,(list,dict)):raise ValueError('Length requires a JSON array or object')
+                            expected=len(expected)
+                        row.update(expected=expected,sourceSha256=hashlib.sha256(source_raw).hexdigest())
+                    if not equal(value,expected):raise ValueError('JSON value differs from the required result')
             elif kind=='command_exit':
                 # Uses the same controller review and scoped background authority as every action.
                 checkpoint=dict(id=identity(),name='verification_command',arguments=dict(command=check['command']),status='started',created=now())
@@ -138,6 +168,8 @@ async def verify(store,tools,task,checks=None):
         result=decode(checkpoint.get('result',''))
         return checkpoint.get('status')=='error' and isinstance(result,dict) and result.get('inputs') and any(c['name']==result.get('toolMatch',checkpoint['name']) and successful(c) for c in task.get('checkpoints',[])[task['checkpoints'].index(checkpoint)+1:])
     unresolved=[c['id'] for c in latest.values() if not successful(c) and not recovered_schema(c)]
+    if not rows and unsupported_artifact_claim(task):
+        rows.append(dict(check=dict(kind='artifact_verification_claim'),status='failed',error='The saved artifact has no independent source checks. Use verify_json for every required field or explicitly report that the artifact remains unverified.',checked=now()))
     status='failed' if any(r['status']=='failed' for r in rows) else 'needs_attention' if unresolved else 'passed' if rows else 'unverified'
     report=dict(status=status,checked=now(),checks=rows,unresolved=unresolved,note='Passed checks cover the explicit criteria only.' if status=='passed' else 'No independent success criteria were supplied.' if status=='unverified' else 'Inspect failed checks or unresolved tool outcomes.')
     task['verification']=report

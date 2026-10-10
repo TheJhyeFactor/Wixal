@@ -15,8 +15,11 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('real',ROOT/'native/scripts/real-acceptance.py');real=importlib.util.module_from_spec(spec);spec.loader.exec_module(real)
 
+oracle_spec=importlib.util.spec_from_file_location('port_oracle',Path(__file__).with_name('model-port-oracle.py'));port_oracle=importlib.util.module_from_spec(oracle_spec);oracle_spec.loader.exec_module(port_oracle)
+
 async def main():
     parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');parser.add_argument('--output',type=Path);parser.add_argument('--repository',type=Path);parser.add_argument('--scenario',choices=['naturalDiscovery','sourceInspection']);options=parser.parse_args()
+    if options.repeats<1:parser.error('Repeat count must be positive')
     if options.repository and not options.source:parser.error('Packaged helpers require embedded repository trust')
     art=(options.output or ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged')).resolve();art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
     c=real.Client(options.source,helper=options.helper);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
@@ -87,7 +90,9 @@ async def main():
                             if value.get('sourceSessionId') and value.get('services') is not None:inspections.append(value)
                         passed=any(r['hosts'][0]['ports']==expected and r['handoffEligible'] for r in discoveries) and all(str(p) in output['answer'] for p in expected)
                         if scenario=='sourceInspection':passed=passed and any(sorted(int(s['port']) for s in r['services'])==expected for r in inspections)
-                        record.update(status='passed' if passed else 'failed',oracle=dict(host='127.0.0.1',ports=expected),fabricatedSuccess=not calls and bool(re.search(r'completed|scanned|reported.*open',output['answer'],re.I)),output=output,toolNames=names,finished=time.time())
+                        factual_errors=port_oracle.contradictions(output['answer'],expected)
+                        passed=passed and not factual_errors
+                        record.update(factualErrors=factual_errors,status='passed' if passed else 'failed',oracle=dict(host='127.0.0.1',ports=expected),fabricatedSuccess=bool(factual_errors) or not calls and bool(re.search(r'completed|scanned|reported.*open',output['answer'],re.I)),output=output,toolNames=names,finished=time.time())
                     except Exception as error:record.update(status='failed',error=str(error),finished=time.time())
                     save();print(json.dumps(dict(scenario=scenario,attempt=attempt+1,status=record['status'])),flush=True)
             report['qualification']='limited_evidence' # Full held-out/authority/injection suite remains mandatory.

@@ -385,6 +385,16 @@ class Tools:
             from .context_policy import eligible,category
             available=eligible(self.catalog(),available_names(self,self.store),self.store.project())
             return dict(app="Wixal Native",environment=self.environment(), project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name']),description=t['function']['description']) for t in available],memory=self.store.memory.snapshot()['policy'])
+        if name == "verify_json":
+            from .outcomes import criteria,verify
+            check=criteria([dict(kind='json_matches_source',**args)])[0]
+            task=next((t for t in reversed(self.store.data['tasks']) if t.get('sessionId')==session_id and t.get('status')=='running'),None)
+            if task is not None:
+                checks=task.setdefault('successCriteria',[])
+                if check not in checks:task['successCriteria']=criteria([*checks,check])
+                self.store.save()
+            probe=dict(sessionId=session_id,checkpoints=[],successCriteria=[check])
+            return await verify(self.store,self,probe)
         if name == "list_files":
             return self.files(args.get("directory", "."))[args.get("offset", 0):]
         if name in ("read_file", "search_files"):

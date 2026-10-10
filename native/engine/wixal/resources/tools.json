@@ -955,5 +955,47 @@
         ]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "verify_json",
+      "description": "Independently compare one saved JSON artifact field with a separate JSON source field, optionally counting source array/object entries. Returns actual values and both hashes. A passing check covers this field only; check every required field before claiming the report verified.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Project-relative saved artifact"
+          },
+          "pointer": {
+            "type": "string",
+            "description": "Artifact JSON pointer, e.g. /name"
+          },
+          "sourcePath": {
+            "type": "string",
+            "description": "Project-relative source artifact"
+          },
+          "sourcePointer": {
+            "type": "string",
+            "description": "Source JSON pointer, e.g. /name"
+          },
+          "transform": {
+            "type": "string",
+            "enum": [
+              "identity",
+              "length"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "pointer",
+          "sourcePath",
+          "sourcePointer"
+        ],
+        "additionalProperties": false
+      }
+    }
   }
 ]

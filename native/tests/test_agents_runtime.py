@@ -44,7 +44,7 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def test_automatic_discovery_write_command_verify_and_restore(self):
         project=self.service.store.data['activeProject'];session=self.service.store.data['activeSession']
         context,seen=self.scripted([('workspace_info',dict(category='files')),('write_file',dict(path='report.txt',content='verified-output')),('workspace_info',dict(category='commands')),('run_command',dict(command="python3 -c \"from pathlib import Path; assert Path('report.txt').read_text() == 'verified-output'; print('VERIFIED')\""))])
-        with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Inspect files and produce a verified report'))
+        with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Inspect files and produce a verified report',successCriteria=[dict(kind='file_contains',path='report.txt',value='verified-output')]))
         self.assertEqual(task['status'],'completed');self.assertEqual((self.root/'report.txt').read_text(),'verified-output')
         self.assertIn('VERIFIED',task['checkpoints'][-1]['result']);self.assertEqual(self.service.store.data['enabledTools'],[])
         self.assertEqual(self.service.store.data['activeProject'],project);self.assertEqual(self.service.store.data['activeSession'],session)

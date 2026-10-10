@@ -59,6 +59,8 @@ def discovery_follow_up(task):
     all normal controller authority/review checks.
     """
     prompt=task.get('prompt','').lower()
+    # Tool availability is context, not a request to perform inspection.
+    prompt=re.sub(r'\b(?:rustscan\s+and\s+nmap|nmap\s+and\s+rustscan|nmap)\s+(?:are|is)\s+(?:already\s+)?installed\b','',prompt)
     if not re.search(r'\b(discover|discovery|rustscan)\b',prompt):return None
     if not re.search(r'\b(inspect|inspection|enumerate|enumeration|nmap)\b',prompt):return None
     if re.search(r"\b(?:do not|don't|without|no|skip)\b[^.!?\n]{0,160}\b(?:inspect\w*|enumerat\w*|nmap)\b",prompt):return None

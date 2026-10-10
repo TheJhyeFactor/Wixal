@@ -41,9 +41,10 @@ async def main(args):
             params=dict(id=agent,prompt=prompt)
             if checks is not None:params['successCriteria']=checks
             task=await c.call('agent-run',params)
-            session=await c.session();usage=[m.get('usage',{}) for m in session['messages'] if m['role']=='assistant']
+            state=await c.state();session=next(s for s in state['sessions'] if s['id']==task['sessionId']);usage=[m.get('usage',{}) for m in session['messages'] if m['role']=='assistant']
             assert any(u.get('eval_count',0)>0 for u in usage),'No real inference counters'
             assert all(hashlib.sha256((project/name).read_bytes()).hexdigest()==sha for name,sha in source_hashes.items()),'A source or fixed oracle artifact changed'
+            assert all(r['estimatedInput']+r['outputReserve']<=r['context'] for r in session.get('requests',[])),'Request exceeds its context budget'
             assert oracle(task),'Independent expected task/artifact outcome failed'
             row.update(status='passed',task=task,requests=session.get('requests',[]),usage=usage)
         except Exception as error:

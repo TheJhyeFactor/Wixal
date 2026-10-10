@@ -47,6 +47,7 @@ def inspection_claim(answer):
     for sentence in re.split(r'[\n.!?]',answer):
         if re.search(r"\b(?:not|never|unable|cannot|can't|declined|failed|unavailable|only)\b",sentence,re.I):continue
         if re.search(r'\b(?:I|we)\s+(?:have\s+)?inspected\b|\b(?:ports|services)\s+(?:were|are|have been)\s+inspected\b|\bused\s+for\s+inspection\b',sentence,re.I):return True
+        if re.search(r'\binspection(?:\s+step)?\s+(?:(?:was|is|has been|had been)\s+)?(?:performed|conducted|carried out)\b',sentence,re.I):return True
         if re.search(r'\binspection\b',sentence,re.I) and re.search(r'\b(?:completed?|finished|successful(?:ly)?|done)\b',sentence,re.I):return True
     return False
 

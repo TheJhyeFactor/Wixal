@@ -26,7 +26,7 @@ def review(raw):
             rows=task['verification']['checks'];status=task['verification']['status'];name=row['name']
             if name in ('multi-read-calculated-artifact','correct-source-report'):
                 assert task['status']=='completed' and status=='passed','Actual task was not verified'
-                fields={c['check'].get('pointer'):c for c in rows if c['check']['kind']=='json_matches_source'}
+                fields={c['check'].get('pointer'):c for c in rows if c['check']['kind']=='json_matches_source' and c['check'].get('sourcePath')=='package.json'}
                 for field,value in expected.items():
                     check=fields['/'+field]
                     assert check['status']=='passed' and check['actual']==value and check['expected']==value and check['sourceSha256']==source_sha,'Source oracle differs'
@@ -40,7 +40,7 @@ def review(raw):
                     assert any(c.get('exitCode')==0 and str(expected['scriptCount']) in c.get('output','') for c in commands),'No successful actual calculation result'
             elif name=='incorrect-source-report':
                 assert task['status']=='needs_attention' and status=='failed','Incorrect report did not retain a failed check'
-                fields={c['check'].get('pointer'):c for c in rows if c['check']['kind']=='json_matches_source'}
+                fields={c['check'].get('pointer'):c for c in rows if c['check']['kind']=='json_matches_source' and c['check'].get('sourcePath')=='package.json'}
                 assert all(fields['/'+key]['actual']=='' and fields['/'+key]['expected']==expected[key] and fields['/'+key]['status']=='failed' and fields['/'+key]['sourceSha256']==source_sha for key in ('name','version')),'Incorrect source fields were not independently rejected'
                 assert not any(c['name']=='write_file' for c in task['checkpoints']),'Negative artifact was modified'
             elif name=='no-criteria-unverified':

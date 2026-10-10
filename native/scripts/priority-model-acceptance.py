@@ -29,7 +29,7 @@ async def main(args):
     (project/'wrong.json').write_text(json.dumps(dict(name='',version='',scriptCount=expected['scriptCount'])))
     source_hashes={name:hashlib.sha256((project/name).read_bytes()).hexdigest() for name in ('package.json','source-a.json','source-b.json','correct.json','wrong.json')}
     c=real.Client(False,helper=helper,payload=app/'Contents/Resources/ollama')
-    report=dict(status='running',started=time.time(),app=str(app),helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),sourceManifestSha256=hashlib.sha256((app/'Contents/Resources/SOURCE_MANIFEST.json').read_bytes()).hexdigest(),scope='Copied public Wixal manifests in an isolated project; named installed models only',attempts=[])
+    report=dict(status='running',started=time.time(),app=str(app),helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),sourceManifestSha256=hashlib.sha256((app/'Contents/Resources/SOURCE_MANIFEST.json').read_bytes()).hexdigest(),scope='Copied public Wixal manifests in an isolated project; named installed models only',endpoint=args.endpoint,repeats=args.repeats,attempts=[])
     def save():(output/'results.json').write_text(json.dumps(report,indent=2)+'\n')
     def source_checks(path):
         return [dict(kind='json_matches_source',path=path,pointer='/'+field,sourcePath='package.json',sourcePointer='/'+source,transform=transform) for field,source,transform in [('name','name','identity'),('version','version','identity'),('scriptCount','scripts','length')]]
@@ -60,7 +60,9 @@ async def main(args):
                 return path.parent.resolve()==project and path.name.startswith('report-') and path.suffix=='.json'
             return data.get('name') in c.allowed
         c.review_policy=review
-        catalog=await c.call('models')
+        catalog=await c.call('models');report['availableModels']=catalog
+        report['unsupported']=[dict(model=m['name'],reason='Conversation-only model: tool tasks are unsupported') for m in catalog if 'tools' not in m.get('capabilities',[])]
+        save()
         for model in args.models:
             metadata=next((m for m in catalog if m['name']==model),None)
             if not metadata or 'tools' not in metadata.get('capabilities',[]):

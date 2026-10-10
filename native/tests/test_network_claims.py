@@ -1,10 +1,16 @@
 """Current tool facts, contradictory answers and host/stage boundaries."""
 import json
 import unittest
-from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote
+from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_explicit_disabled_tool_claim_uses_actual_controller_scope(self):
+        for answer in ['The environment does not have the `network_discover` tool enabled.','network_discover is disabled.']:
+            self.assertEqual(availability_claim(dict(result=answer),['network_discover'])['status'],'failed')
+            self.assertIsNone(availability_claim(dict(result=answer),[]))
+        for answer in ['RustScan is not installed.','network_discover needs your approval.','I cannot claim network_discover is disabled.']:
+            self.assertIsNone(availability_claim(dict(result=answer),['network_discover']))
     def test_standalone_discovery_starts_with_discovery_schemas(self):
         available=[dict(function=dict(name=n)) for n in ['workspace_info','read_file','list_files','recall_memory','load_skill','network_discover','network_read','network_stop','network_scan','addon_catalog','addon_install','addon_run','security_tools','command_read','command_stop']]
         prompt='Which selected TCP ports accept connections? Use bounded standalone discovery without installing programs.'
@@ -83,6 +89,23 @@ from unittest.mock import patch
 class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
+
+    async def test_false_enabled_scope_claim_gets_bounded_feedback_without_effects(self):
+        await self.service.dispatch('settings',dict(mode='chat'))
+        count=0
+        async def stream(endpoint,body,emit):
+            nonlocal count
+            count+=1
+            if count>1:self.assertIn('tool_scope_claim',body['messages'][-1]['content'])
+            return dict(role='assistant',content='The environment does not have the network_discover tool enabled.')
+        with patch('wixal.agent.stream_chat',stream),patch.object(self.service.tools,'execute') as effects:
+            task=await self.service.dispatch('chat',dict(text='Explain whether network_discover is enabled. Do not scan.'))
+        self.assertEqual(count,3);effects.assert_not_called()
+        self.assertEqual(task['status'],'needs_attention')
+        self.assertIn('native tool schema is enabled',task['result'])
+        self.assertIn('No completed current-task scanner observations',task['result'])
+        messages=self.service.store.session()['messages']
+        self.assertTrue(any('does not have' in m.get('unverifiedModelContent','') for m in messages))
 
     async def run_claim(self,recover):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_scan']))

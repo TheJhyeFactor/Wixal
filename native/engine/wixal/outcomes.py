@@ -177,6 +177,13 @@ async def verify(store,tools,task,checks=None):
     if contradiction:rows.append(contradiction)
     quote=evidence_quote(task)
     if quote:rows.append(quote)
+    if hasattr(tools,'catalog'):
+        from .agent_context import available_names
+        from .context_policy import eligible
+        from .network_claims import availability_claim
+        available=eligible(tools.catalog(),available_names(tools,store),store.project())
+        availability=availability_claim(task,[t['function']['name'] for t in available])
+        if availability:rows.append(availability)
     follow_up=discovery_follow_up(task)
     if follow_up:rows.append(follow_up)
     latest={}

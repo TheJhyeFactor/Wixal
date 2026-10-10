@@ -17,6 +17,83 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
     scripted=fixtures.AgentRuntimeTests.scripted
 
+    async def test_invalid_self_source_does_not_poison_corrected_independent_verification(self):
+        (self.root/'source.json').write_text('{"value":7319}')
+        (self.root/'output.json').write_text('{"value":7319}')
+        context,_=self.scripted([('verify_json',dict(path='output.json',pointer='/value',sourcePath='./output.json',sourcePointer='/value',transform='identity')),('verify_json',dict(path='output.json',pointer='/value',sourcePath='source.json',sourcePointer='/value',transform='identity'))],'The independent source check passed.')
+        with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Verify output.json against the separate source.json.'))
+        self.assertEqual(task['status'],'completed');self.assertEqual(task['verification']['status'],'passed')
+        self.assertEqual(task['checkpoints'][0]['status'],'error')
+        self.assertIn('separate source artifact',task['checkpoints'][0]['result'])
+        self.assertEqual(task['successCriteria'],[dict(kind='json_matches_source',path='output.json',pointer='/value',sourcePath='source.json',sourcePointer='/value',transform='identity')])
+        # An actual independent mismatch must still fail.
+        (self.root/'source.json').write_text('{"value":17}')
+        from wixal.outcomes import verify
+        self.assertEqual((await verify(self.service.store,self.service.tools,task))['status'],'failed')
+
+    async def test_graph_persists_branch_identity_before_model_execution(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Durable branch',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
+        entered=asyncio.Event()
+        async def waiting(*args):entered.set();await asyncio.Event().wait()
+        with patch('wixal.agent.stream_chat',waiting):
+            current=asyncio.create_task(self.service.dispatch('workflow-run',dict(id=flow['id'])))
+            await asyncio.wait_for(entered.wait(),5)
+            try:
+                persisted=json.loads(self.service.store.db.execute('SELECT value FROM state').fetchone()[0])
+                stage=persisted['workflowRuns'][-1]['stages'][0]
+                self.assertTrue(stage['childId']);self.assertEqual(stage['status'],'running')
+                task=next(t for t in persisted['tasks'] if t['id']==stage['taskId'])
+                self.assertEqual(task['workflowRunId'],persisted['workflowRuns'][-1]['id'])
+            finally:
+                self.service.active.cancel();await asyncio.gather(current,return_exceptions=True)
+            self.assertEqual(self.service.store.data['workflowRuns'][-1]['stages'][0]['status'],'interrupted')
+
+    async def test_graph_persists_effect_checkpoint_before_action_review(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Durable effect',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Write proof',isolation='Isolated changes')]))
+        entered=asyncio.Event()
+        async def review(details):entered.set();await asyncio.Event().wait()
+        context,_=self.scripted([('write_file',dict(path='proof.txt',content='EFFECT-MARKER'))])
+        with context,patch.object(self.service.tools,'approve',review):
+            current=asyncio.create_task(self.service.dispatch('workflow-run',dict(id=flow['id'])))
+            await asyncio.wait_for(entered.wait(),5)
+            try:
+                persisted=json.loads(self.service.store.db.execute('SELECT value FROM state').fetchone()[0]);stage=persisted['workflowRuns'][-1]['stages'][0]
+                task=next(t for t in persisted['tasks'] if t['id']==stage['taskId'])
+                self.assertEqual(task['checkpoints'][-1]['name'],'write_file');self.assertEqual(task['checkpoints'][-1]['status'],'started')
+                self.assertFalse((self.service.store.directory/'workflow-children'/stage['childId']/'project/proof.txt').exists())
+            finally:self.service.active.cancel();await asyncio.gather(current,return_exceptions=True)
+
+    async def test_uncertain_workflow_recovery_decline_keeps_effects_and_stage(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Uncertain recovery',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
+        context,_=self.scripted([],'Recorded result')
+        with context:run=await self.service.dispatch('workflow-run',dict(id=flow['id']))
+        run['status']='interrupted';stage=run['stages'][0];stage['status']='interrupted'
+        task=next(t for t in self.service.store.data['tasks'] if t['id']==stage['taskId'])
+        before=copy.deepcopy(stage)
+        async def decline(details):self.assertEqual(details['name'],'workflow_recovery');return False
+        for checkpoint in (dict(id='uncertain',name='command_start',status='interrupted',arguments=dict(command='effect'),result=''),dict(id='running-handle',name='command_start',status='finished',arguments=dict(command='effect'),result=json.dumps(dict(session_id='effect-session',state='running')))):
+            task['checkpoints']=[checkpoint];run['status']='interrupted'
+            with patch.object(self.service.tools,'approve',decline),patch('wixal.agent.stream_chat') as model:
+                result=await self.service.dispatch('workflow-resume',dict(runId=run['id']))
+                model.assert_not_called()
+            self.assertEqual(result['status'],'paused');self.assertEqual(result['stages'][0],before)
+
+    async def test_stop_during_interrupted_effect_review_targets_parent_workflow(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Stoppable recovery',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
+        context,_=self.scripted([],'Recorded result')
+        with context:run=await self.service.dispatch('workflow-run',dict(id=flow['id']))
+        run['status']='interrupted';run['stages'][0]['status']='interrupted'
+        task=next(t for t in self.service.store.data['tasks'] if t['id']==run['stages'][0]['taskId'])
+        task['checkpoints']=[dict(id='uncertain',name='command_start',status='interrupted',result='')]
+        entered=asyncio.Event()
+        async def review(details):entered.set();await asyncio.Event().wait()
+        with patch.object(self.service.tools,'approve',review),patch('wixal.agent.stream_chat') as model:
+            current=asyncio.create_task(self.service.dispatch('workflow-resume',dict(runId=run['id'])))
+            await asyncio.wait_for(entered.wait(),5)
+            await self.service.dispatch('stop',dict(runId=run['id']))
+            await asyncio.gather(current,return_exceptions=True);model.assert_not_called()
+        self.assertEqual(run['status'],'interrupted');self.assertIsNone(self.service.agents.active_workflow_id)
+
     async def test_multiple_file_evidence_checks_use_each_files_latest_read(self):
         from wixal.outcomes import verify
         (self.root/'one.txt').write_text('FIRST-SOURCE')

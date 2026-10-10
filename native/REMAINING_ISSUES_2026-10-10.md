@@ -84,3 +84,8 @@ Fresh final-package qualification records use `model-prerequisites-validation/re
 ## Operational boundary
 
 No public release, production catalogue promotion, account deletion, host sleep/reboot or provider message was performed by this assessment. These operations need their actual prerequisites and scoped test resources. Issues remain open until their own completion criteria have measured evidence; preparation and narrower checks do not automatically satisfy them.
+
+
+## 11 October follow-up: issues #8 and #20
+
+The later [Mac recovery completion record](MAC_RECOVERY_COMPLETION_2026-10-11.md) supersedes the outstanding #8/#20 recovery items in this dated assessment. It records production fixes, final installed real-model workflow/data acceptance, controlled source fault boundaries, retained failed attempts and exact package identities. The remaining 24 issues retain their own open completion criteria; this follow-up does not extend lexical recall evidence to optional embedding inference or process interruption to physical power loss.

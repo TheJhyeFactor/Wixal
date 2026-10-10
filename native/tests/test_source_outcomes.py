@@ -60,9 +60,8 @@ class SourceOutcomeTests(unittest.IsolatedAsyncioTestCase):
         await self.service.dispatch('settings',dict(mode='chat'))
         self.source();(self.root/'report.json').write_text('{"name":"actual"}')
         for source in ['missing.json','.env','report.json']:
-            result=await self.service.tools.execute('verify_json',dict(path='report.json',pointer='/name',sourcePath=source,sourcePointer='/name'),self.service.store.session()['id'])
-            self.assertEqual(result['status'],'failed')
-            self.assertNotIn('sourceSha256',result['checks'][0])
+            with self.assertRaises((ValueError,OSError)):
+                await self.service.tools.execute('verify_json',dict(path='report.json',pointer='/name',sourcePath=source,sourcePointer='/name'),self.service.store.session()['id'])
 
 class SourceSchemaTests(unittest.TestCase):
     def test_paths_and_transforms_are_bounded(self):

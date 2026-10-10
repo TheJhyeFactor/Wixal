@@ -388,6 +388,10 @@ class Tools:
         if name == "verify_json":
             from .outcomes import criteria,verify
             check=criteria([dict(kind='json_matches_source',**args)])[0]
+            # Invalid tool inputs must not install an impossible success
+            # criterion. Retain the failed call and allow corrected inputs.
+            if safe_path(root,check['path'])==safe_path(root,check['sourcePath']):
+                raise ValueError('Verification requires a separate source artifact')
             task=next((t for t in reversed(self.store.data['tasks']) if t.get('sessionId')==session_id and t.get('status')=='running'),None)
             if task is not None:
                 checks=task.setdefault('successCriteria',[])

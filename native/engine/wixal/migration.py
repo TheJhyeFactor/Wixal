@@ -22,9 +22,18 @@ def import_workspace(store, source, *, preview=False, preserve_preferences=False
     native_backup=legacy.get("wixalBackupVersion")==1
     if "wixalBackupVersion" in legacy and not native_backup:raise ValueError("Unsupported native backup version")
     candidate=copy.deepcopy(store.data)
+    if native_backup:
+        # Merge recall exclusions before records: an older backup must not
+        # resurrect a locally forgotten note or its historical source text.
+        from .workspace_data import MEMORY_EXCLUSIONS
+        for key in MEMORY_EXCLUSIONS:
+            incoming=legacy.get(key,[])
+            if not isinstance(incoming,list) or any(not isinstance(v,str) or not 1<=len(v)<=200 for v in incoming):
+                raise ValueError('Invalid memory exclusion collection: '+key)
+            candidate[key]=list(dict.fromkeys(candidate.get(key,[])+incoming))
     counts,warnings,skipped={},[],{}
     def warn(key,index,reason): warnings.append(f"{key} record {index+1}: {reason}")
-    for key in ("projects","sessions","memories","agentProfiles","agentWorkflows","tasks","skills","schedules","workflowRuns","skillCandidates","agentJobs","mcpServers"):
+    for key in ("projects","sessions","memories","globalMemories","agentProfiles","agentWorkflows","tasks","skills","schedules","workflowRuns","skillCandidates","agentJobs","mcpServers"):
         records=legacy.get(key,[])
         if not isinstance(records,list): raise ValueError(f"Invalid {key} collection")
         candidate.setdefault(key,[])
@@ -37,6 +46,8 @@ def import_workspace(store, source, *, preview=False, preserve_preferences=False
                 skipped[key]+=1;continue
             value=copy.deepcopy(raw)
             try:
+                if key in ('memories','globalMemories') and value['id'] in candidate.get('forgottenMemories',[]):
+                    raise ValueError('forgotten note excluded')
                 projects={p["id"] for p in candidate["projects"]}
                 if key=="projects":
                     if not isinstance(value.get("root"),str) or not isinstance(value.get("name"),str): raise ValueError("missing project name or folder")
@@ -72,9 +83,27 @@ def import_workspace(store, source, *, preview=False, preserve_preferences=False
                         for field in ("agentId","scheduledRun"):
                             if field in raw:value[field]=raw[field]
                         if isinstance(raw.get("summary"),dict) and isinstance(raw["summary"].get("content"),str):value["summary"]=copy.deepcopy(raw["summary"])
-                elif key=="memories":
+                elif key in ("memories","globalMemories"):
                     if not isinstance(value.get("content"),str):raise ValueError("missing note text")
-                    value={k:v for k,v in value.items() if k in ("id","projectId","content","created")}
+                    if key=='globalMemories' and not native_backup:raise ValueError('Global notes require a native backup')
+                    fields={'id','projectId','content','created'}
+                    if native_backup:
+                        fields.update(('scope','owner','updated','sourceSession','sourceMessage','sources','revisions','mergedIds'))
+                        if value.get('scope','global' if key=='globalMemories' else 'project')!=('global' if key=='globalMemories' else 'project'):raise ValueError('invalid note scope')
+                        if not isinstance(value.get('owner','guest'),str) or not 1<=len(value.get('owner','guest'))<=200:raise ValueError('invalid note owner')
+                        for field in ('sourceSession','sourceMessage'):
+                            if value.get(field) is not None and not isinstance(value[field],str):raise ValueError('invalid note source')
+                        for field in ('sources','revisions'):
+                            if not isinstance(value.get(field,[]),list) or any(not isinstance(v,dict) for v in value.get(field,[])):raise ValueError('invalid note provenance')
+                            allowed={'session','message','created'} if field=='sources' else {'content','sourceSession','sourceMessage','updated'}
+                            if field in value:value[field]=[{k:v for k,v in row.items() if k in allowed} for row in value[field]]
+                            for row in value.get(field,[]):
+                                for name in allowed-{'created','updated'}:
+                                    if row.get(name) is not None and not isinstance(row[name],str):raise ValueError('invalid note provenance value')
+                        if not isinstance(value.get('mergedIds',[]),list) or any(not isinstance(v,str) or not 1<=len(v)<=200 for v in value.get('mergedIds',[])):raise ValueError('invalid merged note identifiers')
+                    value={k:v for k,v in value.items() if k in fields}
+                    if key=='globalMemories':
+                        value.update(scope='global',projectId=None,owner=value.get('owner','guest'))
                 elif key in ("agentProfiles","agentWorkflows","workflowRuns","skillCandidates","agentJobs"):
                     if not native_backup:raise ValueError("Agent records require a native backup")
                     from .agent_data import imported
@@ -129,6 +158,8 @@ def import_workspace(store, source, *, preview=False, preserve_preferences=False
             from .tools import DEFINITIONS
             supported={t["function"]["name"] for t in DEFINITIONS}
             candidate["enabledTools"]=[name for name in legacy["enabledTools"] if isinstance(name,str) and name in supported]
+    for key in ('memories','globalMemories'):
+        candidate[key]=[n for n in candidate[key] if n['id'] not in candidate.get('forgottenMemories',[])]
     if candidate["projects"] or candidate["sessions"]:
         candidate["setup"].update(entryCompleted=True,completed=True)
     candidate["migration"]=dict(source=str(source),imported=now(),counts=counts,skippedExisting=skipped,warnings=warnings,settingsVersion=3)

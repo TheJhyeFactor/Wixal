@@ -7,7 +7,8 @@ from pathlib import Path
 from .storage import now
 from .migration import import_workspace
 
-COLLECTIONS=('projects','sessions','memories','agentProfiles','agentWorkflows','tasks','skills','schedules','workflowRuns','skillCandidates','agentJobs')
+COLLECTIONS=('projects','sessions','memories','globalMemories','agentProfiles','agentWorkflows','tasks','skills','schedules','workflowRuns','skillCandidates','agentJobs')
+MEMORY_EXCLUSIONS=('forgottenMemories','forgottenMemorySources','supersededMemorySources')
 
 
 def backup(store,path):
@@ -15,6 +16,7 @@ def backup(store,path):
     if destination.suffix.lower()!='.json':raise ValueError('Save the backup as a JSON file')
     if destination.is_symlink():raise ValueError('Choose a regular backup file, not a symbolic link')
     data={key:copy.deepcopy(store.data.get(key,[])) for key in COLLECTIONS}
+    data.update({key:copy.deepcopy(store.data.get(key,[])) for key in MEMORY_EXCLUSIONS})
     from .conversation import read_image
     for session in data['sessions']:
         session.pop('draft',None)

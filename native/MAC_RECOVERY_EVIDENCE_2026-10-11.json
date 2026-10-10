@@ -1,0 +1,189 @@
+{
+  "installed": {
+    "status": "passed",
+    "app": "/Applications/Wixal Recovery Final.app",
+    "productionSourceCommit": "f74a3a9",
+    "installedFiles": 542,
+    "sourceEntries": 125,
+    "helperSha256": "47c188c5a89533cbffb20452f44955e7b1aaae64174fb8f5453936714fcae5ad",
+    "sourceManifestSha256": "179ab89dfed7ebb7deffd93f3a4bcb2c285af88db34043d71f96757f91d73476",
+    "toolTrustManifestSha256": "41161c9c2cf05df2e363862e779fa94fad520cf649cd0834e4767917022bf10b",
+    "acceptanceScripts": {
+      "data-recovery-completion.py": "d9e16273d8bc0353cac4ec0bdcbd18cc3d841c33d33d4bb819face3b16a9006a",
+      "workflow-completion-acceptance.py": "ecf17c8aeec5160bc5d456d267edb5bdbb2a79182dcfa3fefed956cd9b9222a3"
+    }
+  },
+  "records": [
+    {
+      "path": "artifacts/native/mac-completion/data-run-5/results.json",
+      "sha256": "f7754aedf7997c18a2118b7e34aae4b5630576a4bd8430b457602e1f0e2330c6",
+      "status": "passed",
+      "cases": [
+        {
+          "name": "repeated-session-cycle-0",
+          "status": "passed"
+        },
+        {
+          "name": "repeated-session-cycle-1",
+          "status": "passed"
+        },
+        {
+          "name": "repeated-session-cycle-2",
+          "status": "passed"
+        },
+        {
+          "name": "kill-during-blocked-write-preserves-last-commit",
+          "status": "passed"
+        },
+        {
+          "name": "kill-after-acknowledged-commit-retains-new-record",
+          "status": "passed"
+        },
+        {
+          "name": "failed-installed-restore-is-atomic",
+          "status": "passed"
+        },
+        {
+          "name": "native-restore-retains-scopes-revisions-tombstones-and-history",
+          "status": "passed"
+        },
+        {
+          "name": "source-sqlite-save-interruption-1",
+          "status": "passed"
+        },
+        {
+          "name": "source-sqlite-save-interruption-5",
+          "status": "passed"
+        },
+        {
+          "name": "source-sqlite-save-interruption-10",
+          "status": "passed"
+        },
+        {
+          "name": "source-sqlite-import-interruption-1",
+          "status": "passed"
+        },
+        {
+          "name": "source-sqlite-import-interruption-5",
+          "status": "passed"
+        },
+        {
+          "name": "source-sqlite-import-interruption-10",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "artifacts/native/mac-completion/workflow-run-6/results.json",
+      "sha256": "5a4892ddd6b5a34db1b7add2dd0f89da2aef27cf9816828890823a3124fb4bba",
+      "status": "passed",
+      "cases": [
+        {
+          "name": "invalid-prerequisite-blocks-dependent-artifact",
+          "status": "passed"
+        },
+        {
+          "name": "review-decline-and-restart-preserve-completed-branches",
+          "status": "passed"
+        },
+        {
+          "name": "six-stage-real-model-graph-and-reviewed-isolated-merge",
+          "status": "passed"
+        },
+        {
+          "name": "interrupted-effect-is-retained-and-declined-recovery-does-not-execute",
+          "status": "passed"
+        },
+        {
+          "name": "reviewed-recovery-inspects-effect-without-replay",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "artifacts/native/mac-completion/migration-populated-acceptance.json",
+      "sha256": "1f2a1fed966959f15dee2ec1d74365e49bcc346338deb6579bfe4804689434d8",
+      "status": "passed",
+      "cases": []
+    },
+    {
+      "path": "artifacts/native/mac-completion/workflow-run-1/results.json",
+      "sha256": "5c00256afbc831f936cdb6dc7183236aca9238369e115e8467340bac927ffb65",
+      "status": "failed",
+      "cases": [
+        {
+          "name": "invalid-prerequisite-blocks-dependent-artifact",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "artifacts/native/mac-completion/workflow-run-2/results.json",
+      "sha256": "a66e797d713488bf40b9881f0101debc2e16beb495440d409ff606858959e73e",
+      "status": "failed",
+      "cases": [
+        {
+          "name": "invalid-prerequisite-blocks-dependent-artifact",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "artifacts/native/mac-completion/workflow-run-3/results.json",
+      "sha256": "6aa5dc8100e2364251462b359c659ebe4d8dbd4a6e4d3ec227fbd44da7d773ed",
+      "status": "failed",
+      "cases": [
+        {
+          "name": "invalid-prerequisite-blocks-dependent-artifact",
+          "status": "passed"
+        },
+        {
+          "name": "review-decline-and-restart-preserve-completed-branches",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "artifacts/native/mac-completion/workflow-run-4/results.json",
+      "sha256": "be93ffce9b7e2393c8b94cc370491a6bedcc4c0f0c9152e20660be4531c65b4d",
+      "status": "passed",
+      "cases": [
+        {
+          "name": "invalid-prerequisite-blocks-dependent-artifact",
+          "status": "passed"
+        },
+        {
+          "name": "review-decline-and-restart-preserve-completed-branches",
+          "status": "passed"
+        },
+        {
+          "name": "six-stage-real-model-graph-and-reviewed-isolated-merge",
+          "status": "passed"
+        },
+        {
+          "name": "interrupted-effect-is-retained-and-declined-recovery-does-not-execute",
+          "status": "passed"
+        },
+        {
+          "name": "reviewed-recovery-inspects-effect-without-replay",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "artifacts/native/mac-completion/workflow-run-5/results.json",
+      "sha256": "d8c19dbac185d4c36ac7d444985b57fd6afab0720b72c78472ab1f50c7f5d0ee",
+      "status": "failed",
+      "cases": [
+        {
+          "name": "invalid-prerequisite-blocks-dependent-artifact",
+          "status": "passed"
+        },
+        {
+          "name": "review-decline-and-restart-preserve-completed-branches",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

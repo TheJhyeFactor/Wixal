@@ -12,6 +12,19 @@ from wixal.storage import Store
 
 
 class StartupRecoveryTests(unittest.TestCase):
+    def test_restart_marks_parent_workflows_and_stages_interrupted_without_replay(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=Store(temporary)
+            completed=dict(id='done',status='completed',taskId='retained-task',result='Already committed')
+            store.data['workflowRuns']=[dict(id='flow',status='running',stages=[completed,dict(id='pending',status='running',taskId='branch-task',childId='child')]),dict(id='review',status='waiting_review',stages=[])]
+            store.close();restored=Store(temporary)
+            try:
+                self.assertTrue(all(r['status']=='interrupted' for r in restored.data['workflowRuns']))
+                stages=restored.data['workflowRuns'][0]['stages']
+                self.assertEqual(stages[0],completed)
+                self.assertEqual(stages[1]['status'],'interrupted');self.assertEqual(stages[1]['childId'],'child')
+            finally:restored.close()
+
     def test_failed_final_save_releases_database_and_owner_lock(self):
         with tempfile.TemporaryDirectory() as temporary:
             store=Store(temporary)

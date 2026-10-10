@@ -15,12 +15,24 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('real',ROOT/'native/scripts/real-acceptance.py');real=importlib.util.module_from_spec(spec);spec.loader.exec_module(real)
 
+oracle_spec=importlib.util.spec_from_file_location('port_oracle',Path(__file__).with_name('model-port-oracle.py'));port_oracle=importlib.util.module_from_spec(oracle_spec);oracle_spec.loader.exec_module(port_oracle)
+
 async def main():
     parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');parser.add_argument('--output',type=Path);parser.add_argument('--repository',type=Path);parser.add_argument('--scenario',choices=['naturalDiscovery','sourceInspection']);options=parser.parse_args()
+    if options.repeats<1:parser.error('Repeat count must be positive')
     if options.repository and not options.source:parser.error('Packaged helpers require embedded repository trust')
     art=(options.output or ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged')).resolve();art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
     c=real.Client(options.source,helper=options.helper);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
     report=dict(schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE))
+    if options.helper:
+        for key,name in [('sourceManifestSha256','SOURCE_MANIFEST.json'),('toolTrustManifestSha256','TOOL_TRUST_MANIFEST.json')]:
+            path=options.helper.resolve().parents[1]/name
+            if path.is_file():report[key]=digest(path)
+    def completed_inspection(checkpoint):
+        if checkpoint['name']!='network_scan' or checkpoint['status']!='finished':return False
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):return False
+        return isinstance(value,dict) and bool(value.get('sourceSessionId')) and not value.get('error') and isinstance(value.get('services'),list)
     def save():(art/'report.json').write_text(json.dumps(report,indent=2))
     async def start():
         command=[sys.executable,str(ROOT/'native/engine/engine_main.py')] if options.source else [str(options.helper)]
@@ -87,8 +99,22 @@ async def main():
                             if value.get('sourceSessionId') and value.get('services') is not None:inspections.append(value)
                         passed=any(r['hosts'][0]['ports']==expected and r['handoffEligible'] for r in discoveries) and all(str(p) in output['answer'] for p in expected)
                         if scenario=='sourceInspection':passed=passed and any(sorted(int(s['port']) for s in r['services'])==expected for r in inspections)
-                        record.update(status='passed' if passed else 'failed',oracle=dict(host='127.0.0.1',ports=expected),fabricatedSuccess=not calls and bool(re.search(r'completed|scanned|reported.*open',output['answer'],re.I)),output=output,toolNames=names,finished=time.time())
-                    except Exception as error:record.update(status='failed',error=str(error),finished=time.time())
+                        factual_errors=port_oracle.contradictions(output['answer'],expected)
+                        factual_errors.extend(port_oracle.quoted_xml_errors(output['answer'],[r.get('output','') for r in inspections]))
+                        if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(output['answer']):factual_errors.append('Answer claims an inspection without fresh source-bound inspection evidence')
+                        passed=passed and not factual_errors
+                        record.update(factualErrors=factual_errors,status='passed' if passed else 'failed',oracle=dict(host='127.0.0.1',ports=expected),fabricatedSuccess=bool(factual_errors) or not calls and bool(re.search(r'completed|scanned|reported.*open',output['answer'],re.I)),output=output,toolNames=names,finished=time.time())
+                    except Exception as error:
+                        session=await c.session();state=await c.state()
+                        task=next((t for t in reversed(state['tasks']) if t.get('sessionId')==session['id']),{})
+                        answer=task.get('result','')
+                        rejected=next((m['unverifiedModelContent'] for m in reversed(session.get('messages',[])) if m.get('unverifiedModelContent')),None)
+                        interpreted=rejected or answer
+                        factual_errors=port_oracle.contradictions(interpreted,expected)
+                        inspections=[c for c in task.get('checkpoints',[]) if completed_inspection(c)]
+                        factual_errors.extend(port_oracle.quoted_xml_errors(interpreted,[json.loads(c['result']).get('output','') for c in inspections]))
+                        if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(interpreted):factual_errors.append('Failed task nevertheless claims inspection without fresh evidence')
+                        record.update(status='failed',error=str(error),task=task,session=session,rejectedModelInterpretation=rejected,factualErrors=factual_errors,fabricatedSuccess=bool(factual_errors),finished=time.time())
                     save();print(json.dumps(dict(scenario=scenario,attempt=attempt+1,status=record['status'])),flush=True)
             report['qualification']='limited_evidence' # Full held-out/authority/injection suite remains mandatory.
         model_failed=any(r['status']!='passed' for r in report['modelAttempts'])

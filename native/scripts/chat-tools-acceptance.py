@@ -23,6 +23,10 @@ async def main(args):
     shutil.copy2(manifest, scratch/'package.json')
     project_manifest = json.loads(manifest.read_text())
     expected = dict(name=project_manifest['name'], version=project_manifest['version'], scriptCount=len(project_manifest['scripts']))
+    source_checks=[dict(kind='json_matches_source',path='chat-project-report.json',pointer='/'+field,sourcePath='package.json',sourcePointer='/'+source,transform=transform) for field,source,transform in [('name','name','identity'),('version','version','identity'),('scriptCount','scripts','length')]]
+    assertion_program="\n".join(["import json","with open('chat-project-report.json') as stream: saved = json.load(stream)","with open('package.json') as stream: source = json.load(stream)","assert saved['name'] == source['name']","assert saved['version'] == source['version']","assert type(saved['scriptCount']) is int and saved['scriptCount'] == len(source['scripts'])","print('CHAT-REPORT-VERIFIED')"])
+    assertion_command="python3 - <<'PY'\n"+assertion_program+"\nPY"
+    acceptance_sha=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     helper = app/'Contents/Resources/engine/wixal-engine'
     process = await asyncio.create_subprocess_exec(str(helper), '--data', str(output/'data'),
         '--runtime', str(app/'Contents/Resources/ollama'), '--endpoint', args.endpoint,
@@ -65,18 +69,19 @@ async def main(args):
         await call('project-add', dict(root=str(scratch)))
         await call('session-new', dict(mode='chat'))
         allow_writes = True
-        task = await call('chat', dict(text='Read package.json, copied from the actual Wixal project manifest. Use an installed python3 command to calculate the number of entries in scripts before writing the report; do not count them mentally. Use write_file to save chat-project-report.json with exactly the keys name (the package name), version (the package version), and scriptCount (the integer number of entries in scripts). Read the saved report back to verify it. Discover other schemas with workspace_info if needed. Do not change package.json or save memory.'))
+        task = await call('chat', dict(text='Read package.json, copied from the actual Wixal project manifest. Use an installed python3 command to calculate the number of entries in scripts before writing the report; do not count them mentally. Use write_file to save chat-project-report.json with exactly the keys name (the package name), version (the package version), and scriptCount (the integer number of entries in scripts). Read the saved report back to verify it. Discover other schemas with workspace_info if needed. Do not change package.json or save memory.',successCriteria=source_checks))
         path = scratch/'chat-project-report.json'
         actual = json.loads(path.read_text()) if path.exists() else None
-        outcomes.append(dict(name='chat-reviewed-report-and-readback', passed=task['status']=='completed' and actual==expected
+        outcomes.append(dict(name='chat-reviewed-report-and-readback', passed=task['status']=='completed' and task['verification']['status']=='passed' and actual==expected
+            and any(c['name'] in ('run_command','command_read') and c['status']=='finished' and json.loads(c['result']).get('exitCode')==0 and str(expected['scriptCount']) in json.loads(c['result']).get('output','') for c in task['checkpoints'] if c.get('result','').startswith('{'))
             and any(c['name']=='write_file' and c['status']=='finished' for c in task['checkpoints'])
             and any(c['name']=='read_file' and c.get('arguments',{}).get('path')=='chat-project-report.json' for c in task['checkpoints']), expected=expected, actual=actual, task=task))
         print(json.dumps(dict(name=outcomes[-1]['name'], passed=outcomes[-1]['passed'])), flush=True)
 
-        task = await call('chat', dict(text='Run an installed python3 command to independently compare chat-project-report.json with package.json: name and version must match, and scriptCount must equal len(scripts). Print CHAT-REPORT-VERIFIED only after the assertions pass. Inspect the actual command exit code and output before concluding.'))
+        task = await call('chat', dict(text='Run this exact installed python3 command to independently compare the saved report with package.json. Its assertions must pass before the marker is printed. Inspect the actual command exit code and output before concluding. Do not change either file.\n\n'+assertion_command))
         outcomes.append(dict(name='chat-command-verifies-the-actual-report', passed=task['status']=='completed'
             and any(c['name'] in ('run_command', 'command_read') and 'CHAT-REPORT-VERIFIED' in c.get('result','')
-                and json.loads(c['result']).get('exitCode')==0 for c in task['checkpoints'] if c.get('result','').startswith('{')), task=task))
+                and json.loads(c['result']).get('exitCode')==0 and assertion_program in json.loads(c['result']).get('command','') for c in task['checkpoints'] if c.get('result','').startswith('{')), assertionProgram=assertion_program, task=task))
         print(json.dumps(dict(name=outcomes[-1]['name'], passed=outcomes[-1]['passed'])), flush=True)
 
         await call('session-new', dict(mode='chat'))
@@ -96,7 +101,7 @@ async def main(args):
         (output/'helper-stderr.log').write_bytes(await stderr)
         (output/'events.json').write_text(json.dumps(events, indent=2))
         report = dict(status='passed' if len(outcomes)==4 and all(r['passed'] for r in outcomes) else 'failed',
-            model=args.model, app=str(app), helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),
+            model=args.model, app=str(app), acceptanceScriptSha256=acceptance_sha, helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),
             sourceManifestSha256=hashlib.sha256((app/'Contents/Resources/SOURCE_MANIFEST.json').read_bytes()).hexdigest(), outcomes=outcomes)
         (output/'results.json').write_text(json.dumps(report, indent=2))
     return report['status']=='passed'

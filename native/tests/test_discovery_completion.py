@@ -17,6 +17,14 @@ class DiscoveryCompletionTests(unittest.TestCase):
         self.assertEqual(discovery_follow_up(task)['status'],'failed')
         task['checkpoints'][-1]['result']=json.dumps(dict(sourceSessionId='fresh-source',state='completed',services=[]))
         self.assertEqual(discovery_follow_up(task)['status'],'passed')
+    def test_installed_tools_do_not_request_inspection(self):
+        for prompt in ['RustScan and Nmap are installed. Use a suitable bounded tool to determine which of TCP 61207,61208 are open on 127.0.0.1. Do not install anything or identify services.',
+                       'Nmap is already installed. Discover TCP ports only.',
+                       'Nmap and RustScan are installed. Discover the selected ports.']:
+            self.assertIsNone(discovery_follow_up(self.task(prompt)))
+    def test_installed_tools_do_not_hide_an_explicit_inspection_request(self):
+        task=self.task('RustScan and Nmap are installed. Discover the selected TCP ports and then inspect them using the source session.')
+        self.assertEqual(discovery_follow_up(task)['status'],'failed')
     def test_partial_discovery_does_not_request_handoff(self):
         task=self.task();task['checkpoints'][0]['result']=json.dumps(dict(session_id='source',state='stopped',structuredResult=dict(handoffEligible=False)))
         self.assertIsNone(discovery_follow_up(task))

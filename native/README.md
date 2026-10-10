@@ -8,6 +8,8 @@ The current source includes the [prioritized application gap audit and fixes](AP
 
 ## Alpha 3 changes
 
+The [high priority acceptance record](HIGH_PRIORITY_ACCEPTANCE_2026-10-10.md) covers subsequent development changes for JSON report verification, independent agent outcomes and network interpretation checks. It records exact package identities and bounded model coverage separately from the public Alpha 3 release.
+
 The public package includes the queue/recovery, acknowledged editing and activity/output fixes described in the [release notes](../docs/release-0.7.10-alpha.3.md). The [completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) describes the earlier development build. Exact public-package checks and identities accompany the release in `release-info.json`.
 
 Public managed downloads remain gated; no production catalogue or tool payload is bundled. Contributor GitHub OAuth also requires a registered client ID. See [the current alpha guide](../docs/native-alpha.md#tool-library-and-reporting) for usable paths and boundaries.

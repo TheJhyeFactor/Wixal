@@ -26,6 +26,9 @@ struct AgentSuccessCheck:Codable,Equatable {
     var command:String?=nil
     var tool:String?=nil
     var label:String?=nil
+    var sourcePath:String?=nil
+    var sourcePointer:String?=nil
+    var transform:String?=nil
 }
 struct AgentAuthorityDraft:Codable,Equatable {
     var writePaths:[String]?=[]

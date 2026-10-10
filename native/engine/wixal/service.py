@@ -296,7 +296,9 @@ class Service:
             return await self.active
         if method == "chat":
             self.idle()
-            self.active = asyncio.create_task(self.agent.run(params["text"], params.get("resume"), params.get("skill"), params.get("attachments")))
+            from .outcomes import criteria
+            checks=criteria(params.get("successCriteria")) if "successCriteria" in params else None
+            self.active = asyncio.create_task(self.agent.run(params["text"], params.get("resume"), params.get("skill"), params.get("attachments"), success_criteria=checks))
             return await self.active
         if method in ("session-handoff", "summary-clear"):
             self.idle()

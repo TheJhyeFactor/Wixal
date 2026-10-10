@@ -4,7 +4,7 @@ import json
 import re
 
 CATEGORIES = ('files', 'commands', 'web', 'security', 'memory', 'external')
-PROJECT_TOOLS = {'list_files','read_file','search_files','write_file','edit_file','make_directory','run_command','delegate_task'}
+PROJECT_TOOLS = {'list_files','read_file','search_files','write_file','edit_file','make_directory','run_command','delegate_task','verify_json'}
 
 def requires_project(name):
     return name in PROJECT_TOOLS or name.startswith(('command_', 'network_', 'website_'))
@@ -32,6 +32,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
     if re.search(r'\b(skill|skills|procedure|procedures)\b',prompt,re.I):
         chosen.add('skill_manage');chosen.discard('save_memory')
     if re.search(r'\b(addon|add-on|install|download|toolkit|nuclei|ffuf|wireshark|metasploit)\b',prompt,re.I):chosen.update(('addon_catalog','addon_discover','addon_install','addon_job','addon_run','addon_workflow','command_read','command_stop'))
+    if re.search(r'\b(report|artifact|verify|verified|verification)\b',prompt,re.I) and re.search(r'\bjson\b|\.json\b',prompt,re.I):chosen.add('verify_json')
     value = load_category
     if load_name: chosen.add(load_name)
     elif not value:

@@ -14,6 +14,8 @@ Native data remains at `~/Library/Application Support/Wixal Native`. Replacing t
 
 This release brings the agent recovery, editor and activity fixes into the public download. See the [release notes](release-0.7.10-alpha.3.md) for changes and the verification record.
 
+Subsequent development work adds source-bound JSON report checks and checks of model interpretations against recorded TCP evidence. The [high priority acceptance record](../native/HIGH_PRIORITY_ACCEPTANCE_2026-10-10.md) identifies the tested development helper and measured model coverage. Those changes and results do not replace the public Alpha 3 download described here.
+
 ## First use
 
 Start as a guest or use the optional account features. Open Models to download or import a model, or configure external Ollama. A model needs tool support for agent tasks. Real agent acceptance for this release uses gpt-oss:20b; hardware fit and reliability vary by model.

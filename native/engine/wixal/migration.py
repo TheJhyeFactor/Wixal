@@ -96,8 +96,8 @@ def import_workspace(store, source, *, preview=False, preserve_preferences=False
                         for field in ('sources','revisions'):
                             if not isinstance(value.get(field,[]),list) or any(not isinstance(v,dict) for v in value.get(field,[])):raise ValueError('invalid note provenance')
                             allowed={'session','message','created'} if field=='sources' else {'content','sourceSession','sourceMessage','updated'}
-                            value[field]=[{k:v for k,v in row.items() if k in allowed} for row in value.get(field,[])]
-                            for row in value[field]:
+                            if field in value:value[field]=[{k:v for k,v in row.items() if k in allowed} for row in value[field]]
+                            for row in value.get(field,[]):
                                 for name in allowed-{'created','updated'}:
                                     if row.get(name) is not None and not isinstance(row[name],str):raise ValueError('invalid note provenance value')
                         if not isinstance(value.get('mergedIds',[]),list) or any(not isinstance(v,str) or not 1<=len(v)<=200 for v in value.get('mergedIds',[])):raise ValueError('invalid merged note identifiers')

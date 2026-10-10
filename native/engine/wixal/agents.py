@@ -204,6 +204,14 @@ class Agents:
                 if stage['status']=='completed':continue
                 task=next((t for t in self.store.data['tasks'] if t['id']==stage.get('taskId')),None)
                 pending=[c for c in (task or {}).get('checkpoints',[]) if c.get('status') in ('started','interrupted') and c.get('name') not in READ_TOOLS]
+                handles={}
+                for checkpoint in (task or {}).get('checkpoints',[]):
+                    try:result=json.loads(checkpoint.get('result',''))
+                    except (ValueError,TypeError):continue
+                    if not isinstance(result,dict) or not result.get('session_id'):continue
+                    if result.get('state')=='running' and checkpoint.get('name') not in READ_TOOLS:handles[result['session_id']]=checkpoint
+                    elif result.get('state') in ('completed','failed','stopped','cancelled'):handles.pop(result['session_id'],None)
+                pending.extend(c for c in handles.values() if c not in pending)
                 if pending:uncertain.append(dict(stage=stage['name'],taskId=task['id'],childId=stage.get('childId'),checkpoints=pending))
             if uncertain and not await self.service.tools.approve(dict(name='workflow_recovery',workflow=definition['name'],goal='Inspect interrupted effects before continuing; completed stages are retained and uncertain actions must not be repeated.',uncertainEffects=uncertain)):
                 run.update(status='paused',error='Interrupted effect recovery review declined');self.store.save();return run

@@ -39,13 +39,14 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
         with context:run=await self.service.dispatch('workflow-run',dict(id=flow['id']))
         run['status']='interrupted';stage=run['stages'][0];stage['status']='interrupted'
         task=next(t for t in self.service.store.data['tasks'] if t['id']==stage['taskId'])
-        task['checkpoints']=[dict(id='uncertain',name='command_start',status='interrupted',arguments=dict(command='effect'),result='')]
         before=copy.deepcopy(stage)
         async def decline(details):self.assertEqual(details['name'],'workflow_recovery');return False
-        with patch.object(self.service.tools,'approve',decline),patch('wixal.agent.stream_chat') as model:
-            result=await self.service.dispatch('workflow-resume',dict(runId=run['id']))
-            model.assert_not_called()
-        self.assertEqual(result['status'],'paused');self.assertEqual(result['stages'][0],before)
+        for checkpoint in (dict(id='uncertain',name='command_start',status='interrupted',arguments=dict(command='effect'),result=''),dict(id='running-handle',name='command_start',status='finished',arguments=dict(command='effect'),result=json.dumps(dict(session_id='effect-session',state='running')))):
+            task['checkpoints']=[checkpoint];run['status']='interrupted'
+            with patch.object(self.service.tools,'approve',decline),patch('wixal.agent.stream_chat') as model:
+                result=await self.service.dispatch('workflow-resume',dict(runId=run['id']))
+                model.assert_not_called()
+            self.assertEqual(result['status'],'paused');self.assertEqual(result['stages'][0],before)
 
     async def test_multiple_file_evidence_checks_use_each_files_latest_read(self):
         from wixal.outcomes import verify

@@ -1,14 +1,18 @@
-# Wixal 0.7.10 Alpha 2
+# Wixal 0.7.10 Alpha 3
 
 The public download is a single native **Wixal.app** for Apple Silicon Macs running macOS 14 or newer. It uses SwiftUI/AppKit, a persistent Python engine and a bundled local Ollama runner. Python and Node do not need to be installed to use the app. Model weights are separate downloads.
 
 ## Installation and updates
 
-Download `Wixal-0.7.10-alpha.2-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.2), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
+Download `Wixal-0.7.10-alpha.3-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.3), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
 
 The alpha is ad-hoc signed and **not Developer ID signed or notarised**. macOS may block the first launch. After reviewing the source and release notes, use System Settings → Privacy & Security → Open Anyway. This alpha has no automatic updater; download and install newer releases manually.
 
 Native data remains at `~/Library/Application Support/Wixal Native`. Replacing the app does not remove the workspace or model library. Back up important projects and workspace data before testing. Use Settings → Data to explicitly import earlier Electron records; credentials and account sessions are not imported.
+
+## What changed in Alpha 3
+
+This release brings the agent recovery, editor and activity fixes into the public download. See the [release notes](release-0.7.10-alpha.3.md) for changes and the verification record.
 
 ## First use
 
@@ -36,6 +40,14 @@ Workflows connect agent steps with dependencies and bounded parallel branches. I
 
 Skills hold reusable procedures. Candidate skill changes can be evaluated against explicit cases and compared with the current version before promotion. Fully autonomous skill evaluation and promotion remains incomplete.
 
+## Queue, stop and resume
+
+During an active run, use Queue to save another task for later. Cancel pending work from the queue; cancellation is retained across restarts. Each queued task keeps the agent profile and project selected when it was submitted. Starting a second immediate run is disabled while the engine is busy.
+
+Stop applies to the selected run. Resume uses its original conversation and project; if either is missing or the project is unavailable, restore it before resuming. Personal tasks remain personal. The previous workspace selection is restored after execution. Review retained evidence before retrying actions with uncertain effects.
+
+Agent, workflow and schedule editors close after a successful save. If a save fails, the draft stays open with its error. Guidance follows the same acknowledgement rule and preserves text edited while the request was pending.
+
 ## Recurring tasks
 
 Save interval or calendar routines, including timezone and missed-run policy. The foreground engine handles due work while Wixal is open. Enable Background schedules in Settings for macOS LaunchAgent execution while the app is closed and the Mac is awake.
@@ -45,6 +57,12 @@ A background task pauses if it requires interactive review or a desktop-only bro
 ## Cybersecurity
 
 Define authorised targets and scope before an investigation. The workspace supports bounded website checks, optional local Nmap, evidence records, findings and comparisons. Nmap is a separate local dependency. Evidence and model-generated interpretations need human validation. Local and loopback acceptance does not establish dependable production security investigation quality.
+
+## Tool library and reporting
+
+The shared tool library lists available integrations, installed providers and readiness. The managed-profile implementation covers RustScan, ffuf, Nuclei, Trivy and OSV-Scanner. This release does not bundle those executables or a production managed repository. Public installation and promotion remain gated on a qualified signed catalogue and independent key custody. Use separately installed tools through their supported external adapters; an item in the catalogue does not by itself enable agent execution. [Managed implementation and evidence](../native/MANAGED_TOOLS_CONTINUATION_2026-10-10.md) describe the development pilot.
+
+Settings can prepare a sanitized local bug-report bundle for review. In-app contributor GitHub submission needs the registered Device Flow client ID, which is not configured in this release. Use the [GitHub issue tracker](https://github.com/TheJhyeFactor/Wixal/issues) to submit a reviewed report manually. Review the exported files before sharing them.
 
 ## Known limitations
 

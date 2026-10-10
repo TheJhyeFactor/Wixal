@@ -1,10 +1,16 @@
 # Wixal native alpha
 
-**0.7.10 Alpha 2** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.2); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
+**0.7.10 Alpha 3** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.3); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 
-The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. These changes do not update the already published alpha download.
+The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. Alpha 3 brings these changes into the public download; the dated reports retain their earlier build identities.
+
+## Alpha 3 changes
+
+The public package includes the queue/recovery, acknowledged editing and activity/output fixes described in the [release notes](../docs/release-0.7.10-alpha.3.md). The [completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) describes the earlier development build. Exact public-package checks and identities accompany the release in `release-info.json`.
+
+Public managed downloads remain gated; no production catalogue or tool payload is bundled. Contributor GitHub OAuth also requires a registered client ID. See [the current alpha guide](../docs/native-alpha.md#tool-library-and-reporting) for usable paths and boundaries.
 
 ## Build and run
 
@@ -30,7 +36,7 @@ SwiftPM uses `--build-system native` so the AppKit terminal can build with Comma
 native/.venv/bin/python native/scripts/package.py --alpha
 ```
 
-`--alpha` requires an alpha engine version and creates an explicitly labelled ad-hoc signed bundle. It cannot be combined with development or Developer ID options. Public release metadata states that it is not notarised. `--development` is for isolated local validation and allows `--preview-data` and a loopback `--preview-endpoint`; these overrides are not allowed in public alpha packaging.
+`--alpha` requires an alpha engine version and creates an explicitly labelled ad-hoc signed bundle. It cannot be combined with development or Developer ID options. Public release metadata states that it is not notarised. After packaging, verify source provenance with `native/.venv/bin/python native/scripts/verify-release.py`. Create the downloadable ZIP with `ditto -c -k --sequesterRsrc --keepParent release/native/Wixal.app Wixal-<version>-macOS-arm64.zip`, then check its extraction and record `shasum -a 256` alongside the source commit. `--development` is for isolated local validation and allows `--preview-data` and a loopback `--preview-endpoint`; these overrides are not allowed in public alpha packaging.
 
 For a notarised release, omit alpha/development flags and supply `--identity 'Developer ID Application: …' --notary-profile PROFILE`. The packager signs nested binaries, submits to notarytool, staples and checks Gatekeeper. This machine currently has no valid Developer ID identity. Packaging verifies the vendor payload and records source hashes before atomically replacing the staged build.
 

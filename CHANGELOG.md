@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.10 Alpha 3 — 2026-10-10
+
+- Keep queue/cancel available during active runs, freeze queued profiles and project context, and bind stop/guidance to the actual executing task.
+- Resume only in the original conversation and available project; prevent unrelated conversation changes and project leakage into personal tasks.
+- Wait for acknowledged agent, workflow, schedule and queue saves; retain rejected drafts and errors. Preserve guidance edited while submission is pending.
+- Preserve queued, paused, interrupted and attention-required activity; advance Unicode output pages correctly and wait for command evidence finalization.
+- Strengthen command cleanup, agent success checks and structured Nmap evidence; retain real-model interpretation failures as limitations.
+- Show the splash before engine launch and workspace loading, including reduced motion and database recovery.
+- Include the shared tool library, managed-profile foundations and reviewed local bug-report preparation. Public tool promotion and live contributor OAuth remain gated.
+- Recover retained managed-tool transactions across app upgrades; block execution and rollback of packages unevaluated for the current build.
+- Publish an ad-hoc signed, non-notarised native prerelease with checksums, provenance and updated guides. See [release notes](docs/release-0.7.10-alpha.3.md).
+
+## 0.7.10 Alpha 2 — 2026-10-08
+
+- Discover eligible tools automatically in Chat, including workspaces with empty legacy tool preferences.
+- Add inspectable tool suggestions, composer action-review controls, progressive schemas and bounded correction feedback.
+- Require executable calculations and independent checks for derived project reports. See [release notes](docs/release-0.7.10-alpha.2.md).
+
 ## 0.7.10 Alpha 1 — 2026-10-08
 
 - Publish the native SwiftUI/AppKit app as the canonical Wixal download, with a bundled Python engine and local inference runner.

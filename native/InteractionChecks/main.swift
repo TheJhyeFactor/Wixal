@@ -45,4 +45,25 @@ guidance.finish(reverted.id)
 check(guidance.submission.isSubmitting, "Duplicate old reply must not clear a newer pending draft")
 guidance.finish(latest.id)
 check(guidance.text.isEmpty, "The current unchanged draft clears on its own acknowledgement")
+let runA=RunGuidanceDrafts.key(owner:"guest",run:"run-a")
+let runB=RunGuidanceDrafts.key(owner:"guest",run:"run-b")
+let accountA=RunGuidanceDrafts.key(owner:"account:other",run:"run-a")
+var drafts=RunGuidanceDrafts()
+drafts[runA].text="Retained run A draft"
+let requestA=drafts[runA].begin()!
+drafts[runB].text="Independent run B draft"
+drafts[runA].text="Edited while viewing another page"
+drafts[runA].finish(requestA.id)
+check(drafts[runA].text=="Edited while viewing another page","Reply must preserve edited text across view recreation")
+check(drafts[runB].text=="Independent run B draft","A different run must retain its own draft")
+check(drafts[accountA].text.isEmpty,"Drafts must be isolated by owner")
+let pendingB=drafts[runB].begin()!
+check(drafts[runB].submission.isSubmitting,"Reopening a run must retain its pending submission")
+let savedTexts=try JSONEncoder().encode(drafts.texts)
+let reopened=RunGuidanceDrafts(texts:try JSONDecoder().decode([String:String].self,from:savedTexts))
+check(reopened[runA].text==drafts[runA].text && reopened[runB].text==drafts[runB].text,"Relaunch must restore each unsent text")
+check(!reopened[runB].submission.isSubmitting,"Relaunch must not automatically resubmit an uncertain request")
+drafts[runB].finish(pendingB.id)
+check(drafts[runB].text.isEmpty && drafts.texts[runB]==nil,"Acknowledged text must be removed from the persisted snapshot")
+check(RunGuidanceDrafts.key(owner:"a",run:"bc") != RunGuidanceDrafts.key(owner:"ab",run:"c"),"Owner and run keys must not collide")
 print("{\"status\":\"passed\",\"checks\":\(checks),\"implementation\":\"production WixalInteractions submission and guidance state\"}")

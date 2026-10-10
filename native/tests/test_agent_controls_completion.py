@@ -155,3 +155,76 @@ class AgentControlsCompletionTests(unittest.IsolatedAsyncioTestCase):
                 # The native editor sends its fields without projectId.
                 saved=await self.service.dispatch('agent-schedule-save',dict(id=routine['id'],name='Edited routine',agentID='coder',prompt='Read new evidence',timing='Every hour',enabled=False))
                 self.assertEqual(saved['projectId'],expected)
+
+    async def test_guidance_during_final_response_is_consumed_before_completion(self):
+        entered=asyncio.Event();release=asyncio.Event();seen=[]
+        async def stream(endpoint,body,emit):
+            seen.append(copy.deepcopy(body))
+            if len(seen)==1:
+                entered.set();await release.wait()
+            return dict(role='assistant',content='Initial answer' if len(seen)==1 else 'Guidance considered')
+        with patch('wixal.agent.stream_chat',stream):
+            pending=asyncio.create_task(self.service.dispatch('agent-run',dict(id='coder',prompt='Inspect evidence')))
+            await asyncio.wait_for(entered.wait(),5)
+            task=self.service.store.data['tasks'][-1]
+            await self.service.dispatch('agent-guide',dict(id=task['id'],text='Report the new marker GUIDANCE-7319'))
+            release.set();result=await asyncio.wait_for(pending,5)
+        self.assertEqual(len(seen),2)
+        self.assertTrue(any('GUIDANCE-7319' in m.get('content','') for m in seen[1]['messages']))
+        self.assertEqual(result['result'],'Guidance considered')
+        self.assertFalse(result.get('pendingGuidance'))
+
+    async def test_active_queue_job_has_durable_task_identity_when_stopped(self):
+        job=await self.service.dispatch('agent-enqueue',dict(agentID='coder',prompt='Inspect queued evidence'))
+        entered=asyncio.Event()
+        async def stream(*args):entered.set();await asyncio.Event().wait()
+        with patch('wixal.agent.stream_chat',stream):
+            pending=asyncio.create_task(run_next(self.service))
+            await asyncio.wait_for(entered.wait(),5)
+            task=self.service.store.data['tasks'][-1]
+            try:
+                persisted=json.loads(self.service.store.db.execute('SELECT value FROM state').fetchone()[0])
+                saved=next(j for j in persisted['agentJobs'] if j['id']==job['id'])
+                self.assertEqual(saved.get('taskId'),task['id'])
+            finally:
+                await self.service.dispatch('stop',dict(taskId=task['id']))
+                await asyncio.gather(pending,return_exceptions=True)
+        self.assertEqual(job.get('taskId'),task['id'])
+        self.assertEqual(job['status'],'interrupted')
+        self.assertEqual(job['history'][-1]['taskId'],task['id'])
+
+    async def test_selected_stop_remains_available_during_outcome_verification(self):
+        entered=asyncio.Event();release=asyncio.Event()
+        async def verify(*args,**kwargs):
+            entered.set();await release.wait()
+            return dict(status='passed',checks=[],unresolved=[])
+        context,_=self.scripted([])
+        with context,patch('wixal.outcomes.verify',verify):
+            pending=asyncio.create_task(self.service.dispatch('agent-run',dict(id='coder',prompt='Inspect then verify')))
+            await asyncio.wait_for(entered.wait(),5)
+            task=self.service.store.data['tasks'][-1]
+            try:
+                await self.service.dispatch('stop',dict(taskId=task['id']))
+                self.assertEqual(task['status'],'paused')
+            finally:
+                release.set()
+                await asyncio.gather(pending,return_exceptions=True)
+
+    async def test_guidance_during_verification_is_consumed_before_completion(self):
+        entered=asyncio.Event();release=asyncio.Event();seen=[]
+        async def verify(*args,**kwargs):
+            entered.set();await release.wait()
+            return dict(status='passed',checks=[],unresolved=[])
+        async def stream(endpoint,body,emit):
+            seen.append(copy.deepcopy(body))
+            return dict(role='assistant',content='Retained answer')
+        with patch('wixal.agent.stream_chat',stream),patch('wixal.outcomes.verify',verify):
+            pending=asyncio.create_task(self.service.dispatch('agent-run',dict(id='coder',prompt='Inspect then verify')))
+            await asyncio.wait_for(entered.wait(),5)
+            task=self.service.store.data['tasks'][-1]
+            await self.service.dispatch('agent-guide',dict(id=task['id'],text='FINALIZATION-GUIDANCE-7319'))
+            release.set();result=await asyncio.wait_for(pending,5)
+        self.assertEqual(result['status'],'completed')
+        self.assertEqual(len(seen),2)
+        self.assertTrue(any('FINALIZATION-GUIDANCE-7319' in m.get('content','') for m in seen[1]['messages']))
+        self.assertFalse(result.get('pendingGuidance'))

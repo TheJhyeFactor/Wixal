@@ -25,13 +25,17 @@ async def run_next(service,background=False):
     async def deny(*args):return False
     if background:service.tools.approve=deny;service.tools.host=unavailable
     try:
-        service.active=asyncio.create_task(service.agents.run(job['agentId'],job['prompt'],job.get('projectId'),'Background queue' if background else 'Queued job',snapshot=job['profile'],checks=job['successCriteria'],authority=job['profile'].get('authority',{})))
+        service.active=asyncio.create_task(service.agents.run(job['agentId'],job['prompt'],job.get('projectId'),'Background queue' if background else 'Queued job',snapshot=job['profile'],checks=job['successCriteria'],authority=job['profile'].get('authority',{}),queue_job=job))
         result=await service.active;job.update(status=result['status'],taskId=result['id'],verification=result.get('verification'))
         job.setdefault('history',[]).append(dict(taskId=result['id'],status=result['status'],finished=now()))
         from .agent_context import READ_TOOLS
         if result['status']=='failed' and job['attempts']<3 and all(c['name'] in READ_TOOLS for c in result.get('checkpoints',[])):
             job.update(status='queued',notBefore=now()+30000*2**(job['attempts']-1),error='Read-only attempt failed; retained evidence is available. Retry is bounded.')
-    except asyncio.CancelledError:job.update(status='interrupted',error='Execution stopped; inspect retained task evidence before continuing.');raise
+    except asyncio.CancelledError:
+        job.update(status='interrupted',error='Execution stopped; inspect retained task evidence before continuing.')
+        if job.get('taskId'):
+            job.setdefault('history',[]).append(dict(taskId=job['taskId'],status='interrupted',finished=now()))
+        raise
     except Exception as error:
         job.update(status='failed',error=str(error))
         # Only provider/setup failures before any modifying action may be retried.

@@ -7,10 +7,12 @@ struct AgentLiveRunView:View {
     let workflow:Bool
     @Environment(\.wixalTheme) private var theme
     @ViewState private var showContext=false
-    @ViewState private var guidance=AcknowledgedDraft()
+    @Binding var guidance:AcknowledgedDraft
+    var guidanceDraftError:String=""
     private var status:String{textValue(run["status"])}
     private var active:Bool{["running","waiting_review","queued"].contains(status)}
     var body:some View{VStack(alignment:.leading,spacing:20){
+        if !guidanceDraftError.isEmpty{Text(guidanceDraftError).wixalFont(size:11).foregroundStyle(.orange).textSelection(.enabled)}
         HStack(alignment:.top){Text(workflow ? textValue((run["definition"] as? [String:Any])?["name"]) : textValue(run["prompt"])).wixalFont(size:23,weight:.medium).textSelection(.enabled);Spacer();Label(agentOutcomeLabel(run),systemImage:active ? "circle.dotted" : status=="completed" ? "checkmark.circle" : "exclamationmark.circle").wixalFont(size:11).foregroundStyle(theme.accent)}
         Button(showContext ? "Hide run context" : "Show run context"){showContext.toggle()}.buttonStyle(WixalButtonStyle())
         if showContext{Text(pretty(run["agentSnapshot"] ?? run["definition"] ?? [:])).wixalFont(size:11,design:.monospaced).textSelection(.enabled).wixalCard()}

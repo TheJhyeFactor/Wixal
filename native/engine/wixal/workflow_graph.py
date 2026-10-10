@@ -68,6 +68,9 @@ async def child_run(agents,run,stage):
             entry['isolatedRoot']=project['root'];entry['mergeStatus']='pending_review'
         agents.store.data['tasks'].append(result);agents.store.save()
         return entry
+    except Exception as error:
+        if 'task' not in locals():raise
+        return dict(id=stage['id'],name=stage['name'],status='failed',taskId=task['id'],childId=child_id,result=task.get('result',''),verification=task.get('verification',{}),error=str(error))
     finally:
         if 'task' in locals() and not any(t['id']==task['id'] for t in agents.store.data['tasks']):
             if task['status']=='running':task.update(status='interrupted',error='Branch did not finish; inspect the child workspace before resuming')
@@ -101,6 +104,10 @@ async def execute(agents,run):
                 await asyncio.gather(*workers,return_exceptions=True)
                 raise
             for entry in entries:
+                previous=next((s for s in run['stages'] if s['id']==entry['id']),None)
+                if previous:
+                    entry['attemptHistory']=copy.deepcopy(previous.get('attemptHistory',[]))
+                    entry['attemptHistory'].append(copy.deepcopy({k:v for k,v in previous.items() if k!='attemptHistory'}))
                 run['stages']=[s for s in run['stages'] if s['id']!=entry['id']];run['stages'].append(entry)
             if any(s['status']!='completed' for s in entries):run.update(status='failed',error='Inspect failed branch evidence before resuming');return run
         run.update(status='completed',result='\n\n'.join(s['name']+'\n'+s.get('result','') for s in run['stages']),verification=dict(status='passed' if all(s.get('verification',{}).get('status')=='passed' for s in run['stages']) else 'unverified'))

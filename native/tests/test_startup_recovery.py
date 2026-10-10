@@ -12,6 +12,22 @@ from wixal.storage import Store
 
 
 class StartupRecoveryTests(unittest.TestCase):
+    def test_failed_final_save_releases_database_and_owner_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store=Store(temporary)
+            store.data['globalMemory']='last committed value';store.save()
+            store.db.execute("CREATE TRIGGER reject_state_update BEFORE UPDATE ON state BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END")
+            store.db.commit()
+            store.data['globalMemory']='uncommitted value'
+            with self.assertRaisesRegex(sqlite3.IntegrityError,'simulated write failure'):store.close()
+            self.assertTrue(store.owner_lock.closed)
+            with self.assertRaises(sqlite3.ProgrammingError):store.db.execute('SELECT 1')
+            repair=sqlite3.connect(Path(temporary)/'workspace.sqlite3')
+            repair.execute('DROP TRIGGER reject_state_update');repair.commit();repair.close()
+            restored=Store(temporary)
+            try:self.assertEqual(restored.data['globalMemory'],'last committed value')
+            finally:restored.close()
+
     def test_startup_reports_exact_database_before_open_and_completion(self):
         with tempfile.TemporaryDirectory() as temporary:
             reports=[]

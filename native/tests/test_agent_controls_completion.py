@@ -34,6 +34,18 @@ class AgentControlsCompletionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['sessionId'], task['sessionId'])
         self.assertEqual(self.service.store.data['activeSession'], unrelated['id'])
 
+    async def test_verifying_older_run_preserves_selected_conversation(self):
+        task=await self.completed()
+        selected=self.service.store.session()['id']
+        unrelated=self.service.store.new_session()
+        self.service.store.data['activeSession']=selected
+        before={key:self.service.store.data[key] for key in ('activeProject','activeSession','model','mode')}
+        await self.service.dispatch('agent-verify',dict(id=task['id']))
+        self.assertEqual({key:self.service.store.data[key] for key in before},before)
+        persisted=json.loads(self.service.store.db.execute('SELECT value FROM state').fetchone()[0])
+        self.assertEqual(persisted['activeSession'],selected)
+        self.assertNotEqual(selected,unrelated['id'])
+
     async def test_personal_resume_restores_both_project_and_session(self):
         await self.service.dispatch('project-select', dict(id=None))
         task = await self.completed()

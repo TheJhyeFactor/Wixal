@@ -23,7 +23,7 @@ async def main():
     if options.repository and not options.source:parser.error('Packaged helpers require embedded repository trust')
     art=(options.output or ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged')).resolve();art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
     c=real.Client(options.source,helper=options.helper);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
-    report=dict(schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE))
+    report=dict(schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')))
     if options.helper:
         for key,name in [('sourceManifestSha256','SOURCE_MANIFEST.json'),('toolTrustManifestSha256','TOOL_TRUST_MANIFEST.json')]:
             path=options.helper.resolve().parents[1]/name
@@ -32,7 +32,7 @@ async def main():
         if checkpoint['name']!='network_scan' or checkpoint['status']!='finished':return False
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):return False
-        return isinstance(value,dict) and bool(value.get('sourceSessionId')) and not value.get('error') and isinstance(value.get('services'),list)
+        return isinstance(value,dict) and bool(value.get('sourceSessionId')) and not value.get('error') and value.get('state')=='completed' and value.get('exitCode') in (None,0) and isinstance(value.get('services'),list)
     def save():(art/'report.json').write_text(json.dumps(report,indent=2))
     async def start():
         command=[sys.executable,str(ROOT/'native/engine/engine_main.py')] if options.source else [str(options.helper)]
@@ -88,7 +88,7 @@ async def main():
                     servers=[await asyncio.start_server(accept,'127.0.0.1',0) for _ in range(3)]
                     fresh=sorted(s.sockets[0].getsockname()[1] for s in servers)
                     prompt=base_prompt.replace(port_text,','.join(map(str,fresh)));expected=fresh
-                    await c.call('session-new');record=dict(scenario=scenario,attempt=attempt+1,started=time.time(),status='running');report['modelAttempts'].append(record);save()
+                    await c.call('session-new');record=dict(scenario=scenario,attempt=attempt+1,started=time.time(),status='running',oracle=dict(host='127.0.0.1',ports=expected));report['modelAttempts'].append(record);save()
                     try:
                         output=await c.chat(prompt);calls=output['toolResults'];names=[r.get('tool_name') for r in calls]
                         discoveries=[];inspections=[]

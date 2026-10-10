@@ -106,7 +106,7 @@ class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
         calls=0
         async def execute(name,args,session):
             self.assertEqual(name,'network_read')
-            return dict(state='completed',exitCode=0,session_id='fixture-source',structuredResult=dict(handoffEligible=True,services=[dict(host='192.0.2.1',port=9073,state='open')]))
+            return dict(state='completed',exitCode=0,session_id='fixture-source',structuredResult=dict(handoffEligible=True,coverage='completed_attempts',interpretation='Observed TCP ports only',resultSha256='a'*64,invocation=dict(target='192.0.2.1',addresses=['192.0.2.1'],ports=[9073],coverage='selected'),services=[dict(host='192.0.2.1',port=9073,state='open')]))
         async def stream(endpoint,body,emit):
             nonlocal calls
             calls+=1

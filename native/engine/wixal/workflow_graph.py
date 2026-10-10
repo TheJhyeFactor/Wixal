@@ -47,7 +47,7 @@ async def child_run(agents,run,stage):
             if profile['reviewPolicy']=='Read only':return False
             return await agents.service.tools.approve(dict(**details,workflowBranch=stage['name'],isolated=True))
         def retain(event,data):
-            if event!='state' or 'task' not in locals_for_task:return
+            if event not in ('state','tool-start','tool-result') or 'task' not in locals_for_task:return
             snapshot=copy.deepcopy(locals_for_task['task']);snapshot['childId']=child_id
             agents.store.data['tasks']=[t for t in agents.store.data['tasks'] if t['id']!=snapshot['id']]+[snapshot]
             agents.store.save()

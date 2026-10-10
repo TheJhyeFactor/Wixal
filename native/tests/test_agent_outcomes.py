@@ -33,6 +33,21 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 self.service.active.cancel();await asyncio.gather(current,return_exceptions=True)
 
+    async def test_graph_persists_effect_checkpoint_before_action_review(self):
+        flow=await self.service.dispatch('workflow-save',dict(name='Durable effect',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Write proof',isolation='Isolated changes')]))
+        entered=asyncio.Event()
+        async def review(details):entered.set();await asyncio.Event().wait()
+        context,_=self.scripted([('write_file',dict(path='proof.txt',content='EFFECT-MARKER'))])
+        with context,patch.object(self.service.tools,'approve',review):
+            current=asyncio.create_task(self.service.dispatch('workflow-run',dict(id=flow['id'])))
+            await asyncio.wait_for(entered.wait(),5)
+            try:
+                persisted=json.loads(self.service.store.db.execute('SELECT value FROM state').fetchone()[0]);stage=persisted['workflowRuns'][-1]['stages'][0]
+                task=next(t for t in persisted['tasks'] if t['id']==stage['taskId'])
+                self.assertEqual(task['checkpoints'][-1]['name'],'write_file');self.assertEqual(task['checkpoints'][-1]['status'],'started')
+                self.assertFalse((self.service.store.directory/'workflow-children'/stage['childId']/'project/proof.txt').exists())
+            finally:self.service.active.cancel();await asyncio.gather(current,return_exceptions=True)
+
     async def test_uncertain_workflow_recovery_decline_keeps_effects_and_stage(self):
         flow=await self.service.dispatch('workflow-save',dict(name='Uncertain recovery',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect')]))
         context,_=self.scripted([],'Recorded result')

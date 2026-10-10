@@ -28,6 +28,11 @@ async def main():
         for key,name in [('sourceManifestSha256','SOURCE_MANIFEST.json'),('toolTrustManifestSha256','TOOL_TRUST_MANIFEST.json')]:
             path=options.helper.resolve().parents[1]/name
             if path.is_file():report[key]=digest(path)
+    def completed_inspection(checkpoint):
+        if checkpoint['name']!='network_scan' or checkpoint['status']!='finished':return False
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):return False
+        return isinstance(value,dict) and bool(value.get('sourceSessionId')) and not value.get('error') and isinstance(value.get('services'),list)
     def save():(art/'report.json').write_text(json.dumps(report,indent=2))
     async def start():
         command=[sys.executable,str(ROOT/'native/engine/engine_main.py')] if options.source else [str(options.helper)]
@@ -103,7 +108,7 @@ async def main():
                         task=next((t for t in reversed(state['tasks']) if t.get('sessionId')==session['id']),{})
                         answer=task.get('result','')
                         factual_errors=port_oracle.contradictions(answer,expected)
-                        inspections=[c for c in task.get('checkpoints',[]) if c['name']=='network_scan' and c['status']=='finished' and json.loads(c['result']).get('sourceSessionId') and not json.loads(c['result']).get('error')]
+                        inspections=[c for c in task.get('checkpoints',[]) if completed_inspection(c)]
                         if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(answer):factual_errors.append('Failed task nevertheless claims inspection without fresh evidence')
                         record.update(status='failed',error=str(error),task=task,session=session,factualErrors=factual_errors,fabricatedSuccess=bool(factual_errors),finished=time.time())
                     save();print(json.dumps(dict(scenario=scenario,attempt=attempt+1,status=record['status'])),flush=True)

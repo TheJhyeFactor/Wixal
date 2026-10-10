@@ -156,6 +156,9 @@ async def verify(store,tools,task,checks=None):
             row['status']='passed'
         except (ValueError,OSError,KeyError,IndexError,TypeError,UnicodeError) as error:row['error']=str(error)
         rows.append(row)
+    from .network_claims import check as network_claim_check
+    contradiction=network_claim_check(task)
+    if contradiction:rows.append(contradiction)
     follow_up=discovery_follow_up(task)
     if follow_up:rows.append(follow_up)
     latest={}

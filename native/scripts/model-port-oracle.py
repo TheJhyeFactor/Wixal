@@ -10,6 +10,8 @@ def contradictions(answer,open_ports):
     if re.search(r'\b(?:no|zero)\s+open\s+(?:tcp\s+)?ports\b',answer,re.I):failures.append('Answer denies the independently observed open ports')
     if re.search(r'\ball\s+(?:(?:selected|tested|scanned|specified|requested|tcp)\s+)*(?:ports\s+)?(?:are\s+|were\s+)?(?:closed|filtered)\b',answer,re.I):failures.append('Answer claims all selected ports are closed or filtered')
     for sentence in re.split(r'[\n.!?]',answer):
+        denies_open=bool(re.search(r'\bneither\b.*\bopen\b|\bnot\s+open\b',sentence,re.I))
+        if denies_open and not re.search(r"\b(?:cannot|can't|outside|other|unscanned)\b",sentence,re.I) and any(re.search(r'(?<!\d)'+str(port)+r'(?!\d)',sentence) for port in open_ports):failures.append('Answer denies an independently observed open port')
         if not re.search(r'\b(?:closed|filtered)\b',sentence,re.I):continue
         if re.search(r'\b(?:not|neither|outside|other|unscanned)\b',sentence,re.I):continue
         for port in open_ports:

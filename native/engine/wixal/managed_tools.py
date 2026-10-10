@@ -64,7 +64,7 @@ def relative(value):
     return value
 
 
-def descriptor(row):
+def descriptor(row, *, require_build=True):
     required = {'schemaVersion','tool','version','revision','source','platform','target','sha256','length','unpackedSize','entrypoint','inventory','adapter','appBuilds','readiness','distribution','dependencies','state','recovery'}
     if not isinstance(row, dict) or set(row) != required: raise ValueError('Unsupported package descriptor schema')
     profile=PROFILES.get(row['tool'])
@@ -78,7 +78,8 @@ def descriptor(row):
     if row['platform'].keys() != {'os','arch','minimumOS','testedOS'} or row['platform']['os'] != 'Darwin' or row['platform']['arch'] != 'arm64': raise ValueError('Unsupported package platform')
     if not isinstance(row['platform']['testedOS'],list) or not all(isinstance(v,str) for v in row['platform']['testedOS']): raise ValueError('Invalid tested OS matrix')
     if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?',str(row['platform']['minimumOS'])): raise ValueError('Invalid minimum OS')
-    if not isinstance(row['appBuilds'],list) or VERSION not in row['appBuilds']: raise ValueError('Package is unevaluated for this application build')
+    if not isinstance(row['appBuilds'],list) or not row['appBuilds'] or any(not isinstance(build,str) for build in row['appBuilds']): raise ValueError('Invalid application build qualification')
+    if require_build and VERSION not in row['appBuilds']: raise ValueError('Package is unevaluated for this application build')
     if row['dependencies'] != []: raise ValueError('This single-binary profile has no runtime dependencies; dependency packages require their own adapter contract')
     relative(row['target']); relative(row['entrypoint'])
     inventory=row['inventory']
@@ -253,7 +254,9 @@ class PackageRegistry:
 
     def recover(self,db):
         for path in (self.root/'journals').glob('*.json'):
-            journal=json.loads(path.read_text()); row=descriptor(journal['descriptor'])
+            # Recovery preserves historical transactions across app upgrades;
+            # build qualification is enforced before activation or execution.
+            journal=json.loads(path.read_text()); row=descriptor(journal['descriptor'],require_build=False)
             active=db.execute('SELECT digest FROM active WHERE tool=?',(row['tool'],)).fetchone()
             # Publication without commit is harmless: keep a previous active pointer.
             if journal['stage']!='ready':
@@ -285,7 +288,7 @@ class PackageRegistry:
             # Receipts survive removal for historical provenance. Only payloads
             # still on disk are available for recovery; rollback re-verifies the
             # complete inventory before changing the active pointer.
-            versions=[r for r in versions if r['tool']==tool and (self.path(r)/r['entrypoint']).is_file()]
+            versions=[r for r in versions if r['tool']==tool and VERSION in r['appBuilds'] and (self.path(r)/r['entrypoint']).is_file()]
         row=json.loads(pointer['descriptor']) if pointer else None
         return dict(configured=bool(self.client),provider=selected['value'] if selected else 'external_homebrew',installed=bool(row),active=row,versions=versions,catalogue=json.loads(cached['value']) if cached else [],lastCatalogueCheck=float(checked['value']) if checked else None,catalogueError=freshness_error['value'] if freshness_error else None,verifiedAt=pointer['verified'] if pointer else None,modelEvaluation='unevaluated')
 
@@ -307,6 +310,7 @@ class PackageRegistry:
     def resolve(self,tool='rustscan'):
         state=self.snapshot(tool);row=state['active']
         if not row:raise ValueError('No managed '+tool+' package is active')
+        row=descriptor(row)
         compatible(row)
         current=next((p for p in state['catalogue'] if p['sha256']==row['sha256']),row)
         if current['state']=='revoked':raise ValueError('Managed package has been revoked')
@@ -402,7 +406,7 @@ class PackageRegistry:
             row=next((p for p in state['versions'] if p['sha256']==artifact),None)
             known=next((p for p in state['catalogue'] if p['sha256']==artifact),None)
             if not current or artifact not in current['recovery'] or not row or not known or known['state']!='approved':raise ValueError('Rollback requires a retained, approved recovery artifact')
-            compatible(row);inspect_payload(self.path(row),row)
+            row=descriptor(row);compatible(row);inspect_payload(self.path(row),row)
             db.execute('INSERT OR REPLACE INTO active VALUES (?,?)',(tool,artifact))
         return self.snapshot(tool)
 

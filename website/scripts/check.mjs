@@ -5,6 +5,7 @@ import { webpSize } from './image-size.mjs';
 
 const root = resolve(import.meta.dirname, '../dist');
 const base = process.env.BASE_PATH || '/';
+const version = JSON.parse(await readFile(resolve(root, '../../package.json'), 'utf8')).version;
 async function files(dir) {
   const entries = await readdir(dir, {withFileTypes:true});
   return (await Promise.all(entries.map(e => e.isDirectory() ? files(resolve(dir,e.name)) : resolve(dir,e.name)))).flat();
@@ -16,6 +17,11 @@ for (const [file,html] of documents) {
   assert.match(html, /<html lang="en">/);
   assert.equal((html.match(/<h1[ >]/g)||[]).length,1,`${file}: expected one h1`);
   assert.match(html, /name="viewport"/);
+  for (const match of html.matchAll(/href="(https:\/\/github\.com\/TheJhyeFactor\/Wixal\/releases\/download\/[^"]+)"/g)) {
+    assert.equal(match[1], `https://github.com/TheJhyeFactor/Wixal/releases/download/v${version}/Wixal-${version}-macOS-arm64.zip`, 'Download link does not match the release version');
+  }
+  if (file.endsWith('/download/index.html')) assert.ok(html.includes(version.replace('-alpha.', ' Alpha ')), 'Download badge is stale');
+  if (file.endsWith('/stats/index.html')) assert.ok(html.includes(`data-release-tag="v${version}"`), 'Stats release is stale');
   for (const match of html.matchAll(/(?:href|src|poster)="([^"\s]+)"/g)) {
     const value = match[1];
     if (/^https?:/.test(value)) continue;

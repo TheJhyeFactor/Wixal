@@ -105,6 +105,47 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
         atomic_json(self.root/'managed/journals/crash.json',dict(id='crash',descriptor=self.rows[1],stage='published'))
         recovered=PackageRegistry(self.root/'managed',self.config)
         self.assertEqual(recovered.resolve()['packageSha256'],first['sha256']);self.assertEqual(json.loads((self.root/'managed/journals/crash.json').read_text())['stage'],'interrupted')
+    async def test_upgrade_retains_history_but_blocks_unevaluated_execution(self):
+        first,_=await self.install(self.rows[0]['sha256'])
+        second,_=await self.install()
+        journal_path=self.root/'managed/journals'
+        before={p.name:p.read_bytes() for p in journal_path.glob('*.json')}
+        with patch('wixal.managed_tools.VERSION','0.7.10-alpha.999'):
+            recovered=PackageRegistry(self.root/'managed',self.config)
+            state=recovered.snapshot()
+            self.assertEqual(state['active']['sha256'],second['sha256'])
+            self.assertEqual(state['versions'],[])
+            self.assertEqual(before,{p.name:p.read_bytes() for p in journal_path.glob('*.json')})
+            with self.assertRaisesRegex(ValueError,'unevaluated'):
+                recovered.acquire('upgrade')
+            with self.assertRaisesRegex(ValueError,'unevaluated'):
+                recovered.select_provider('managed')
+            with self.assertRaisesRegex(ValueError,'retained, approved recovery'):
+                recovered.rollback(first['sha256'])
+            with recovered.database() as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM leases').fetchone()[0],0)
+            recovered.remove()
+            self.assertFalse(recovered.snapshot()['installed'])
+            self.assertFalse(recovered.path(second).exists())
+            with recovered.database() as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM packages').fetchone()[0],2)
+
+    async def test_upgrade_recovers_interrupted_transaction_without_activation(self):
+        first,_=await self.install(self.rows[0]['sha256'])
+        from wixal.managed_tools import atomic_json
+        journal_path=self.root/'managed/journals/upgrade-crash.json'
+        atomic_json(journal_path,dict(id='upgrade-crash',descriptor=self.rows[1],stage='published'))
+        staging=self.root/'managed/staging/upgrade-crash';staging.mkdir()
+        (staging/'incomplete').write_text('partial')
+        with patch('wixal.managed_tools.VERSION','0.7.10-alpha.999'):
+            recovered=PackageRegistry(self.root/'managed',self.config)
+            self.assertEqual(recovered.snapshot()['active']['sha256'],first['sha256'])
+            self.assertEqual(json.loads(journal_path.read_text())['stage'],'interrupted')
+            self.assertFalse(staging.exists())
+            with self.assertRaisesRegex(ValueError,'unevaluated'):
+                recovered.resolve()
+        self.assertEqual(PackageRegistry(self.root/'managed',self.config).resolve()['packageSha256'],first['sha256'])
+
     async def test_integrity_change_prevents_execution(self):
         row,_=await self.install();(self.registry.path(row)/row['entrypoint']).write_bytes(b'replaced')
         with self.assertRaisesRegex(ValueError,'integrity'):self.registry.acquire('test')

@@ -14,8 +14,9 @@ try {
     return { release, dmg: count('dmg'), zip: count('zip') };
   });
   document.querySelectorAll('[data-download-total]').forEach(el => { el.textContent = rows.reduce((sum, row) => sum + row.dmg + row.zip, 0).toLocaleString(); });
-  const latest = rows.find(row => row.release.tag_name === 'v0.7.10-alpha.1');
-  document.querySelector('[data-stats-latest]').textContent = latest ? `${latest.release.tag_name}: ${(latest.dmg + latest.zip).toLocaleString()}` : 'No releases';
+  const current = document.querySelector('[data-stats-latest]');
+  const latest = rows.find(row => row.release.tag_name === current.dataset.releaseTag);
+  current.textContent = latest ? `${latest.release.tag_name}: ${(latest.dmg + latest.zip).toLocaleString()}` : 'No releases';
   const tbody = document.querySelector('[data-stats-rows]');
   for (const row of rows) {
     const tr = document.createElement('tr');

@@ -137,7 +137,7 @@ class Agents:
         from .agent_authority import validate
         value['authority']=validate(source.get('authority',{}))
         self.upsert('schedules',value);return value
-    async def run(self,identifier,prompt,project_id=None,source='Agent',workflow_id=None,snapshot=None,checks=None,authority=None,resume_task=None):
+    async def run(self,identifier,prompt,project_id=None,source='Agent',workflow_id=None,snapshot=None,checks=None,authority=None,resume_task=None,queue_job=None):
         if resume_task:
             project_id=resume_task.get('projectId')
             retained=next((s for s in self.store.data['sessions'] if s['id']==resume_task.get('sessionId') and s.get('projectId')==resume_task.get('projectId')),None)
@@ -170,6 +170,9 @@ class Agents:
             if resume_task:
                 prompt='Continue after inspecting the retained state and tool evidence. Do not replay uncertain actions.\n'+prompt
             if not resume_task:self.store.data['tasks'].append(task)
+            if queue_job is not None:
+                queue_job['taskId']=task['id']
+                task['queueJobId']=queue_job['id']
             if workflow_id:
                 run=next((r for r in self.store.data['workflowRuns'] if r['id']==workflow_id),None)
                 if run:

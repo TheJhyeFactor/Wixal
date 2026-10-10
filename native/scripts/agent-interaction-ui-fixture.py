@@ -24,7 +24,10 @@ from wixal.service import Service
 
 
 def main(args):
-    base=args.output.resolve();base.mkdir(parents=True,exist_ok=False)
+    base=args.output.resolve()
+    if args.resume:
+        if not (base/'data/workspace.sqlite3').is_file():raise ValueError('Resume requires an existing isolated fixture workspace')
+    else:base.mkdir(parents=True,exist_ok=False)
     source=sqlite3.connect(f'file:{args.setup_source.resolve()}?mode=ro',uri=True)
     setup=json.loads(source.execute('SELECT value FROM state').fetchone()[0]).get('setup',{})
     source.close()
@@ -68,13 +71,16 @@ def main(args):
             await service.dispatch('agent-schedule-save',dict(id='ui-acceptance-routine',name='Saved routine acceptance',agentID=agent['id'],prompt='Inspect retained evidence',timing='Every hour',enabled=False))
             service.store.save()
         finally:await service.close()
-    asyncio.run(seed())
+    if not args.resume:asyncio.run(seed())
     app=args.app.resolve()
     report=dict(app=str(app),endpoint=endpoint,storage=str(base/'data'),sourceSetup='copied completed setup flags only',model='controlled fixture; no real-model claim',helperSha256=hashlib.sha256((app/'Contents/Resources/engine/wixal-engine').read_bytes()).hexdigest())
     (base/'launch.json').write_text(json.dumps(report,indent=2)+'\n')
-    env={**os.environ,'WIXAL_NATIVE_DATA':str(base/'data'),'WIXAL_NATIVE_ENDPOINT':endpoint,'WIXAL_AGENTS_DESIGN_DATA':str(base/'drafts')}
-    with (base/'app-stdout.log').open('w') as stdout,(base/'app-stderr.log').open('w') as stderr:
-        process=subprocess.Popen([str(app/'Contents/MacOS/WixalNative')],env=env,stdout=stdout,stderr=stderr)
+    with (base/'launches.jsonl').open('a') as launches:launches.write(json.dumps({**report,'resumed':args.resume,'started':time.time()})+'\n')
+    launch_env={'WIXAL_NATIVE_DATA':str(base/'data'),'WIXAL_NATIVE_ENDPOINT':endpoint,'WIXAL_AGENTS_DESIGN_DATA':str(base/'drafts')}
+    command=['/usr/bin/open','-n','-W',str(app)]
+    for key,value in launch_env.items():command.extend(['--env',f'{key}={value}'])
+    with (base/'app-stdout.log').open('a') as stdout,(base/'app-stderr.log').open('a') as stderr:
+        process=subprocess.Popen(command,stdout=stdout,stderr=stderr)
         def shutdown(*args):stop.set()
         signal.signal(signal.SIGTERM,shutdown);signal.signal(signal.SIGINT,shutdown)
         print(json.dumps(report),flush=True)
@@ -90,4 +96,5 @@ if __name__=='__main__':
     parser.add_argument('--app',type=Path,default=Path('/Applications/Wixal.app'))
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--setup-source',type=Path,default=Path.home()/'Library/Application Support/Wixal Native/workspace.sqlite3')
+    parser.add_argument('--resume',action='store_true',help='Reopen this fixture workspace without replacing drafts or retained runs')
     main(parser.parse_args())

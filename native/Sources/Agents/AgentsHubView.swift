@@ -1,4 +1,5 @@
 import SwiftUI
+import WixalInteractions
 
 struct AgentsHubView:View {
     @ObservedObject var engine:EngineClient
@@ -102,16 +103,20 @@ struct AgentsHubView:View {
         let selection=selectedRun ?? design.liveSelection
         if let run=tasks.first(where:{textValue($0["id"])==selection}){
             Button("All runs"){selectedRun=nil;design.liveSelection=nil}.buttonStyle(WixalButtonStyle())
-            AgentLiveRunView(engine:engine,run:run,workflow:false).id(textValue(run["id"]))
+            AgentLiveRunView(engine:engine,run:run,workflow:false,guidance:runGuidance(run),guidanceDraftError:design.guidanceDraftError).id(textValue(run["id"]))
         }else if let run=flows.first(where:{textValue($0["id"])==selection}){
             Button("All runs"){selectedRun=nil;design.liveSelection=nil}.buttonStyle(WixalButtonStyle())
-            AgentLiveRunView(engine:engine,run:run,workflow:true).id(textValue(run["id"]))
+            AgentLiveRunView(engine:engine,run:run,workflow:true,guidance:runGuidance(run),guidanceDraftError:design.guidanceDraftError).id(textValue(run["id"]))
         }else{
             if tasks.isEmpty && flows.isEmpty{Text("No runs yet. Give a saved agent a task or start a workflow.").foregroundStyle(theme.muted)}
             ForEach(Array(flows.reversed().enumerated()),id:\.offset){_,run in Button{selectedRun=textValue(run["id"])}label:{HStack{Text(textValue((run["definition"] as? [String:Any])?["name"]));Spacer();Text(agentOutcomeLabel(run))}.wixalCard()}.buttonStyle(.plain)}
             ForEach(Array(tasks.reversed().enumerated()),id:\.offset){_,run in Button{selectedRun=textValue(run["id"])}label:{HStack{Text(textValue(run["prompt"])).lineLimit(2);Spacer();Text(agentOutcomeLabel(run))}.wixalCard()}.buttonStyle(.plain)}
         }
     }}
+    private func runGuidance(_ run:[String:Any])->Binding<AcknowledgedDraft>{
+        let key=RunGuidanceDrafts.key(owner:textValue(run["owner"]),run:textValue(run["id"]))
+        return Binding(get:{design.guidanceDrafts[key]},set:{design.saveGuidance($0,key:key)})
+    }
     private var schedules:some View{AgentDesignPage(title:"Schedules",subtitle:"Choose recurring work, its timing and what happens after a missed run."){
         AgentRuntimeBanner()
         Toggle("Run schedules while Wixal is closed",isOn:Binding(get:{(engine.state["backgroundScheduler"] as? [String:Any])?["enabled"] as? Bool ?? false},set:{engine.action("background-settings",["enabled":$0])})).disabled(engine.busy || !engine.connected)

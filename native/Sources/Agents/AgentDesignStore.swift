@@ -81,6 +81,9 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
     @Published var workflows: [AgentWorkflowDraft] = []
     @Published var schedules: [AgentScheduleDraft] = []
     @Published var liveSelection:String?
+    @Published var guidanceDrafts=RunGuidanceDrafts()
+    @Published private(set) var guidanceDraftError=""
+    private var guidanceFile:URL {file.deletingLastPathComponent().appendingPathComponent("run-guidance.json")}
     @Published var engineReady=false
     private weak var engine:EngineClient?
     private var subscription:AnyCancellable?
@@ -93,12 +96,25 @@ struct AgentScheduleDraft: Identifiable, Codable, Equatable {
         let location = ProcessInfo.processInfo.environment["WIXAL_AGENTS_DESIGN_DATA"] ?? (Bundle.main.object(forInfoDictionaryKey:"WixalPreviewData") as? String).map{$0+"/drafts"}
         let base = location.map { URL(fileURLWithPath:$0) } ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Wixal Agents Design",isDirectory:true)
         file = base.appendingPathComponent("drafts.json")
+        if FileManager.default.fileExists(atPath:guidanceFile.path){
+            do{guidanceDrafts=RunGuidanceDrafts(texts:try JSONDecoder().decode([String:String].self,from:Data(contentsOf:guidanceFile)))}
+            catch{guidanceDraftError="Could not load run guidance drafts. The existing file is preserved. \(error.localizedDescription)"}
+        }
         guard FileManager.default.fileExists(atPath:file.path) else{return}
         do {
             let data = try JSONDecoder().decode(Snapshot.self,from:Data(contentsOf:file))
             guard data.version == 1 else {throw CocoaError(.fileReadCorruptFile)}
             agents=data.agents;workflows=data.workflows;schedules=data.schedules
         } catch { self.error="Could not load Agents design drafts. The existing file is preserved. \(error.localizedDescription)" }
+    }
+    func saveGuidance(_ draft:AcknowledgedDraft,key:String){
+        guidanceDrafts[key]=draft
+        guard guidanceDraftError.isEmpty else{return}
+        do{
+            try FileManager.default.createDirectory(at:guidanceFile.deletingLastPathComponent(),withIntermediateDirectories:true)
+            try JSONEncoder().encode(guidanceDrafts.texts).write(to:guidanceFile,options:.atomic)
+            try FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:guidanceFile.path)
+        }catch{guidanceDraftError="Could not retain run guidance after relaunch. \(error.localizedDescription)"}
     }
     private func persist() {
         do {

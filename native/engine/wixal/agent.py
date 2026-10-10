@@ -398,6 +398,11 @@ class Agent:
                     if calls and (not supports_tools or not body.get("tools")):
                         raise ValueError("The model returned an unavailable tool call. No action was executed.")
                     if not calls:
+                        # Guidance acknowledged during streaming belongs to this
+                        # run. Give it a model turn before accepting completion;
+                        # the loop budget still bounds repeated late guidance.
+                        if task.get('pendingGuidance'):
+                            continue
                         if not message.get("content", "").strip():
                             if message.get('usage',{}).get('eval_count',0)>=body['options']['num_predict']:
                                 raise ValueError("The model reached its response limit without a visible answer. Choose a model with optional thinking or increase the supported context before trying again.")
@@ -408,10 +413,18 @@ class Agent:
                                 self.store.save()
                                 continue
                             raise ValueError("The model ended its response without a visible answer. Retry the request or choose another model.")
-                        task["status"] = "completed"
                         task["result"] = message.get("content", "")[:24000]
                         from .outcomes import verify,unsupported_artifact_claim
                         report=await verify(self.store,self.tools,task)
+                        # Verification can itself await reviewed commands and
+                        # evidence finalization. Keep the selected run active
+                        # until it settles so stop/guidance remain correctly
+                        # targeted throughout that work.
+                        if task.get('pendingGuidance'):
+                            task.pop('result',None)
+                            continue
+                        task['status']='needs_attention' if report['status'] in ('failed','needs_attention') else 'completed'
+                        if task['status']=='needs_attention':task['error']=report['note']
                         self.emit('verification', dict(taskId=task['id'], sessionId=session['id'], turn=turn+1, status=report['status'], unresolved=report['unresolved'], retries=verification_retries))
                         unresolved=[c for c in task['checkpoints'] if c['id'] in report['unresolved']]
                         recoverable=all(c.get('status') not in ('started','interrupted') and not str(c.get('result','')).startswith(('User declined','Not executed:')) for c in unresolved)

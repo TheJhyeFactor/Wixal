@@ -11,6 +11,7 @@ This record covers all 26 issues left open after PR #32. It distinguishes comple
 - The managed-tools matrix rejects empty suites, suites without mandatory families and incomplete configuration identities. Passing evidence cannot qualify an unspecified helper, source, payload, adapter, platform or model configuration.
 - Acceptance clients can explicitly select a model endpoint and frozen helper. New recovery and saved-capture suites retain their independent observations in isolated directories.
 - Real dependency recovery exposed a multi-file verification bug: `tool_contains` considered only the last read of any file. It now checks the latest read of each canonical file path independently. A later read of the same file still supersedes its older content, including path aliases.
+- Explicit standalone discovery starts with discovery/read/stop schemas rather than the entire security catalogue. Explicit schema loading and requested inspection remain available. This changes progressive guidance, not controller permissions or action review.
 
 ## Current package and results
 
@@ -31,6 +32,8 @@ The development package is `/Applications/Wixal Backlog.app`, built from source 
 Retained raw records live under `artifacts/native/remaining-issues` in the original checkout. Failed harness launches remain retained: the first recovery launch selected an empty managed-runtime model catalogue; the second reached the interruption assertion but failed on a duplicate reporting keyword. The successful fresh run is `recovery-final/results.json`. Neither failed run was overwritten or counted as successful.
 
 The next development package, built from `a624819`, retained a failed real-model dependency recovery run: both initial reads and repaired prerequisite passed, but the join's two-file checks exposed the verification bug described above. The original failed record is `workflow-recovery/results.json`. Its model prerequisite suite belongs to the earlier `b821c1e` package and passed 13/14; the failure attempted a shell scanner command instead of native discovery and the harness declined it. Neither result is a qualification pass. Follow-up source adds explicit native-discovery guidance and the multi-file fix; earlier observations are not transferred to the new helper identity.
+
+The `08bcaee` installed helper passed the corrected real-model dependency recovery (`workflow-final/results.json`): missing prerequisite blocked the join, repaired prerequisite and join passed, the completed source branch was not replayed, and the failed child's evidence remained retained. Its two-local-workspace encrypted sync passed conflict resolution, forgetting, unchanged ciphertext, distinct local device identities and encrypted-envelope inspection; no image was present in the source conversation and no image acceptance is claimed. Its model prerequisites again failed the standalone variant, which chose service probing; follow-up source narrows initial schemas. These failures are retained, not regraded as successful discovery.
 
 ## Every remaining issue
 

@@ -5,6 +5,17 @@ from wixal.network_claims import check,facts,inspection_claim,corrected_summary,
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_standalone_discovery_starts_with_discovery_schemas(self):
+        available=[dict(function=dict(name=n)) for n in ['workspace_info','read_file','list_files','recall_memory','load_skill','network_discover','network_read','network_stop','network_scan','addon_catalog','addon_install','addon_run','security_tools','command_read','command_stop']]
+        prompt='Which selected TCP ports accept connections? Use bounded standalone discovery without installing programs.'
+        names={t['function']['name'] for t in select_tools(available,prompt)}
+        self.assertIn('network_discover',names);self.assertIn('network_read',names)
+        self.assertNotIn('network_scan',names);self.assertNotIn('addon_install',names)
+        loaded={t['function']['name'] for t in select_tools(available,prompt,load_name='network_scan')}
+        self.assertIn('network_scan',loaded)
+        chained={t['function']['name'] for t in select_tools(available,prompt+' Then inspect the discovered ports.')}
+        self.assertIn('network_scan',chained)
+
     def task(self,answer,services=None):
         return dict(result=answer,checkpoints=[dict(id='owned-inspection',name='network_scan',status='finished',result=json.dumps(dict(state='completed',sourceSessionId='owned-discovery',services=services or [dict(host='192.0.2.1',port='9021',state='open')])) )])
     def test_denial_is_checked_against_current_actual_open_ports(self):

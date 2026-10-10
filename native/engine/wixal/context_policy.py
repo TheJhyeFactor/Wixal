@@ -55,6 +55,14 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
                 if re.search(pattern, routing_prompt, re.I): value=candidate;break
     if value:
         matching=[t['function']['name'] for t in available if category(t['function']['name']) == value]
+        inspection_request=re.sub(r"\b(?:do not|don't|without|no|avoid|skip)\s+(?:service\s+)?(?:inspect\w*|enumerat\w*)\b",'',prompt,flags=re.I)
+        if value=='security' and not load_category and not load_name and re.search(r'\bstandalone\s+(?:tcp\s+)?discovery\b',prompt,re.I) and not re.search(r'\b(?:inspect\w*|enumerat\w*)\b',inspection_request,re.I):
+            # Progressive discovery starts with its own adapter, not every
+            # service probe/installer in the security catalogue. Other schemas
+            # remain explicitly discoverable through workspace_info.
+            discovery={'network_discover','network_read','network_stop','security_tools','addon_catalog'}
+            matching=[name for name in matching if name in discovery]
+            chosen={name for name in chosen if name in requested or category(name)!='security' or name in discovery}
         chosen.update(matching[:8] if value == 'external' else matching)
         if value in ('commands','security'): chosen.update(('command_read','command_stop','command_save_output'))
     return [t for t in available if t['function']['name'] in chosen]

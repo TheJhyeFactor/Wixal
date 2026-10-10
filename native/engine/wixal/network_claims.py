@@ -68,6 +68,25 @@ def availability_claim(task,available):
     return dict(check=dict(kind='tool_scope_claim'),status='failed',availableTools=sorted(set(contradictions)),error='These named native tools are enabled in the current controller scope. Installation, readiness and action approval remain separate; do not claim that an available adapter is disabled. Use its native schema or report the actual readiness/review error.')
 
 
+def execution_claim(task):
+    """Reject explicit scan completion claims after only unsuccessful attempts.
+
+    Restricted to current-task native scanner checkpoints. A completed empty
+    scan is still completion; this check does not reinterpret its port states.
+    """
+    attempts=[c for c in task.get('checkpoints',[]) if c.get('name') in ('network_discover','network_scan','network_read')]
+    if not attempts:return None
+    for checkpoint in attempts:
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if checkpoint.get('status')=='finished' and isinstance(value,dict) and not value.get('error') and value.get('state')=='completed' and value.get('exitCode') in (None,0):return None
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r"\b(?:not|never|unable|cannot|can't|failed|incomplete|pending|if|whether|would|could|example|historical|previous|earlier)\b",sentence,re.I):continue
+        if re.search(r'\b(?:scan|discovery|inspection)\b.{0,100}\b(?:completed|finished|found|observed|returned|produced)\b|\b(?:I|we)\s+(?:have\s+)?(?:scanned|inspected)\b|\b(?:complete|actual|retained|verified)\s+(?:Nmap\s+)?XML\b',sentence,re.I):
+            return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='No current-task native scanner attempt completed successfully. Do not describe completed scans, observed port results or retained XML evidence. Report the actual failed or unfinished attempt; do not replay an action to justify this answer.')
+    return None
+
+
 def check(task):
     hosts,sources=facts(task)
     # A bare port number is ambiguous across multiple hosts; retain their raw

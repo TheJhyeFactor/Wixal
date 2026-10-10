@@ -47,7 +47,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
             routing_prompt = re.sub(r"\b(?:do not|don't|without)\s+(?:inspect|read|write|edit|search)\s+(?:(?:the|any|project|unrelated)\s+)?files\b", "", prompt, flags=re.I)
             for candidate, pattern in (
                 ('external', r'\b(mcp|connected|connector|integration)\b'),
-                ('security', r'\b(nmap|rustscan|discover|scan|ports|tls|assessment|security|vulnerab\w*)\b'),
+                ('security', r'\b(nmap|rustscan|discover(?:y)?|scan|ports|tls|assessment|security|vulnerab\w*)\b'),
                 ('commands', r'\b(run|build|test|command|shell|terminal|execute)\b'),
                 ('web', r'https?://|\b(browse|website|web|online|internet|url|links?)\b'),
                 ('files', r'\b(file|files|folder|source|code|read|write|edit)\b'),

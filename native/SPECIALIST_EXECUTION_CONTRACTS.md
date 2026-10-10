@@ -1,0 +1,15 @@
+# Specialist execution contracts
+
+These are the current engine contracts in `wixal/addon_execution.py` and `wixal/addons.py`. Availability, an installed executable, passing execution, model interpretation and distribution qualification are separate observations.
+
+| Capability | Current executable and inputs | Bounds and evidence | Qualification boundary |
+| --- | --- | --- | --- |
+| Saved packet analysis | TShark through `addon_run`, `id=wireshark`, project-relative `path` | Existing regular capture below 100 MB; fixed `-r … -q -z io,phs` argv; reviewed command session; poll `command_read`; retain capture hash, executable hash, exit status and raw protocol summary | Does not start live capture, set permissions, decrypt opaque payloads or establish Wireshark desktop acceptance. Fresh generated one-packet capture acceptance passed on the development helper. |
+| TLS assessment | testssl.sh through `addon_run`, `id=testssl`, explicitly authorised single host/URL | Host validation through scan planning; fixed quiet/non-colour/batch argv; bounded command timeout; task target authority before review; retain actual endpoint, tool identity, output and exit status | CLI presence is not successful TLS coverage. Needs real owned TLS fixture, certificate/protocol oracles, cancellation, absent-dependency and unsupported-runtime acceptance. |
+| HTTP interception | mitmproxy/mitmdump catalogue entry, `setup_required` | No `addon_run` execution profile. Requires explicit proxy/CA/browser configuration, allowed endpoint list and retained transaction evidence | No autonomous adapter or qualification is advertised. Installing the cask does not configure a proxy or authorize interception. |
+| Web assessment automation | ZAP catalogue entry, `setup_required` | No `addon_run` execution profile. Requires configured runtime, authenticated context, reviewed automation plan, target scope and cancellation contract | Catalogue discovery does not establish a working ZAP session or agent capability. |
+| Specialist module validation | Metasploit catalogue entry, `setup_required` | No `addon_run` execution profile. Requires independently scoped module/input policy, authenticated RPC and retained module/effect evidence | Catalogue presence grants no execution authority. Official installation and configured specialist operation remain separate. |
+
+All implemented add-on profiles use structured argv rather than model-authored shell interpolation. File paths pass project/credential/symlink checks. Execution inside writable workflow branches is rejected. A restricted agent's network targets must match its task authority. A declined action must remain declined; command/session ownership and terminal outcomes remain inspectable. Temporary run homes and managed package leases are released on completion or failure.
+
+The outer command timeout bounds supported runs. Each future specialist adapter still needs its own process-tree, cancellation, output-parsing and uncertain-effect recovery acceptance. Generic process machinery does not establish those tool-specific results.

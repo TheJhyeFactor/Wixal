@@ -7,6 +7,7 @@ remains in the output and releaseQualified remains false.
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT/'native/engine'))
@@ -14,9 +15,19 @@ from wixal.tool_qualification import validate_report
 from wixal.managed_tools import canonical,digest
 
 def matrix(suite,envelopes,identity,evidence_root,excluded_gates=()):
-    if suite.get('schemaVersion')!=1 or not isinstance(suite.get('families'),list):raise ValueError('Invalid acceptance suite')
+    if suite.get('schemaVersion')!=1 or not isinstance(suite.get('families'),list) or not suite['families']:raise ValueError('Invalid or empty acceptance suite')
     families=suite['families'];ids=[f['id'] for f in families]
     if len(set(ids))!=len(ids):raise ValueError('Duplicate acceptance families')
+    if not any(f.get('mandatory') is True for f in families):raise ValueError('Acceptance suite has no mandatory families')
+    identity_errors=[]
+    for key in ('helperSha256','sourceManifestSha256','packageSha256','executableSha256'):
+        if not isinstance(identity.get(key),str) or not re.fullmatch('[0-9a-f]{64}',identity[key]):identity_errors.append('Missing or invalid exact tuple '+key)
+    for key in ('adapter','architecture','macOS'):
+        if not isinstance(identity.get(key),str) or not identity[key].strip():identity_errors.append('Missing exact tuple '+key)
+    if any(f['gate']=='model' and f['gate'] not in excluded_gates for f in families):
+        model=identity.get('model')
+        if not isinstance(model,dict) or not isinstance(model.get('name'),str) or not model['name'] or not isinstance(model.get('digest'),str) or not re.fullmatch('[0-9a-f]{64}',model['digest']):identity_errors.append('Missing exact model name and digest')
+        if type(identity.get('contextSize')) is not int or identity['contextSize']<=0:identity_errors.append('Missing exact model context size')
     rows=[];rejected=[]
     for envelope in envelopes:
         if envelope.get('identity')!=identity:
@@ -53,9 +64,9 @@ def matrix(suite,envelopes,identity,evidence_root,excluded_gates=()):
         status='passed' if validation['status']=='passed' else 'missing' if not selected else 'incomplete_or_failed'
         result.append(dict(base,status=status,validation=validation))
     required=[r for r in result if r['mandatory'] and r['status']!='deferred_by_request']
-    complete=not rejected and not critical and all(r['status']=='passed' for r in required)
+    complete=not identity_errors and not rejected and not critical and all(r['status']=='passed' for r in required)
     deferred=any(r['mandatory'] and r['status']=='deferred_by_request' for r in result)
-    return dict(schemaVersion=1,status='passed_for_requested_gates' if complete else 'incomplete',releaseQualified=complete and not deferred,identity=identity,suiteSha256=canonical(suite),families=result,rejectedEnvelopes=rejected,criticalFailure=critical,counts={state:sum(r['status']==state for r in result) for state in ('passed','missing','incomplete_or_failed','deferred_by_request')})
+    return dict(schemaVersion=1,status='passed_for_requested_gates' if complete else 'incomplete',releaseQualified=complete and not deferred,identity=identity,identityErrors=identity_errors,suiteSha256=canonical(suite),families=result,rejectedEnvelopes=rejected,criticalFailure=critical,counts={state:sum(r['status']==state for r in result) for state in ('passed','missing','incomplete_or_failed','deferred_by_request')})
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--suite',type=Path,default=ROOT/'native/tools-distribution/acceptance-suite.json');p.add_argument('--identity',type=Path,required=True,help='Reviewed exact tuple JSON');p.add_argument('--claims',type=Path,action='append',default=[],help='Normalized evidence envelope; may repeat');p.add_argument('--evidence-root',type=Path,required=True);p.add_argument('--exclude-gate',action='append',choices=['release'],default=[]);p.add_argument('--output',type=Path,required=True);o=p.parse_args()

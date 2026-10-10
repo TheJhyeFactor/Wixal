@@ -19,7 +19,7 @@ async def main(options):
     base=options.output.resolve();base.mkdir(parents=True,exist_ok=False)
     real.ART=base;real.STATE=base/'workspace'
     helper=options.helper.resolve();app=helper.parents[3]
-    client=real.Client(False,helper=helper,payload=app/'Contents/Resources/ollama')
+    client=real.Client(False,helper=helper,payload=app/'Contents/Resources/ollama',endpoint=options.endpoint)
     report=dict(status='running',started=time.time(),helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),cases=[],limitations=['Helper IPC acceptance; native desktop and spoken VoiceOver are not exercised.','No sleep, reboot, remote account or second physical device is simulated.'])
     manifest=app/'Contents/Resources/SOURCE_MANIFEST.json'
     report['sourceManifestSha256']=hashlib.sha256(manifest.read_bytes()).hexdigest()
@@ -95,7 +95,7 @@ async def main(options):
         session=next(s for s in restored['sessions'] if s['id']==task['sessionId'])
         assert any(m['role']=='user' and 'relational database' in m.get('content','') for m in session['messages']),session
         assert len([t for t in restored['tasks'] if t['id']==task['id']])==1
-        record('actual-inference-interruption-no-automatic-replay',taskId=task['id'],sessionId=task['sessionId'],status=task['status'])
+        record('active-model-task-interruption-no-automatic-replay',taskId=task['id'],sessionId=task['sessionId'],taskStatus=task['status'])
         db=sqlite3.connect(f'file:{real.STATE / "workspace.sqlite3"}?mode=ro',uri=True)
         try:assert db.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
         finally:db.close()
@@ -109,7 +109,7 @@ async def main(options):
     return True
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--helper',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--notes',type=int,default=50);parser.add_argument('--jobs',type=int,default=20)
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--helper',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--endpoint',default='http://127.0.0.1:11434');parser.add_argument('--notes',type=int,default=50);parser.add_argument('--jobs',type=int,default=20)
     args=parser.parse_args()
     if not 2<=args.notes<=500 or not 1<=args.jobs<=100:parser.error('Use 2–500 notes and 1–100 queued jobs')
     asyncio.run(main(args))

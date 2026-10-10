@@ -19,14 +19,16 @@ ART=ROOT/'artifacts/native/real-acceptance'
 STATE=ART/'workspace'
 
 class Client:
-    def __init__(self,source,helper=None,payload=None):
+    def __init__(self,source,helper=None,payload=None,endpoint=None):
         self.helper=helper or ROOT/'release/native/Wixal.app/Contents/Resources/engine/wixal-engine'
         self.payload=payload or ROOT/'runtime/ollama'
+        self.endpoint=endpoint
         self.source=source;self.pending={};self.counter=0;self.events=[];self.reviews=[];self.allowed={'read_file','run_command','command_start','command_read','save_memory','forget_memory'}
     async def start(self):
         command=[sys.executable,str(ROOT/'native/engine/engine_main.py')] if self.source else [str(self.helper)]
         self.log=(ART/('source-helper.log' if self.source else 'packaged-helper.log')).open('a')
-        self.child=await asyncio.create_subprocess_exec(*command,'--data',str(STATE),'--runtime',str(self.payload),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=self.log,limit=32*1024*1024)
+        endpoint_args=['--endpoint',self.endpoint] if self.endpoint else []
+        self.child=await asyncio.create_subprocess_exec(*command,'--data',str(STATE),'--runtime',str(self.payload),*endpoint_args,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=self.log,limit=32*1024*1024)
         self.reading=asyncio.create_task(self.read())
         await self.call('hello')
     async def read(self):

@@ -59,6 +59,7 @@ def check(task):
     host,states=next(iter(hosts.items()));ports=[p for p,state in states.items() if state=='open']
     answer=task.get('result','');errors=[]
     for sentence in re.split(r'[\n.!?;,]',answer):
+        if re.search(r'\bno\s+open\s+ports(?:\s+detected)?\s+does\s+not\s+establish\b',sentence,re.I):continue
         if re.search(r"\b(?:not necessarily|cannot|can't|could|may|might|outside|other|unscanned|elsewhere)\b",sentence,re.I):continue
         if ports and re.search(r'\b(?:no|zero)\s+open\s+(?:tcp\s+)?ports\b|\ball\s+(?:(?:selected|tested|scanned|specified|requested|tcp)\s+)*(?:ports\s+)?(?:are\s+|were\s+)?(?:closed|filtered)\b',sentence,re.I):errors.append('The answer denies the observed open ports')
         if re.search(r'\b(?:open|closed)\s*\|\s*filtered\b',sentence,re.I):continue
@@ -72,6 +73,34 @@ def check(task):
                 if re.search(r'(?<!\d)'+str(port)+r'(?!\d)[^0-9]{0,70}\bopen\b|\bopen\s+(?:tcp\s+)?(?:port\s+)?'+str(port)+r'(?!\d)',sentence,re.I):errors.append(f'The answer claims open TCP port {port}, which this evidence did not observe open')
     if not errors:return None
     return dict(check=dict(kind='network_port_claim'),status='failed',errors=errors,observed=dict(host=host,ports=sorted(ports)),sources=sources,error='Use the actual completed scanner observations; a port label does not establish a vulnerability.')
+
+
+def evidence_quote(task):
+    """A purported verbatim XML excerpt must occur in current completed output.
+
+    Explicitly illustrative examples are not quotations. This does not attempt
+    to certify arbitrary rewritten summaries or all model prose.
+    """
+    outputs=[];sources=[]
+    for checkpoint in task.get('checkpoints',[]):
+        if checkpoint.get('name')!='network_scan' or checkpoint.get('status')!='finished':continue
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict) or value.get('error') or value.get('state')!='completed':continue
+        output=value.get('output')
+        if isinstance(output,str) and output.strip():
+            outputs.append(re.sub(r'\s+',' ',output.strip()))
+            sources.append(dict(checkpointId=checkpoint['id'],sha256=hashlib.sha256(output.encode()).hexdigest()))
+    if not outputs:return None
+    answer=task.get('result','');invalid=[]
+    for match in re.finditer(r'```xml\s*\n?(.*?)```',answer,re.I|re.S):
+        context=answer[max(0,match.start()-240):match.start()]
+        if re.search(r'\b(?:example|illustrative|schematic|simplified)\b',context,re.I):continue
+        if not re.search(r'\b(?:output|excerpt|verbatim|verified)\b',context,re.I):continue
+        quote=re.sub(r'\s+',' ',match.group(1).strip())
+        if quote and not any(quote in output for output in outputs):invalid.append(hashlib.sha256(match.group(1).encode()).hexdigest())
+    if not invalid:return None
+    return dict(check=dict(kind='network_evidence_quote'),status='failed',error='The purported XML output excerpt does not match completed current-task scanner output. Quote retained evidence exactly, or describe it explicitly as a summary.',quoteSha256=invalid,sources=sources)
 
 
 def corrected_summary(task):

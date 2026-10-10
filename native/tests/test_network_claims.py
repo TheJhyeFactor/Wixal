@@ -1,7 +1,7 @@
 """Current tool facts, contradictory answers and host/stage boundaries."""
 import json
 import unittest
-from wixal.network_claims import check,facts,inspection_claim,corrected_summary
+from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
@@ -11,8 +11,25 @@ class NetworkClaimsTests(unittest.TestCase):
         for answer in ['No open TCP ports were found.','All selected ports are closed.','TCP 9021 is filtered.','Neither TCP 9021 nor TCP 9022 is open.']:
             report=check(self.task(answer));self.assertEqual(report['status'],'failed');self.assertEqual(report['observed']['ports'],[9021]);self.assertEqual(len(report['sources'][0]['sha256']),64)
     def test_correct_observations_and_unscanned_limits_remain_valid(self):
-        for answer in ['9021/tcp open.','9021 is open, not filtered.','Other unscanned ports may be closed or filtered.','This cannot establish that there are no open ports elsewhere.']:
+        for answer in ['9021/tcp open.','9021 is open, not filtered.','Other unscanned ports may be closed or filtered.','This cannot establish that there are no open ports elsewhere.','Observed TCP 9021 open. Scanner warning: No open ports detected does not establish host absence, closed ports or service safety.']:
             self.assertIsNone(check(self.task(answer)))
+
+    def test_verbatim_xml_excerpt_uses_actual_current_output(self):
+        t=self.task('Nmap output excerpt:\n```xml\n<port protocol="tcp" portid="9021"><state state="open"/></port>\n```')
+        result=json.loads(t['checkpoints'][0]['result']);result['output']='<nmaprun>\n  <port protocol="tcp" portid="9021"><state state="open"/></port>\n</nmaprun>';t['checkpoints'][0]['result']=json.dumps(result)
+        self.assertIsNone(evidence_quote(t))
+        t['result']='Nmap XML output excerpt:\n```xml\n<nmaprun><!-- invented full output --></nmaprun>\n```'
+        row=evidence_quote(t);self.assertEqual(row['status'],'failed');self.assertEqual(len(row['sources'][0]['sha256']),64)
+
+    def test_illustrative_xml_is_not_claimed_as_verbatim_evidence(self):
+        t=self.task('Simplified illustrative XML example:\n```xml\n<nmaprun/>\n```')
+        result=json.loads(t['checkpoints'][0]['result']);result['output']='<nmaprun scanner="nmap"><host/></nmaprun>';t['checkpoints'][0]['result']=json.dumps(result)
+        self.assertIsNone(evidence_quote(t))
+
+    def test_old_or_failed_scanner_output_cannot_support_an_excerpt(self):
+        t=self.task('Nmap output excerpt:\n```xml\n<nmaprun scanner="old"/>\n```')
+        result=json.loads(t['checkpoints'][0]['result']);result['output']='<nmaprun scanner="current"/>';t['checkpoints'][0]['result']=json.dumps(result)
+        self.assertEqual(evidence_quote(t)['status'],'failed')
     def test_later_inspection_state_supersedes_earlier_discovery(self):
         t=self.task('TCP 9021 is closed.');t['checkpoints'].append(dict(id='later',name='network_scan',status='finished',result=json.dumps(dict(state='completed',services=[dict(host='192.0.2.1',port=9021,state='closed')]))))
         self.assertIsNone(check(t));self.assertEqual(facts(t)[0]['192.0.2.1'][9021],'closed')

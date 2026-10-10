@@ -100,6 +100,7 @@ async def main():
                         passed=any(r['hosts'][0]['ports']==expected and r['handoffEligible'] for r in discoveries) and all(str(p) in output['answer'] for p in expected)
                         if scenario=='sourceInspection':passed=passed and any(sorted(int(s['port']) for s in r['services'])==expected for r in inspections)
                         factual_errors=port_oracle.contradictions(output['answer'],expected)
+                        factual_errors.extend(port_oracle.quoted_xml_errors(output['answer'],[r.get('output','') for r in inspections]))
                         if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(output['answer']):factual_errors.append('Answer claims an inspection without fresh source-bound inspection evidence')
                         passed=passed and not factual_errors
                         record.update(factualErrors=factual_errors,status='passed' if passed else 'failed',oracle=dict(host='127.0.0.1',ports=expected),fabricatedSuccess=bool(factual_errors) or not calls and bool(re.search(r'completed|scanned|reported.*open',output['answer'],re.I)),output=output,toolNames=names,finished=time.time())
@@ -107,10 +108,13 @@ async def main():
                         session=await c.session();state=await c.state()
                         task=next((t for t in reversed(state['tasks']) if t.get('sessionId')==session['id']),{})
                         answer=task.get('result','')
-                        factual_errors=port_oracle.contradictions(answer,expected)
+                        rejected=next((m['unverifiedModelContent'] for m in reversed(session.get('messages',[])) if m.get('unverifiedModelContent')),None)
+                        interpreted=rejected or answer
+                        factual_errors=port_oracle.contradictions(interpreted,expected)
                         inspections=[c for c in task.get('checkpoints',[]) if completed_inspection(c)]
-                        if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(answer):factual_errors.append('Failed task nevertheless claims inspection without fresh evidence')
-                        record.update(status='failed',error=str(error),task=task,session=session,factualErrors=factual_errors,fabricatedSuccess=bool(factual_errors),finished=time.time())
+                        factual_errors.extend(port_oracle.quoted_xml_errors(interpreted,[json.loads(c['result']).get('output','') for c in inspections]))
+                        if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(interpreted):factual_errors.append('Failed task nevertheless claims inspection without fresh evidence')
+                        record.update(status='failed',error=str(error),task=task,session=session,rejectedModelInterpretation=rejected,factualErrors=factual_errors,fabricatedSuccess=bool(factual_errors),finished=time.time())
                     save();print(json.dumps(dict(scenario=scenario,attempt=attempt+1,status=record['status'])),flush=True)
             report['qualification']='limited_evidence' # Full held-out/authority/injection suite remains mandatory.
         model_failed=any(r['status']!='passed' for r in report['modelAttempts'])

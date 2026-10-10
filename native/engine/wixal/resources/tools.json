@@ -928,6 +928,7 @@
           },
           "coverage": {
             "type": "string",
+            "default": "selected",
             "enum": [
               "selected",
               "all_tcp"
@@ -939,6 +940,7 @@
           },
           "pace": {
             "type": "string",
+            "default": "careful",
             "enum": [
               "careful",
               "balanced"

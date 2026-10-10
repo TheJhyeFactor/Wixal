@@ -17,6 +17,23 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
     scripted=fixtures.AgentRuntimeTests.scripted
 
+    async def test_multiple_file_evidence_checks_use_each_files_latest_read(self):
+        from wixal.outcomes import verify
+        (self.root/'one.txt').write_text('FIRST-SOURCE')
+        (self.root/'two.txt').write_text('SECOND-SOURCE')
+        context,_=self.scripted([('read_file',dict(path='one.txt')),('read_file',dict(path='two.txt'))],'Both sources read')
+        with context:
+            task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Read files one.txt and two.txt',successCriteria=[dict(kind='tool_contains',tool='read_file',value='FIRST-SOURCE'),dict(kind='tool_contains',tool='read_file',value='SECOND-SOURCE')]))
+        self.assertEqual(task['verification']['status'],'passed')
+        self.assertEqual(len({r['checkpointId'] for r in task['verification']['checks']}),2)
+        # An alias of the same file must supersede the earlier observation.
+        (self.root/'one.txt').write_text('CHANGED-SOURCE')
+        task['checkpoints'].append(dict(id='later-read',name='read_file',arguments=dict(path='./one.txt'),status='finished',result=json.dumps(dict(content='CHANGED-SOURCE'))))
+        report=await verify(self.service.store,self.service.tools,task)
+        self.assertEqual(report['status'],'failed')
+        self.assertEqual(report['checks'][0]['status'],'failed')
+        self.assertEqual(report['checks'][1]['status'],'passed')
+
     async def test_graph_retry_retains_failed_child_and_completed_branch(self):
         flow=await self.service.dispatch('workflow-save',dict(name='Recover branches',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Inspect'),dict(id='two',name='Two',agentID='coder',goal='Inspect')]))
         calls=0

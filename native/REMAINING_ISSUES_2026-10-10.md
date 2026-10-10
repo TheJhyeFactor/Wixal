@@ -10,6 +10,7 @@ This record covers all 26 issues left open after PR #32. It distinguishes comple
 - Skill evaluation records bind the candidate and baseline procedure bytes with SHA-256. Promotion rejects missing/stale provenance and changed candidate or baseline content. Promotion remains explicit.
 - The managed-tools matrix rejects empty suites, suites without mandatory families and incomplete configuration identities. Passing evidence cannot qualify an unspecified helper, source, payload, adapter, platform or model configuration.
 - Acceptance clients can explicitly select a model endpoint and frozen helper. New recovery and saved-capture suites retain their independent observations in isolated directories.
+- Real dependency recovery exposed a multi-file verification bug: `tool_contains` considered only the last read of any file. It now checks the latest read of each canonical file path independently. A later read of the same file still supersedes its older content, including path aliases.
 
 ## Current package and results
 
@@ -28,6 +29,8 @@ The development package is `/Applications/Wixal Backlog.app`, built from source 
 - TShark saved-capture acceptance passed through `addon_run` and command paging. The independent fixture contains one Ethernet/IPv4/UDP packet, and its bytes remained unchanged. No live packet capture or permissions change occurred.
 
 Retained raw records live under `artifacts/native/remaining-issues` in the original checkout. Failed harness launches remain retained: the first recovery launch selected an empty managed-runtime model catalogue; the second reached the interruption assertion but failed on a duplicate reporting keyword. The successful fresh run is `recovery-final/results.json`. Neither failed run was overwritten or counted as successful.
+
+The next development package, built from `a624819`, retained a failed real-model dependency recovery run: both initial reads and repaired prerequisite passed, but the join's two-file checks exposed the verification bug described above. The original failed record is `workflow-recovery/results.json`. Its model prerequisite suite belongs to the earlier `b821c1e` package and passed 13/14; the failure attempted a shell scanner command instead of native discovery and the harness declined it. Neither result is a qualification pass. Follow-up source adds explicit native-discovery guidance and the multi-file fix; earlier observations are not transferred to the new helper identity.
 
 ## Every remaining issue
 

@@ -9,7 +9,7 @@ class NetworkClaimsTests(unittest.TestCase):
         task=dict(checkpoints=[dict(id='failed-read',name='network_read',status='finished',result=json.dumps(dict(error='Unknown session')))])
         for answer in ['The scan found no open ports.','The evidence is complete Nmap XML from network_scan.','I have inspected the ports.']:
             task['result']=answer;self.assertEqual(execution_claim(task)['status'],'failed')
-        for answer in ['The scan failed and found no usable evidence.','The scan has not completed.','An earlier scan found no open ports.','Example: the scan found no open ports.']:
+        for answer in ['The scan failed and found no usable evidence.','The scan returned an error.','The scan produced a declined review.','The scan has not completed.','No scan completed.','The scan produced no evidence.','An earlier scan found no open ports.','Example: the scan found no open ports.']:
             task['result']=answer;self.assertIsNone(execution_claim(task))
         task['result']='The scan completed.'
         task['checkpoints'][0]['result']=json.dumps(dict(state='completed',exitCode=0,services=[]))

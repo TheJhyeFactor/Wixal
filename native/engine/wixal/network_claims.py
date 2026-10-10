@@ -81,7 +81,8 @@ def execution_claim(task):
         except (ValueError,TypeError):continue
         if checkpoint.get('status')=='finished' and isinstance(value,dict) and not value.get('error') and value.get('state')=='completed' and value.get('exitCode') in (None,0):return None
     for sentence in re.split(r'[.!?\n]',task.get('result','')):
-        if re.search(r"\b(?:not|never|unable|cannot|can't|failed|incomplete|pending|if|whether|would|could|example|historical|previous|earlier)\b",sentence,re.I):continue
+        if re.search(r"\b(?:not|never|unable|cannot|can't|failed|error|declined|stopped|cancelled|running|unfinished|incomplete|pending|if|whether|would|could|example|historical|previous|earlier)\b",sentence,re.I):continue
+        if re.search(r'\b(?:no|neither)\s+(?:(?:native|scanner|network)\s+)?(?:scan|discovery|inspection)\b|\b(?:returned|produced)\s+no\s+(?:results|evidence|output)\b',sentence,re.I):continue
         if re.search(r'\b(?:scan|discovery|inspection)\b.{0,100}\b(?:completed|finished|found|observed|returned|produced)\b|\b(?:I|we)\s+(?:have\s+)?(?:scanned|inspected)\b|\b(?:complete|actual|retained|verified)\s+(?:Nmap\s+)?XML\b',sentence,re.I):
             return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='No current-task native scanner attempt completed successfully. Do not describe completed scans, observed port results or retained XML evidence. Report the actual failed or unfinished attempt; do not replay an action to justify this answer.')
     return None

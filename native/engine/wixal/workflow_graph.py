@@ -134,7 +134,10 @@ async def execute(agents,run):
             if any(s['status']!='completed' for s in entries):run.update(status='failed',error='Inspect failed branch evidence before resuming');return run
         run.update(status='completed',result='\n\n'.join(s['name']+'\n'+s.get('result','') for s in run['stages']),verification=dict(status='passed' if all(s.get('verification',{}).get('status')=='passed' for s in run['stages']) else 'unverified'))
         return run
-    except asyncio.CancelledError:run.update(status='interrupted',error='Branches stopped; inspect isolated artifacts before continuing');raise
+    except asyncio.CancelledError:
+        for stage in run['stages']:
+            if stage['status']=='running':stage.update(status='interrupted',error='Branch stopped; inspect retained effects before continuing')
+        run.update(status='interrupted',error='Branches stopped; inspect isolated artifacts before continuing');raise
     except Exception as error:run.update(status='failed',error=str(error));raise
     finally:run['updated']=now();agents.store.save();agents.service.emit('state',agents.store.data)
 

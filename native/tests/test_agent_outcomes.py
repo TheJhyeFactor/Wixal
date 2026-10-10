@@ -32,6 +32,7 @@ class OutcomeTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(task['workflowRunId'],persisted['workflowRuns'][-1]['id'])
             finally:
                 self.service.active.cancel();await asyncio.gather(current,return_exceptions=True)
+            self.assertEqual(self.service.store.data['workflowRuns'][-1]['stages'][0]['status'],'interrupted')
 
     async def test_graph_persists_effect_checkpoint_before_action_review(self):
         flow=await self.service.dispatch('workflow-save',dict(name='Durable effect',execution='Dependency graph',stages=[dict(id='one',name='One',agentID='coder',goal='Write proof',isolation='Isolated changes')]))

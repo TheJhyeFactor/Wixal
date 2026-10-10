@@ -23,7 +23,7 @@ async def main():
     if options.repository and not options.source:parser.error('Packaged helpers require embedded repository trust')
     art=(options.output or ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged')).resolve();art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
     c=real.Client(options.source,helper=options.helper);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
-    report=dict(schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')))
+    report=dict(schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),acceptanceScriptSha256=digest(Path(__file__)))
     if options.helper:
         for key,name in [('sourceManifestSha256','SOURCE_MANIFEST.json'),('toolTrustManifestSha256','TOOL_TRUST_MANIFEST.json')]:
             path=options.helper.resolve().parents[1]/name

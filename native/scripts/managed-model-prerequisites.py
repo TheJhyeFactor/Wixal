@@ -43,7 +43,7 @@ async def main():
         if name=='http_request':return data.get('url')==http_url
         return name=='read_file' and Path(data.get('path','')).resolve().is_relative_to(project)
     c.review_policy=review
-    report=dict(status='running',cases=[],helperSha256=real.hashlib.sha256(o.helper.read_bytes()).hexdigest(),model=None,started=time.time(),scope='Owned loopback services and copied real project sources',qualification='prerequisites_only')
+    report=dict(status='running',cases=[],helperSha256=real.hashlib.sha256(o.helper.read_bytes()).hexdigest(),model=None,started=time.time(),scope='Owned loopback services and copied real project sources',qualification='prerequisites_only',gradingScriptSha256=real.hashlib.sha256(Path(__file__).with_name('model-port-oracle.py').read_bytes()).hexdigest(),acceptanceScriptSha256=real.hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     def save():(art/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     def results(output):
         values=[]

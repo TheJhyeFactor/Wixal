@@ -421,8 +421,8 @@ class Agent:
                             self.emit('activity',dict(message='Checking the result found unfinished work; the agent is inspecting it.'))
                             self.store.save()
                             continue
-                        from .network_claims import inspection_claim,corrected_summary
-                        network_failed=any(r['status']=='failed' and (r.get('check',{}).get('kind') in ('network_port_claim','network_evidence_quote') or r.get('check',{}).get('kind')=='requested_discovery_inspection' and inspection_claim(task.get('result',''))) for r in report['checks'])
+                        from .network_claims import corrected_summary
+                        network_failed=any(r['status']=='failed' and r.get('check',{}).get('kind') in ('network_port_claim','network_evidence_quote','requested_discovery_inspection') for r in report['checks'])
                         if network_failed:
                             message['unverifiedModelContent']=message.get('content','')
                             message['content']=corrected_summary(task);task['result']=message['content'];self.store.save()

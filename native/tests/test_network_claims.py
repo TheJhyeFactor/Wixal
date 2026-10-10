@@ -101,7 +101,7 @@ class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(count,4);self.assertEqual(task['status'],'needs_attention');self.assertIn('9073',task['result']);self.assertNotIn('No open TCP ports',task['result'])
         self.assertEqual(task['verification']['checks'][0]['check']['kind'],'network_port_claim')
 
-    async def test_performed_inspection_claim_requires_actual_inspection(self):
+    async def test_requested_inspection_cannot_be_removed_by_model_narrative(self):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_discover','network_scan','network_read']))
         calls=0
         async def execute(name,args,session):
@@ -111,10 +111,10 @@ class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
             nonlocal calls
             calls+=1
             if calls==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='fixture-source')))])
-            return dict(role='assistant',content='The inspection step was performed using the same session ID. TCP 9073 is open.')
+            return dict(role='assistant',content='TCP 9073 is open. No additional inspection was required. The evidence above is the final verified output.')
         with patch.object(self.service.tools,'execute',execute),patch('wixal.agent.stream_chat',stream):
             task=await self.service.dispatch('chat',dict(text='Discover selected TCP port 9073 on 192.0.2.1, then inspect it using the ports profile.'))
         self.assertEqual(calls,4)
         self.assertEqual(task['status'],'needs_attention')
         self.assertIn('inspection did not complete',task['result'])
-        self.assertNotIn('inspection step was performed',task['result'])
+        self.assertNotIn('No additional inspection was required',task['result'])

@@ -31,10 +31,33 @@ class InspectionFocusTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('read_file',{t['function']['name'] for t in requested['tools']})
         self.assertEqual(task['checkpoints'],[dict(name='network_read',status='finished',result=json.dumps(source))],'Request preparation must not execute inspection')
         self.assertNotIn('tools',agent.request_body(session,supports_tools=True,tools_stopped=True))
-        # Completed inspection ends this focus; the next task is not restricted.
+        # Reporting retains the evidence reader without reoffering scanners.
         task['checkpoints'].append(dict(name='network_scan',status='finished',result=json.dumps(dict(sourceSessionId='current-discovery',state='completed'))))
         completed=agent.request_body(session,supports_tools=True)
+        self.assertIn('network_read',{t['function']['name'] for t in completed['tools']})
+        self.assertNotIn('network_discover',{t['function']['name'] for t in completed['tools']})
+        # Additional requested work can explicitly load another eligible schema.
+        task['checkpoints'].append(dict(name='workspace_info',status='finished',arguments=dict(tool='write_file'),result='{}'))
+        self.assertIn('write_file',{t['function']['name'] for t in agent.request_body(session,supports_tools=True)['tools']})
+        task['status']='completed'
+        agent.selected_tools=None
+        completed=agent.request_body(session,supports_tools=True)
         self.assertIn('network_discover',{t['function']['name'] for t in completed['tools']})
+
+    async def test_named_retained_read_selects_reader_and_can_load_other_tools(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_scan','network_discover']))
+        agent=self.service.agent
+        agent.model_info=dict(name='fixture',capabilities=['tools','thinking'])
+        agent.effective_context=lambda:8192
+        session=self.service.store.session()
+        session['messages']=[dict(role='user',content='Read retained cancelled discovery evidence with network_read. Do not start another scan.')]
+        names={t['function']['name'] for t in agent.request_body(session,supports_tools=True)['tools']}
+        self.assertIn('network_read',names)
+        self.assertIn('workspace_info',names)
+        self.assertNotIn('network_discover',names)
+        self.assertNotIn('addon_install',names)
+        agent.selected_tools={'workspace_info','read_file'}
+        self.assertIn('read_file',{t['function']['name'] for t in agent.request_body(session,supports_tools=True)['tools']})
 
     async def test_failed_verification_is_current_context_without_promoting_tool_text(self):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_scan','network_discover']))

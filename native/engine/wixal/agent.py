@@ -203,6 +203,9 @@ class Agent:
             if message["role"] == "user" or not groups:
                 groups.append([])
             entry = {k:v for k,v in message.items() if k in ("role", "content", "tool_calls", "tool_name", "images")}
+            if message['role']=='tool':
+                from .network_evidence import model_view
+                entry['content']=model_view(message.get('tool_name'),entry.get('content',''))
             if message['role']=='system' and message.get('controllerFeedback') is True:
                 # Keep the stored task/history boundary while budgeting. Some
                 # local templates discard later system messages; deliver only

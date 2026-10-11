@@ -510,7 +510,10 @@ class Tools:
                 return await run(self,args,session_id,stage_checkpoint)
             if args.get('source_run_id') or args.get('source_session_id'):
                 from .network_discovery import inspect
-                return await inspect(self,args,session_id)
+                from .network_investigation import report
+                result=await inspect(self,args,session_id)
+                result['evidenceReport']=report(result)
+                return result
             executable=shutil.which('nmap') or ('/opt/homebrew/bin/nmap' if Path('/opt/homebrew/bin/nmap').exists() else None)
             if not executable:raise ValueError('Install Nmap to use network assessment')
             from .agent_context import profile

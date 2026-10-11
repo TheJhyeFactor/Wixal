@@ -266,7 +266,11 @@ struct MessageView: View {
     }
     var body: some View {
         if role == "tool"{
+            if !NetworkEvidenceSummary.decode(textValue(message["content"])).isEmpty{
+                StructuredToolResult(message:message).padding(.vertical,5)
+            }else{
             DisclosureGroup{Text(textValue(message["content"])).wixalFont(size:11,design:.monospaced).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading).padding(.top,8)}label:{HStack{Text(textValue(message["tool_name"]));Spacer();Text("Tool result").foregroundStyle(theme.muted)}}.wixalFont(size:11).padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).stroke(theme.line,lineWidth:1)).padding(.vertical,5)
+            }
         }else{
             HStack{
                 if role == "user"{Spacer(minLength:50)}

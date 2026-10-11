@@ -37,5 +37,10 @@ func activityRegressionChecks() throws -> Int {
         let rows=TimelineHistory.milestones(messages:messages,tasks:tasks,sessionID:"regression",busy:false,review:nil)
         guard rows.first(where:{$0.id=="pending"})?.status==status.replacingOccurrences(of:"_",with:" ") else{throw CocoaError(.coderInvalidValue)}
     }
-    return 15+explained.count+6
+    let scan:[String:Any]=["evidenceReport":["stage":"discovery","state":"stopped","sessionId":"exact-reference","requestedPortCount":65535,"examinedPortCount":NSNull(),"observedEndpoints":[],"limitation":"No completion ledger"]]
+    let facts=NetworkEvidenceSummary.decode(try encoded(scan))
+    guard facts.count==1,facts[0].requestedCount==65535,facts[0].examinedCount==nil,facts[0].state=="stopped",facts[0].sessionID=="exact-reference",facts[0].endpoints.isEmpty else{throw CocoaError(.coderInvalidValue)}
+    let skipped:[String:Any]=["evidenceReport":[["stage":"inspection","state":"completed","skipped":true,"sourceSessionId":"discovery","observedEndpoints":[]]]]
+    guard NetworkEvidenceSummary.decode(try encoded(skipped)).first?.state=="skipped",NetworkEvidenceSummary.decode("{\"answer\":\"all ports safe\"}").isEmpty else{throw CocoaError(.coderInvalidValue)}
+    return 15+explained.count+8
 }

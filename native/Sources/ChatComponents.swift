@@ -61,6 +61,9 @@ struct WorkHistoryView:View {
                 }}}
                 if let action=actions.first(where:{$0.id==selected}) {
                     Text(action.command).font(.system(size:10,design:.monospaced)).textSelection(.enabled)
+                    if let recorded=action.rawEvents.last(where:{!NetworkEvidenceSummary.decode($0).isEmpty}){
+                        NetworkEvidenceView(content:recorded)
+                    }
                     Text(action.output.isEmpty ? "Action "+action.status+" · no result yet" : action.output).font(.system(size:11,design:.monospaced)).textSelection(.enabled)
                     HStack{Spacer();Button("Copy output"){NSPasteboard.general.clearContents();NSPasteboard.general.setString(action.output,forType:.string)}.disabled(action.output.isEmpty)}
                     DisclosureGroup("Raw events · \(action.rawEvents.count)"){Text(action.rawEvents.joined(separator:"\n\n")).font(.system(size:10,design:.monospaced)).textSelection(.enabled)}
@@ -81,12 +84,42 @@ struct StructuredToolResult:View {
         Label(textValue(message["tool_name"]).replacingOccurrences(of:"_",with:" "),systemImage:decoded?["error"]==nil ? "checkmark.circle" : "exclamationmark.circle").font(.system(size:11,weight:.medium))
         if let value=decoded{
             if let error=value["error"] as? String{Text(error).foregroundStyle(.red).textSelection(.enabled)}
-            if let output=value["output"] as? String ?? value["stdout"] as? String{Text(output).font(.system(size:11,design:.monospaced)).textSelection(.enabled)}
+            if !NetworkEvidenceSummary.decode(textValue(message["content"])).isEmpty{
+                NetworkEvidenceView(content:textValue(message["content"]))
+                if let output=value["output"] as? String,!output.isEmpty{
+                    DisclosureGroup("Recorded scanner output"){Text(output).font(.system(size:11,design:.monospaced)).textSelection(.enabled)}
+                }
+            }
+            else if let output=value["output"] as? String ?? value["stdout"] as? String{Text(output).font(.system(size:11,design:.monospaced)).textSelection(.enabled)}
             let findings=records(value["findings"])
             if !findings.isEmpty{ForEach(Array(findings.enumerated()),id:\.offset){_,finding in HStack(alignment:.top){Text(textValue(finding["severity"]).uppercased()).font(.system(size:9,weight:.semibold));VStack(alignment:.leading){Text(textValue(finding["title"]));Text(textValue(finding["evidence"] ?? finding["description"])).foregroundStyle(theme.muted)}}}}
             DisclosureGroup("Full result"){Text(pretty(value)).font(.system(size:10,design:.monospaced)).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}
         }else{Text(textValue(message["content"])).font(.system(size:11,design:.monospaced)).textSelection(.enabled)}
     }.font(.system(size:11)).padding(10).frame(maxWidth:.infinity,alignment:.leading).background(theme.inset,in:RoundedRectangle(cornerRadius:6))}
+}
+
+struct NetworkEvidenceView:View {
+    let content:String
+    @Environment(\.wixalTheme) private var theme
+    var body:some View {
+        VStack(alignment:.leading,spacing:10){
+            Text("Recorded scan evidence").font(.system(size:12,weight:.semibold))
+            ForEach(Array(NetworkEvidenceSummary.decode(content).enumerated()),id:\.offset){_,row in
+                VStack(alignment:.leading,spacing:5){
+                    Text("\(row.stage.capitalized): \(row.state)").font(.system(size:11,weight:.medium))
+                    if row.stage=="discovery"{
+                        Text("Requested ports: \(row.requestedCount.map(String.init) ?? "Unknown")")
+                        Text("Examined ports: \(row.examinedCount.map(String.init) ?? "Unknown")")
+                    }
+                    if row.endpoints.isEmpty{Text("No observed endpoints recorded")}else{ForEach(row.endpoints,id:\.self){Text($0)}}
+                    if row.omittedEndpoints>0{Text("\(row.omittedEndpoints) additional endpoints in full result")}
+                    if !row.sessionID.isEmpty{Text("Session: \(row.sessionID)")}
+                    if !row.sourceID.isEmpty{Text("Discovery source: \(row.sourceID)")}
+                    Text(row.limitation).foregroundStyle(theme.muted)
+                }.textSelection(.enabled)
+            }
+        }.font(.system(size:11)).frame(maxWidth:.infinity,alignment:.leading)
+    }
 }
 
 struct ConversationDetailsView:View {

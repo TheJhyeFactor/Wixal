@@ -84,6 +84,10 @@ def bounded_evidence(content, limit):
     except (ValueError, TypeError):
         room=max(0,limit-100);head=room//3
         return content[:head]+'\n[Excerpt; full evidence saved in conversation]\n'+content[-(room-head):]
+    if isinstance(value,dict) and value.get('modelView') is True:
+        from .network_evidence import fit_view
+        compact=fit_view(value,limit)
+        if compact is not None:return compact
     def shrink(item, room):
         if isinstance(item,str):
             if len(item)<=room:return item
@@ -106,7 +110,20 @@ def bounded_evidence(content, limit):
             result['excerpt']=True
             return result
         return item
-    return json.dumps(shrink(value,max(150,limit-60)),ensure_ascii=False)
+    encoded=json.dumps(shrink(value,max(150,limit-60)),ensure_ascii=False)
+    if len(encoded)<=limit:return encoded
+    # Nested dictionaries can exceed their allocation even after shrinking.
+    # Use an explicitly labelled textual excerpt rather than return an
+    # oversized or apparently complete structured result. The stored result
+    # and its tool-call chain remain unchanged.
+    excerpt=dict(excerpt=True,fullEvidenceSaved=True)
+    for key in ('session_id','state','status'):
+        if isinstance(value,dict) and key in value and isinstance(value[key],str) and len(value[key])<100:excerpt[key]=value[key]
+    while len(json.dumps(excerpt,ensure_ascii=False))>limit and len(excerpt)>1:excerpt.pop(next(reversed(excerpt)))
+    room=max(0,limit-len(json.dumps(excerpt,ensure_ascii=False))-20)
+    excerpt['preview']=encoded[:room]
+    while len(json.dumps(excerpt,ensure_ascii=False))>limit and excerpt['preview']:excerpt['preview']=excerpt['preview'][:-1]
+    return json.dumps(excerpt,ensure_ascii=False)
 
 def token_estimate(messages, definitions):
     text=sum((len(json.dumps({k:v for k,v in m.items() if k not in ('images','imageIds')},ensure_ascii=False))+3)//4+8 for m in messages)

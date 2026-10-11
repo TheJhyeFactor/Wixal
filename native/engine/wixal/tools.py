@@ -198,6 +198,8 @@ def web_search(args):
 class Tools:
     def __init__(self, store, approve, emit, mcp, host=None):
         self.store, self.approve, self.emit, self.mcp, self.host = store, approve, emit, mcp, host
+        # Retain the controller review independently of agent pre-approval.
+        self.review_recovery = approve
         self.jobs = {}
         self.delegate = None
 

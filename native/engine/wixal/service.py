@@ -123,7 +123,7 @@ class Service:
     async def approve(self, details):
         # Install requests follow the global installation preference, independently
         # of a project's command/execution bypass setting.
-        if details.pop('installationReview',False):
+        if details.pop('installationReview',False) or details.pop('recoveryReview',False):
             return bool(await self.ask('review',details))
         # Bypass is an explicit user preference; default is review.
         if self.store.approval_mode() == "bypass":

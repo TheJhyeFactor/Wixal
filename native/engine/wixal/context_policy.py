@@ -21,6 +21,26 @@ def category(name):
 def eligible(catalog, enabled, project):
     return [t for t in catalog if t['function']['name'] in enabled and (project and not project.get('syncRootRequired') or not requires_project(t['function']['name']))]
 
+def requested_category(prompt):
+    """Shared positive-task classification for schema routing and automatic recall."""
+    routing_prompt = re.sub(r"\b(?:do not|don't|without)\s+(?:inspect|read|write|edit|search)\s+(?:(?:the|any|project|unrelated)\s+)?files\b", "", prompt, flags=re.I)
+    matches=[]
+    for rank,(candidate, pattern) in enumerate((
+        ('external', r'\b(mcp|connected|connector|integration)\b'),
+        ('security', r'\b(nmap|rustscan|discover(?:y)?|scan|ports?|tls|assessment|security|vulnerab\w*)\b'),
+        ('commands', r'\b(run|build|test|command|shell|terminal|execute)\b'),
+        ('web', r'https?://|\b(browse|fetch|visit|website|web|online|internet|url|links?)\b|\b(?:read|inspect|open)\s+(?:the\s+)?(?:https?://|website|web\s?page|url)\b'),
+        ('files', r'\b(file|files|folder|source|code|read|write|edit)\b'),
+        ('memory', r'\b(remember|memory|recall|previous|earlier|prefer)\b'))):
+        for match in re.finditer(pattern,routing_prompt,re.I):
+            # Route the requested work, not a later prohibition. Tool
+            # selection is a discovery hint; scope/review still enforce
+            # authority independently.
+            prefix=routing_prompt[:match.start()]
+            if re.search(r"\b(?:do not|don't|never|avoid|without|no)\b[^,;.!?\n]{0,80}$",prefix,re.I):continue
+            matches.append((match.start(),rank,candidate));break
+    return min(matches)[2] if matches else None
+
 def select_tools(available, prompt='', requested=(), load_category=None, load_name=None):
     names = {t['function']['name'] for t in available}
     if load_name and load_name not in names: raise ValueError('That tool is not enabled or available in this workspace')
@@ -49,23 +69,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
                 chosen.update(('command_read','command_stop','command_save_output'))
             return [t for t in available if t['function']['name'] in chosen]
         else:
-            routing_prompt = re.sub(r"\b(?:do not|don't|without)\s+(?:inspect|read|write|edit|search)\s+(?:(?:the|any|project|unrelated)\s+)?files\b", "", prompt, flags=re.I)
-            matches=[]
-            for rank,(candidate, pattern) in enumerate((
-                ('external', r'\b(mcp|connected|connector|integration)\b'),
-                ('security', r'\b(nmap|rustscan|discover(?:y)?|scan|ports|tls|assessment|security|vulnerab\w*)\b'),
-                ('commands', r'\b(run|build|test|command|shell|terminal|execute)\b'),
-                ('web', r'https?://|\b(browse|fetch|visit|website|web|online|internet|url|links?)\b|\b(?:read|inspect|open)\s+(?:the\s+)?(?:https?://|website|web\s?page|url)\b'),
-                ('files', r'\b(file|files|folder|source|code|read|write|edit)\b'),
-                ('memory', r'\b(remember|memory|recall|previous|earlier|prefer)\b'))):
-                for match in re.finditer(pattern,routing_prompt,re.I):
-                    # Route the requested work, not a later prohibition. Tool
-                    # selection is a discovery hint; scope/review still enforce
-                    # authority independently.
-                    prefix=routing_prompt[:match.start()]
-                    if re.search(r"\b(?:do not|don't|never|avoid|without|no)\b[^,;.!?\n]{0,80}$",prefix,re.I):continue
-                    matches.append((match.start(),rank,candidate));break
-            if matches:value=min(matches)[2]
+            value=requested_category(prompt)
     if value:
         matching=[t['function']['name'] for t in available if category(t['function']['name']) == value]
         inspection_request=re.sub(r"\b(?:do not|don't|without|no|avoid|skip)\s+(?:service\s+)?(?:inspect\w*|enumerat\w*)\b",'',prompt,flags=re.I)

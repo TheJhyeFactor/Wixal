@@ -1,7 +1,10 @@
 """Context/view regressions; these controlled cases are not model qualification."""
 import copy
 import json
+import hashlib
+import tempfile
 import unittest
+from pathlib import Path
 import test_agents_runtime as fixtures
 from wixal.context_policy import bounded_evidence,token_estimate
 from wixal.network_discovery import parse,ports
@@ -15,6 +18,22 @@ def stopped_result():
 
 
 class EvidenceViewTests(unittest.TestCase):
+    def test_saved_output_locations_are_distinct_from_binding_and_content_digests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stdout=Path(directory)/'stdout';stderr=Path(directory)/'stderr'
+            stdout.write_text('<nmaprun/>\n');stderr.write_bytes(b'')
+            evidence=dict(stdoutPath=str(stdout),stderrPath=str(stderr),stdoutSha256=hashlib.sha256(stdout.read_bytes()).hexdigest(),stderrSha256=hashlib.sha256(stderr.read_bytes()).hexdigest(),incomplete=False)
+            result=dict(sourceSessionId='owned-discovery',sourceResultSha256='a'*64,state='completed',output=stdout.read_text(),evidence=[evidence])
+            original=copy.deepcopy(result)
+            view=json.loads(model_view('network_scan',json.dumps(result)))
+            self.assertEqual(view['evidence'],[evidence])
+            self.assertEqual(view['sourceResultSha256'],result['sourceResultSha256'])
+            self.assertNotEqual(view['sourceResultSha256'],view['evidence'][0]['stdoutSha256'])
+            self.assertEqual(result,original)
+            bounded=json.loads(bounded_evidence(json.dumps(view),300))
+            self.assertTrue(bounded['evidenceOmitted'])
+            self.assertNotIn('evidence',bounded)
+
     def test_probe_coverage_is_unknown_independent_of_artifact_completion(self):
         invocation=dict(target='127.0.0.1',addresses=['127.0.0.1'],ports=[8123,8124],coverage='selected')
         for complete,status in ((True,'complete'),(False,'interrupted')):

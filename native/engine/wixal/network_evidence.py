@@ -50,7 +50,10 @@ def model_view(name, content):
         result_view['inspectionSessions']=result.get('inspectionSessions',[])[:8]
         evidence=result.get('evidence',{})
         rows=evidence if isinstance(evidence,list) else [evidence]
-        result_view['evidence']=[{k:r[k] for k in ('stdoutSha256','stderrSha256','incomplete') if k in r} for r in rows[:8]]
+        # Digests identify bytes; they are not artifact locations. Keep the
+        # actual owned paths alongside them so a report can cite saved output
+        # without guessing a URL or treating a source-binding hash as a file.
+        result_view['evidence']=[{k:r[k] for k in ('stdoutPath','stderrPath','stdoutSha256','stderrSha256','incomplete') if k in r} for r in rows[:8]]
         output=result.get('output','')
         if output:
             excerpt=output[:1600]
@@ -88,4 +91,6 @@ def fit_view(value, limit):
         essential=candidate
     for key in ('evidence','inspectionSessions','evidenceReport','discovery'):
         if key in value and fits(dict(essential,**{key:value[key]})):essential[key]=value[key]
+    if value.get('evidence') and 'evidence' not in essential and fits(dict(essential,evidenceOmitted=True)):
+        essential['evidenceOmitted']=True
     return json.dumps(essential,ensure_ascii=False) if fits(essential) else None

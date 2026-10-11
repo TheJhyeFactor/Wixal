@@ -63,7 +63,7 @@ def availability_claim(task,available):
         if re.search(r'\b(?:if|whether|earlier|previous|historical|quoted|example)\b',sentence,re.I):continue
         for name in sorted(set(available)&{'network_discover','network_scan'}):
             label=r'`?'+re.escape(name)+r'`?(?:\s+tool)?'
-            if re.search(label+r"\s+(?:is\s+)?(?:disabled|not\s+enabled)\b",sentence,re.I) or re.search(r"\b(?:not|doesn't|does\s+not)\s+have\s+(?:the\s+)?"+label+r'\s+enabled\b',sentence,re.I):contradictions.append(name)
+            if re.search(label+r"\s+(?:is\s+)?(?:(?:currently|presently)\s+)?(?:disabled|not\s+enabled)\b",sentence,re.I) or re.search(r"\b(?:not|doesn't|does\s+not)\s+have\s+(?:the\s+)?"+label+r'\s+enabled\b',sentence,re.I):contradictions.append(name)
     if not contradictions:return None
     return dict(check=dict(kind='tool_scope_claim'),status='failed',availableTools=sorted(set(contradictions)),error='These named native tools are enabled in the current controller scope. Installation, readiness and action approval remain separate; do not claim that an available adapter is disabled. Use its native schema or report the actual readiness/review error.')
 
@@ -81,11 +81,83 @@ def execution_claim(task):
         except (ValueError,TypeError):continue
         if checkpoint.get('status')=='finished' and isinstance(value,dict) and not value.get('error') and value.get('state')=='completed' and value.get('exitCode') in (None,0):return None
     for sentence in re.split(r'[.!?\n]',task.get('result','')):
-        if re.search(r"\b(?:not|never|unable|cannot|can't|failed|error|declined|stopped|cancelled|running|unfinished|incomplete|pending|if|whether|would|could|example|historical|previous|earlier)\b",sentence,re.I):continue
+        # A cancelled invocation records requested ports, not a completed
+        # per-port probe ledger. Table headings can make the same unsupported
+        # claim as prose even when another paragraph admits partial coverage.
+        if re.search(r'\bports\s+(?:examined|tested|probed)\s*\*?\*?\s*\|',sentence,re.I) and not re.search(r'\b(?:unknown|undetermined|not established|not recorded)\b|examinedPortCount\s*:\s*null',sentence,re.I):
+            return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='Requested invocation ports do not establish which ports were examined before cancellation. No completed per-port probe ledger is retained. Describe requested coverage separately and mark actual examined coverage unknown.')
+        if re.search(r'\bno\s+ports?\s+(?:(?:could|would)\s+have\s+been|(?:was|were))\s+(?:tested|examined|probed)\b|\bbefore\s+any\s+probes?\s+(?:finished|completed)\b',sentence,re.I) and not re.search(r'\b(?:unknown|whether|cannot establish|cannot say)\b',sentence,re.I):
+            return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='Cancelled scan evidence has no per-port completion ledger. Elapsed duration or configured timeouts cannot prove that zero ports were examined. Report actual examined coverage as unknown.')
+        if re.search(r"\b(?:not|never|unable|cannot|can't|failed|error|declined|stopped|halted|cancelled|running|unfinished|incomplete|pending|if|whether|would|could|example|historical|previous|earlier)\b",sentence,re.I):continue
         if re.search(r'\b(?:no|neither)\s+(?:(?:native|scanner|network)\s+)?(?:scan|discovery|inspection)\b|\b(?:returned|produced)\s+no\s+(?:results|evidence|output)\b',sentence,re.I):continue
+        if re.search(r'\b(?:returned|produced)\s+no\s+(?:warnings|errors)\b',sentence,re.I) and not re.search(r'\b(?:completed|finished|scanned|inspected)\b',sentence,re.I):continue
         if re.search(r'\b(?:scan|discovery|inspection)\b.{0,100}\b(?:completed|finished|found|observed|returned|produced)\b|\b(?:I|we)\s+(?:have\s+)?(?:scanned|inspected)\b|\b(?:complete|actual|retained|verified)\s+(?:Nmap\s+)?XML\b',sentence,re.I):
             return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='No current-task native scanner attempt completed successfully. Do not describe completed scans, observed port results or retained XML evidence. Report the actual failed or unfinished attempt; do not replay an action to justify this answer.')
     return None
+
+
+def evidence_invocation_claim(task):
+    """Check explicit invocation option claims against the retained argv.
+
+    Controller presets are not CLI switches. This covers named long options
+    in invocation prose, not arbitrary examples or all command semantics.
+    """
+    options=set()
+    for checkpoint in task.get('checkpoints',[]):
+        if checkpoint.get('status')!='finished' or checkpoint.get('name')!='network_read':continue
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict) or value.get('error'):continue
+        structured=value.get('structuredResult')
+        if not isinstance(structured,dict):continue
+        invocation=structured.get('invocation')
+        if not isinstance(invocation,dict):continue
+        argv=invocation.get('argv',[])
+        if isinstance(argv,list):options.update(a for a in argv if isinstance(a,str) and re.fullmatch(r'--[a-z][a-z0-9-]*',a))
+    if not options:return None
+    invalid=set()
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if not re.search(r'\b(?:invocation|command[- ]line|executed|arguments|parameters)\b',sentence,re.I):continue
+        if re.search(r"\b(?:not|never|example|illustrative|hypothetical|previous|historical)\b",sentence,re.I):continue
+        invalid.update(flag for flag in re.findall(r'--[a-z][a-z0-9-]*',sentence) if flag not in options)
+    if not invalid:return None
+    return dict(check=dict(kind='network_invocation_claim'),status='failed',unsupportedOptions=sorted(invalid),actualOptions=sorted(options),error='These claimed invocation options are absent from retained argv. Describe controller metadata separately; copy executable options only from actual argv.')
+
+
+def evidence_hash_claim(task):
+    """Check explicitly named output hashes against retained evidence metadata.
+
+    Empty bytes have a real SHA-256 digest, not an all-zero digest. This covers
+    explicit stdout/stderr hash claims, not arbitrary factual model prose.
+    """
+    hashes={}
+    for checkpoint in task.get('checkpoints',[]):
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict) or value.get('error'):continue
+        evidence=value.get('evidence',{})
+        for label in ('stdout','stderr'):
+            digest=evidence.get(label+'Sha256') if isinstance(evidence,dict) else None
+            if isinstance(digest,str) and re.fullmatch(r'[0-9a-f]{64}',digest):hashes.setdefault(label,set()).add(digest)
+    if not hashes:return None
+    errors=[]
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r'\b(?:stdout|stderr)Sha256\b.{0,100}\b(?:are|is)\s+empty\b',sentence,re.I) and not re.search(r'\b(?:not|cannot|example|historical)\b',sentence,re.I):
+            errors.append('Retained output SHA-256 fields contain digests, not empty values')
+        if not re.search(r'\b(?:sha[- ]?256|hash|digest)\b',sentence,re.I):continue
+        if re.search(r"\b(?:not|never|cannot|can't|example|historical|previous)\b",sentence,re.I):continue
+        labels=[label for label in hashes if re.search(r'\b'+label+r'\b',sentence,re.I)]
+        expected=set().union(*(hashes[label] for label in labels or hashes))
+        if re.search(r'\b(?:zero|all[- ]zero)\s+(?:hash|digest)\b',sentence,re.I) and '0'*64 not in expected:
+            errors.append('Empty output does not have an all-zero SHA-256 digest')
+        if labels:
+            for claimed in re.findall(r'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])',sentence,re.I):
+                if claimed.lower() not in expected:errors.append('Named output digest differs from retained evidence')
+    if not errors:return None
+    return dict(check=dict(kind='network_evidence_hash_claim'),status='failed',errors=sorted(set(errors)),
+                actualHashes={label:sorted(values) for label,values in hashes.items()},
+                error='Copy the retained stdout/stderr SHA-256 exactly or omit a digest claim. An empty file has the SHA-256 of empty bytes, not the zero hash.')
 
 
 def check(task):
@@ -149,6 +221,10 @@ def corrected_summary(task):
         lines.append(f"- {host}: observed open TCP ports {', '.join(map(str,ports)) or 'none in this evidence' }.")
     if hosts:lines.append('These are observations from the selected scan coverage. Inspect the retained tool evidence; they do not prove service safety or a vulnerability.')
     for row in task.get('verification',{}).get('checks',[]):
+        if row.get('check',{}).get('kind')=='network_invocation_claim' and row['status']=='failed':
+            lines.append('Retained executable options: '+', '.join(row['actualOptions'])+'. Controller presets are separate metadata.')
+        if row.get('check',{}).get('kind')=='network_evidence_hash_claim' and row['status']=='failed':
+            lines.append('Retained output SHA-256 digests: '+json.dumps(row['actualHashes'],sort_keys=True)+'.')
         if row.get('check',{}).get('kind')=='tool_scope_claim' and row['status']=='failed':
             lines.append('The native tool schema is enabled for this task: '+', '.join(row['availableTools'])+'. This does not establish executable readiness or action approval. The requested action still needs completed tool evidence.')
     if any(r.get('check',{}).get('kind')=='requested_discovery_inspection' and r['status']=='failed' for r in task.get('verification',{}).get('checks',[])):lines.append('The requested source-bound inspection did not complete. Discovery alone does not finish that task.')

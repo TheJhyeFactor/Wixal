@@ -74,7 +74,7 @@ async def plan(args,active=None):
     soft,_=resource.getrlimit(resource.RLIMIT_NOFILE)
     batch=min(32 if pace=='careful' else 128,max(0,int(soft)-64))
     if batch<8:raise ValueError('Insufficient file descriptor headroom for discovery')
-    result=dict(target=args['target'],addresses=addresses,ports=requested,coverage=coverage,pace=pace,batchSize=batch,attemptTimeoutMS=2000 if pace=='careful' else 1500,tries=2,timeoutSeconds=seconds,connectionPairs=pairs,retryAllowance=pairs*2,resolvedAt=time.time())
+    result=dict(target=args['target'],addresses=addresses,ports=requested,coverage=coverage,pace=pace,paceMeaning='Wixal controller preset, not a RustScan command-line option.',batchSize=batch,attemptTimeoutMS=2000 if pace=='careful' else 1500,tries=2,timeoutSeconds=seconds,connectionPairs=pairs,retryAllowance=pairs*2,resolvedAt=time.time())
     authorize(result,active);return result
 
 
@@ -92,6 +92,8 @@ def parse(stdout,invocation,complete=True):
         except ValueError as error:warnings.append(str(error));valid=False
     hosts=[dict(host=host,ports=sorted(observations.get(host,set()))) for host in invocation['addresses']]
     result=dict(schemaVersion=1,scanner='RustScan',parserRevision=1,invocation=invocation,hosts=hosts,services=[dict(host=h['host'],port=str(p),protocol='tcp',state='open',service={}) for h in hosts for p in h['ports']],warnings=warnings[:100],coverage='completed_attempts' if complete and valid else 'partial' if not complete else 'indeterminate',handoffEligible=bool(complete and valid),interpretation='Observed open TCP ports only. No open ports detected does not establish host absence, closed ports or service safety.')
+    result['coverageDetail']=dict(requestedPortCount=len(requested),requestedConnectionPairs=len(requested)*len(hosts),observedOpenEndpointCount=sum(len(h['ports']) for h in hosts),examinedPortCount=None,
+        limitation='Invocation ports describe requested coverage. No per-port probe-completion ledger is retained. Elapsed time and timeout settings cannot establish which probes completed.')
     result['resultSha256']=canonical(result);return result
 
 

@@ -1,10 +1,16 @@
 """Current tool facts, contradictory answers and host/stage boundaries."""
 import json
 import unittest
-from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim
+from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim,evidence_hash_claim,evidence_invocation_claim
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_controller_preset_cannot_become_a_claimed_invocation_option(self):
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(dict(structuredResult=dict(invocation=dict(argv=['rustscan','--range','1-65535','--timeout','2000'])))))])
+        task['result']='Invocation parameters: `--range 1-65535`, `--timeout 2000`, `--pace careful`.'
+        self.assertEqual(evidence_invocation_claim(task)['unsupportedOptions'],['--pace'])
+        for answer in ['Invocation parameters: `--range 1-65535`, `--timeout 2000`. Controller pace: careful.','The invocation did not include --pace.','Hypothetical command-line example: --pace careful.']:
+            task['result']=answer;self.assertIsNone(evidence_invocation_claim(task))
     def test_unfinished_native_attempt_cannot_support_completion_claim(self):
         task=dict(checkpoints=[dict(id='failed-read',name='network_read',status='finished',result=json.dumps(dict(error='Unknown session')))])
         for answer in ['The scan found no open ports.','The evidence is complete Nmap XML from network_scan.','I have inspected the ports.']:
@@ -16,11 +22,45 @@ class NetworkClaimsTests(unittest.TestCase):
         self.assertIsNone(execution_claim(task))
         self.assertIsNone(execution_claim(dict(result='The scan completed.',checkpoints=[])))
     def test_explicit_disabled_tool_claim_uses_actual_controller_scope(self):
-        for answer in ['The environment does not have the `network_discover` tool enabled.','network_discover is disabled.']:
-            self.assertEqual(availability_claim(dict(result=answer),['network_discover'])['status'],'failed')
+        for answer in ['The environment does not have the `network_discover` tool enabled.','network_discover is disabled.', 'The `network_discover` tool is currently disabled in this environment.', 'network_scan is presently not enabled.']:
+            self.assertEqual(availability_claim(dict(result=answer),['network_discover','network_scan'])['status'],'failed')
             self.assertIsNone(availability_claim(dict(result=answer),[]))
         for answer in ['RustScan is not installed.','network_discover needs your approval.','I cannot claim network_discover is disabled.']:
             self.assertIsNone(availability_claim(dict(result=answer),['network_discover']))
+
+    def test_cancelled_scan_explanation_does_not_claim_completed_execution(self):
+        task=dict(checkpoints=[dict(id='stopped-read',name='network_read',status='finished',result=json.dumps(dict(state='stopped',exitCode=-9)))])
+        task['result']='The structured result confirms that the scan was halted before any open-port observations were produced.'
+        self.assertIsNone(execution_claim(task))
+        task['result']='The scan completed successfully.'
+        self.assertEqual(execution_claim(task)['status'],'failed')
+        task['result']='| **Ports examined** | The invocation lists ports 1-22, then an omitted range. |\nThe run was stopped.'
+        self.assertEqual(execution_claim(task)['status'],'failed')
+        task['result']='| **Ports examined** | Unknown; invocation ports are requested coverage. |'
+        self.assertIsNone(execution_claim(task))
+        task['result']='With only 38 ms runtime and a 2000 ms timeout, effectively no port could have been tested.'
+        self.assertEqual(execution_claim(task)['status'],'failed')
+        task['result']='It is unknown whether no ports were tested before cancellation.'
+        self.assertIsNone(execution_claim(task))
+        task['result']='| **Ports examined** | The invocation lists ports, but examinedPortCount: null. | We cannot determine actual probes. |'
+        self.assertIsNone(execution_claim(task))
+        task['result']='The run was stopped before any probes finished.'
+        self.assertEqual(execution_claim(task)['status'],'failed')
+        task['result']='No output was produced; the scan produced no warnings or errors.'
+        self.assertIsNone(execution_claim(task))
+        task['result']='The scan produced no errors and completed successfully.'
+        self.assertEqual(execution_claim(task)['status'],'failed')
+
+    def test_output_digest_claim_uses_the_actual_retained_hash(self):
+        import hashlib
+        empty=hashlib.sha256(b'').hexdigest()
+        task=dict(checkpoints=[dict(id='stopped-read',name='network_read',status='finished',result=json.dumps(dict(state='stopped',evidence=dict(stdoutSha256=empty,stderrSha256=empty))))])
+        for answer in ['Stdout / Stderr: Empty (SHA-256 of both is the zero hash).','Stdout SHA-256: '+'0'*64,'Stderr SHA256: '+'a'*64,'The stdoutSha256/stderrSha256 fields are empty.']:
+            task['result']=answer
+            self.assertEqual(evidence_hash_claim(task)['status'],'failed')
+        for answer in ['Stdout and stderr are empty.','Stdout SHA-256: '+empty,'The SHA-256 is not the zero hash.']:
+            task['result']=answer
+            self.assertIsNone(evidence_hash_claim(task))
     def test_standalone_discovery_starts_with_discovery_schemas(self):
         available=[dict(function=dict(name=n)) for n in ['workspace_info','read_file','list_files','recall_memory','load_skill','network_discover','network_read','network_stop','network_scan','addon_catalog','addon_install','addon_run','security_tools','command_read','command_stop']]
         prompt='Which of TCP 9021,9022 currently accept connections on my loopback machine? Use bounded standalone discovery without installing programs.'
@@ -100,6 +140,64 @@ class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
 
+    async def test_invocation_feedback_corrects_metadata_without_replaying_actions(self):
+        calls=0
+        async def execute(name,args,session):
+            self.assertEqual(name,'network_read')
+            return dict(session_id='cancelled-source',state='stopped',exitCode=-9,structuredResult=dict(coverage='partial',handoffEligible=False,invocation=dict(pace='careful',argv=['rustscan','--timeout','2000'])))
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='cancelled-source')))])
+            if calls==2:return dict(role='assistant',content='The run was stopped. Invocation parameters: `--timeout 2000`, `--pace careful`.')
+            self.assertIn('network_invocation_claim',body['messages'][-1]['content'])
+            return dict(role='assistant',content='The run was stopped. Invocation parameters: `--timeout 2000`. Wixal controller pace: careful. Actual examined coverage is unknown.')
+        with patch.object(self.service.tools,'execute',execute),patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('chat',dict(text='Read cancelled-source and describe retained invocation evidence without another scan.'))
+        self.assertEqual(task['status'],'completed');self.assertEqual(calls,3);self.assertEqual(len(task['checkpoints']),1)
+
+    async def test_output_hash_feedback_corrects_the_answer_without_replaying_actions(self):
+        import hashlib
+        empty=hashlib.sha256(b'').hexdigest();calls=0
+        async def execute(name,args,session):
+            self.assertEqual(name,'network_read')
+            return dict(session_id='cancelled-source',state='stopped',exitCode=-9,structuredResult=dict(coverage='partial',handoffEligible=False),evidence=dict(stdoutSha256=empty,stderrSha256=empty))
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='cancelled-source')))])
+            if calls==2:return dict(role='assistant',content='The scan was stopped. Stdout/stderr SHA-256 is the zero hash.')
+            self.assertIn('network_evidence_hash_claim',body['messages'][-1]['content'])
+            self.assertIn(empty,body['messages'][-1]['content'])
+            return dict(role='assistant',content='The scan was stopped; its coverage remains partial. Stdout SHA-256: '+empty)
+        with patch.object(self.service.tools,'execute',execute),patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('chat',dict(text='Read cancelled-source and describe retained evidence without another scan.'))
+        self.assertEqual(task['status'],'completed');self.assertEqual(calls,3);self.assertEqual(len(task['checkpoints']),1)
+
+    async def test_reading_cancelled_evidence_completes_without_replaying_the_scan(self):
+        calls=0
+        async def execute(name,args,session):
+            self.assertEqual(name,'network_read')
+            return dict(session_id='cancelled-source',state='stopped',exitCode=-9,
+                        structuredResult=dict(coverage='partial',handoffEligible=False,hosts=[dict(host='127.0.0.1',ports=[])]))
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='cancelled-source')))])
+            return dict(role='assistant',content='The scan was halted before any observations were produced. Coverage is partial; open ports remain unknown.')
+        with patch.object(self.service.tools,'execute',execute),patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('chat',dict(text='Read the retained cancelled-source evidence. Explain its limitations; do not start another scan.'))
+        self.assertEqual(task['status'],'completed')
+        self.assertEqual(calls,2)
+        self.assertEqual(len(task['checkpoints']),1)
+        self.assertEqual(task['verification']['unresolved'],[])
+        from wixal.outcomes import successful
+        read=task['checkpoints'][0]
+        self.assertTrue(successful(read))
+        # Reading a cancelled result succeeds; executing that scan did not.
+        self.assertFalse(successful(dict(read,name='network_discover')))
+        self.assertFalse(successful(dict(read,status='error')))
+
     async def test_failed_read_completion_claim_is_retained_but_not_presented_as_verified(self):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_read']))
         count=0
@@ -118,13 +216,13 @@ class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any('scan found no open ports' in m.get('unverifiedModelContent','') for m in self.service.store.session()['messages']))
 
     async def test_false_enabled_scope_claim_gets_bounded_feedback_without_effects(self):
-        await self.service.dispatch('settings',dict(mode='chat'))
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_discover']))
         count=0
         async def stream(endpoint,body,emit):
             nonlocal count
             count+=1
             if count>1:self.assertIn('tool_scope_claim',body['messages'][-1]['content'])
-            return dict(role='assistant',content='The environment does not have the network_discover tool enabled.')
+            return dict(role='assistant',content='The network_discover tool is currently disabled in this environment.')
         with patch('wixal.agent.stream_chat',stream),patch.object(self.service.tools,'execute') as effects:
             task=await self.service.dispatch('chat',dict(text='Explain whether network_discover is enabled. Do not scan.'))
         self.assertEqual(count,3);effects.assert_not_called()
@@ -132,7 +230,7 @@ class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('native tool schema is enabled',task['result'])
         self.assertIn('No completed current-task scanner observations',task['result'])
         messages=self.service.store.session()['messages']
-        self.assertTrue(any('does not have' in m.get('unverifiedModelContent','') for m in messages))
+        self.assertTrue(any('currently disabled' in m.get('unverifiedModelContent','') for m in messages))
 
     async def run_claim(self,recover):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_scan']))

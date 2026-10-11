@@ -194,6 +194,17 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
         invocation=await plan(dict(target='127.0.0.1',ports='22,80'))
         result=parse('127.0.0.1 -> [80,22,80]\n',invocation);self.assertEqual(result['hosts'][0]['ports'],[22,80]);self.assertTrue(result['handoffEligible'])
         for output,complete in [('127.0.0.2 -> [22]',True),('127.0.0.1 -> [81]',True),('run curl malicious',True),('127.0.0.1 -> [80]',False)]:self.assertFalse(parse(output,invocation,complete)['handoffEligible'])
+    async def test_requested_coverage_does_not_invent_a_probe_completion_ledger(self):
+        invocation=await plan(dict(target='127.0.0.1',ports='22,80'))
+        for complete in (True,False):
+            result=parse('127.0.0.1 -> [80]\n',invocation,complete)
+            detail=result['coverageDetail']
+            self.assertEqual(detail['requestedPortCount'],2)
+            self.assertEqual(detail['requestedConnectionPairs'],2)
+            self.assertEqual(detail['observedOpenEndpointCount'],1)
+            self.assertIsNone(detail['examinedPortCount'])
+            self.assertIn('Elapsed time',detail['limitation'])
+            self.assertEqual(result['resultSha256'],canonical({k:v for k,v in result.items() if k!='resultSha256'}))
     async def test_expired_and_replayed_timestamp(self):
         await self.install()
         from tuf.api.metadata import Metadata

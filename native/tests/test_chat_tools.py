@@ -14,6 +14,28 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown = fixtures.AgentRuntimeTests.asyncTearDown
     scripted = fixtures.AgentRuntimeTests.scripted
 
+    async def test_disabled_native_scanners_are_absent_from_automatic_scope(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=[]))
+        from wixal.agent_context import available_names
+        names=available_names(self.service.tools,self.service.store)
+        self.assertNotIn('network_discover',names)
+        self.assertNotIn('network_scan',names)
+        self.assertIn('read_file',names,'Other Chat tools retain automatic discovery')
+        with self.assertRaisesRegex(ValueError,'switched off|outside'):
+            await self.service.tools.execute('network_scan',dict(target='127.0.0.1',ports='8123'),self.service.store.session()['id'])
+        await self.service.dispatch('settings',dict(enabledTools=['network_scan','network_discover']))
+        self.assertIn('network_discover',available_names(self.service.tools,self.service.store))
+        self.assertIn('network_scan',available_names(self.service.tools,self.service.store))
+
+    async def test_security_inventory_reports_current_adapter_scope(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=[]))
+        result=await self.service.tools.execute('security_tools',{},self.service.store.session()['id'])
+        self.assertEqual(result['nativeAdapters'],{'network_discover':{'available':False},'network_scan':{'available':False}})
+        await self.service.dispatch('settings',dict(enabledTools=['network_scan']))
+        result=await self.service.tools.execute('security_tools',{},self.service.store.session()['id'])
+        self.assertTrue(result['nativeAdapters']['network_scan']['available'])
+        self.assertFalse(result['nativeAdapters']['network_discover']['available'])
+
     async def chat(self, text, calls, final='Observed the actual result'):
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
         context, seen = self.scripted(calls, final)
@@ -52,6 +74,8 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
             calls += 1
             if calls == 1:
                 return dict(role='assistant', content='', tool_calls=[dict(function=dict(name='write_file', arguments=dict(path=path, content='NO'))) for path in ('report.txt', 'alternate.txt')])
+            self.assertNotIn('tools',args[1])
+            self.assertIn('Tool execution has stopped',args[1]['messages'][0]['content'])
             return dict(role='assistant', content='The action was declined.')
         with patch('wixal.agent.stream_chat', stream):
             task = await self.service.dispatch('chat', dict(text='Write files report.txt'))
@@ -130,6 +154,40 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body['messages'][-1]['content'], prompt)
         self.assertIn('workspace_info', [t['function']['name'] for t in body['tools']])
         self.assertLessEqual(token_estimate(body['messages'], body['tools'])[0]+body['options']['num_predict'], 4096)
+
+    async def test_requested_inspection_schema_survives_discovery_error_recovery(self):
+        import json
+        from wixal.context_policy import token_estimate
+        await self.service.dispatch('settings', dict(mode='chat', enabledTools=['network_scan','network_discover']))
+        agent = self.service.agent
+        agent.model_info = dict(name='fixture', capabilities=['tools', 'thinking'])
+        agent.effective_context = lambda: 8192
+        session = self.service.store.session()
+        prompt = 'Discover selected TCP ports and then inspect using the source session.'
+        session['messages'] = [dict(role='user', content=prompt)]
+        self.service.store.data['tasks'].append(dict(
+            id='inspection-continuation', sessionId=session['id'], status='running', prompt=prompt,
+            checkpoints=[dict(name='network_read', status='finished', result=json.dumps(dict(
+                session_id='fresh-source', state='completed', structuredResult=dict(handoffEligible=True))))]))
+        # A discovery argument error loaded only the schemas in that request.
+        agent.selected_tools = {'workspace_info', 'network_discover', 'network_read', 'network_stop'}
+        for context in (8192, 4096):
+            agent.effective_context = lambda: context
+            body = agent.request_body(session, supports_tools=True)
+            self.assertIn('network_scan', [t['function']['name'] for t in body['tools']])
+            self.assertIn('Current task state: discovery has completed',body['messages'][0]['content'])
+            self.assertIn('fresh-source',body['messages'][0]['content'])
+            self.assertLessEqual(token_estimate(body['messages'], body['tools'])[0]+body['options']['num_predict'], context)
+        # Loading a continuation schema cannot override a stop/decline.
+        self.assertNotIn('tools', agent.request_body(session, supports_tools=True, tools_stopped=True))
+        # A tool unavailable in the current mode cannot be restored either.
+        await self.service.dispatch('settings', dict(mode='agent', enabledTools=['workspace_info','network_read']))
+        self.assertNotIn('network_scan', [t['function']['name'] for t in agent.request_body(session, supports_tools=True)['tools']])
+        await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
+        # Discovery-only tasks must keep their existing selection.
+        await self.service.dispatch('settings', dict(enabledTools=['network_scan','network_discover']))
+        self.service.store.data['tasks'][-1]['prompt'] = 'Discover selected ports. Do not inspect services.'
+        self.assertNotIn('network_scan', [t['function']['name'] for t in agent.request_body(session, supports_tools=True)['tools']])
 
     async def test_chat_stop_during_review_keeps_files_untouched(self):
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))

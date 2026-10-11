@@ -1,27 +1,27 @@
 # Wixal GitHub metrics
 
-Collected 2026-10-11T06:54:17.262Z.
+Collected 2026-10-11T22:57:41.979Z.
 
-**Release file downloads: 25**
+**Release file downloads: 30**
 
 DMG and ZIP only. Includes repeated and direct downloads; does not measure unique users, installations, or active app users.
 
 | Release | File | Downloads |
 | --- | --- | ---: |
-| v0.7.10-alpha.4 | Wixal-0.7.10-alpha.4-macOS-arm64.zip | 0 |
+| v0.7.10-alpha.4 | Wixal-0.7.10-alpha.4-macOS-arm64.zip | 2 |
 | v0.7.10-alpha.3 | Wixal-0.7.10-alpha.3-macOS-arm64.zip | 3 |
 | v0.7.10-alpha.2 | Wixal-0.7.10-alpha.2-macOS-arm64.zip | 0 |
 | v0.7.10-alpha.1 | Wixal-0.7.10-alpha.1-macOS-arm64.zip | 1 |
 | v0.7.9 | Wixal-0.7.9-macOS-arm64.dmg | 1 |
 | v0.7.9 | Wixal-0.7.9-macOS-arm64.zip | 0 |
 | v0.7.8 | Wixal-0.7.8-macOS-arm64.dmg | 3 |
-| v0.7.8 | Wixal-0.7.8-macOS-arm64.zip | 2 |
+| v0.7.8 | Wixal-0.7.8-macOS-arm64.zip | 3 |
 | v0.7.7 | Wixal-0.7.7-macOS-arm64.dmg | 1 |
 | v0.7.7 | Wixal-0.7.7-macOS-arm64.zip | 1 |
 | v0.7.3 | Wixal-0.7.3-macOS-arm64.dmg | 3 |
-| v0.7.3 | Wixal-0.7.3-macOS-arm64.zip | 1 |
+| v0.7.3 | Wixal-0.7.3-macOS-arm64.zip | 2 |
 | v0.7.2 | Wixal-0.7.2-macOS-arm64.dmg | 0 |
-| v0.7.2 | Wixal-0.7.2-macOS-arm64.zip | 0 |
+| v0.7.2 | Wixal-0.7.2-macOS-arm64.zip | 1 |
 | v0.7.1 | Wixal-0.7.1-macOS-arm64.dmg | 1 |
 | v0.7.1 | Wixal-0.7.1-macOS-arm64.zip | 1 |
 | v0.7.0 | Wixal-0.7.0-macOS-arm64.dmg | 1 |

@@ -84,6 +84,16 @@ from .agent_context import profile as active_profile, available_names
 
 class BudgetReached(RuntimeError):pass
 
+VERIFICATION_GUIDANCE={
+    'network_execution_claim':'For cancelled or partial evidence, the number of completed probes is unknown, including whether zero completed. Remove claims that the stop occurred before any probes finished. Do not describe a failed or unfinished scan as completed.',
+    'network_invocation_claim':'Remove options absent from retained argv. Controller presets such as pace are metadata, not executable flags; report them separately.',
+    'network_evidence_hash_claim':'Copy recorded SHA-256 values exactly. An empty output has a nonzero SHA-256 digest; a nonempty recorded digest field is not empty.',
+    'network_port_claim':'Report only the completed current-task observed port facts; requested ports do not establish observed state, services, safety or vulnerabilities.',
+    'network_evidence_quote':'The claimed XML quotation is unsupported. Quote the retained output exactly, or label a description as a summary.',
+    'tool_scope_claim':'The listed native adapters are enabled in the current scope. Their installation, readiness and review requirements remain separate.',
+    'requested_discovery_inspection':'The requested inspection is unfinished. Discovery alone does not complete both stages; use its exact source reference with normal authority and review.',
+}
+
 class Agent:
     def __init__(self, store, runtime, tools, emit):
         self.store, self.runtime, self.tools, self.emit = store, runtime, tools, emit
@@ -236,6 +246,7 @@ class Agent:
                 for row in verification.get('checks',[]):
                     if row.get('status')!='failed':continue
                     detail=dict(kind=row.get('check',{}).get('kind'),status='failed')
+                    if detail['kind'] in VERIFICATION_GUIDANCE:detail['correction']=VERIFICATION_GUIDANCE[detail['kind']]
                     for key in ('unsupportedOptions','actualOptions','sourceSessions','availableTools'):
                         values=row.get(key)
                         if isinstance(values,list):detail[key]=[value[:160] for value in values[:24] if isinstance(value,str)]

@@ -126,7 +126,7 @@ async def start(tools,args,session):
     if budget is None:
         budget=getattr(tools,'socket_budget',None) or SocketBudget();tools.socket_budget=budget
     reservation=await budget.acquire(invocation['batchSize'])
-    handle=None;home=None
+    handle=None;home=None;job=None
     try:
         acquisition=asyncio.create_task(asyncio.to_thread(executable,tools))
         try:handle=await asyncio.shield(acquisition)
@@ -155,6 +155,12 @@ async def start(tools,args,session):
             return result
         raise ValueError(result)
     except BaseException:
+        if job is not None:
+            # Cancellation can arrive while binding the launched process to
+            # its reservation. Its collector owns evidence and lease cleanup.
+            tools.stop_job(job)
+            await asyncio.shield(job['collector'])
+            raise
         if handle and handle.get('lease'):manager.managed.release(handle['lease'])
         await budget.release(invocation['batchSize'],reservation)
         if home:shutil.rmtree(home,ignore_errors=True)

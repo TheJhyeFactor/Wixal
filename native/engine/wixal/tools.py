@@ -319,7 +319,10 @@ class Tools:
         if not job or job["owner"] != session_id or job["projectId"] != (self.store.project() or {}).get("id"):
             raise ValueError("Command belongs to another conversation or project")
         if job["state"] == "running" or not job.get('settled',False):
-            await asyncio.sleep(args.get("wait_ms", 1000)/1000)
+            wait=args.get("wait_ms",1000)
+            if wait>0:
+                try:await asyncio.wait_for(asyncio.shield(job['collector']),wait/1000)
+                except TimeoutError:pass
         offset = args.get("offset", job["base"])
         encoded=job['output'].encode('utf-16-le');units=len(encoded)//2
         if offset<0 or offset>job["base"]+units:
@@ -503,7 +506,18 @@ class Tools:
             return dict(installed=bool(shutil.which('nmap') or Path('/opt/homebrew/bin/nmap').is_file()),profiles=list(PROFILES),rustscan=rustscan,nativeAdapters=adapters,interpretation='Installation, capability readiness, current adapter availability and model evaluation are separate states. Installed binaries and ready packages do not grant task permission. Respect disabled adapters and user restrictions; do not use commands or installation as a workaround when the user forbids it.')
         if name == 'network_discover':
             from .network_discovery import start
-            return await start(self,args,session_id)
+            started=await start(self,args,session_id)
+            if not args.get('await_results',True):return started
+            job=self.jobs[started['session_id']]
+            try:await asyncio.shield(job['collector'])
+            except asyncio.CancelledError:
+                self.stop_job(job)
+                await asyncio.shield(job['collector'])
+                raise
+            result=await self.read_job(dict(session_id=job['id'],wait_ms=0,max_chars=100000),session_id)
+            from .network_investigation import report
+            result.update(evidenceReport=report(result),read='network_read',stop='network_stop')
+            return result
         if name == 'network_scan':
             if args.get('discover_first'):
                 from .network_investigation import run

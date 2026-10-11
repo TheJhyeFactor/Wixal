@@ -79,11 +79,12 @@ def discovery_follow_up(task):
         result=decode(checkpoint.get('result',''))
         if checkpoint.get('status')!='finished' or not isinstance(result,dict):continue
         structured=result.get('structuredResult',{})
-        if checkpoint['name']=='network_read' and result.get('state')=='completed' and structured.get('handoffEligible'):
+        if checkpoint['name'] in ('network_discover','network_read') and result.get('state')=='completed' and structured.get('handoffEligible'):
             sources.append(result)
         if checkpoint['name']=='network_scan' and result.get('sourceSessionId'):
             inspections.append(result)
     if not sources:return None
+    sources=list({source['session_id']:source for source in sources}.values())
     missing=[source['session_id'] for source in sources if not any(
         result.get('sourceSessionId')==source['session_id'] and not result.get('error')
         and (result.get('skipped') or result.get('state')=='completed' or result.get('exitCode')==0) for result in inspections)]

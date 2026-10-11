@@ -339,6 +339,9 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
             for _ in range(3):servers.append(await asyncio.start_server(lambda r,w:w.close(),'127.0.0.1',0))
             expected=sorted(server.sockets[0].getsockname()[1] for server in servers)
             started=await tools.execute('network_discover',dict(target='127.0.0.1',ports=','.join(map(str,expected)),timeout_seconds=20),'chat');job=tools.jobs[started['session_id']];await job['collector']
+            self.assertEqual(started['state'],'completed','Default foreground call must deliver terminal evidence')
+            self.assertEqual(started['structuredResult']['hosts'][0]['ports'],expected)
+            self.assertEqual(started['evidenceReport']['state'],'completed')
             result=job['structuredResult'];self.assertEqual(result['hosts'][0]['ports'],expected,result);self.assertTrue(result['handoffEligible'],result)
             inspected=await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],profile='ports',timeout_seconds=20),'chat')
             self.assertEqual(sorted(int(r['port']) for r in inspected['services']),expected)
@@ -358,4 +361,30 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ValueError,'manual ports'):await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],ports='22'),'chat')
         finally:
             for server in servers:server.close();await server.wait_closed()
+            await tools.close();await manager.close();store.close()
+
+    async def test_discovery_background_and_owned_foreground_cancellation(self):
+        await self.install();store=Store(self.root/'foreground-cancellation')
+        store.data['projects']=[dict(id='foreground',root=str(self.root),approvalMode='review')]
+        store.data['activeProject']='foreground';store.data['enabledTools']=[r['function']['name'] for r in DEFINITIONS]
+        manager=Addons(SimpleNamespace(store=store,emit=lambda *_:None));manager.managed=self.registry;store.addons=manager
+        tools=Tools(store,AsyncMock(return_value=True),lambda *_:None,SimpleNamespace(definitions=lambda:[]))
+        try:
+            started=await tools.execute('network_discover',dict(target='127.0.0.1',coverage='all_tcp',timeout_seconds=20,await_results=False),'chat')
+            self.assertEqual(started['state'],'running')
+            job=tools.jobs[started['session_id']];tools.stop_job(job);await job['collector']
+            self.assertEqual(job['state'],'stopped')
+            self.assertFalse(job['structuredResult']['handoffEligible'])
+            previous=set(tools.jobs)
+            operation=asyncio.create_task(tools.execute('network_discover',dict(target='127.0.0.1',coverage='all_tcp',timeout_seconds=20),'chat'))
+            async with asyncio.timeout(10):
+                while set(tools.jobs)==previous:await asyncio.sleep(0)
+            job=tools.jobs[next(iter(set(tools.jobs)-previous))]
+            operation.cancel()
+            with self.assertRaises(asyncio.CancelledError):await operation
+            self.assertTrue(job['collector'].done())
+            self.assertEqual(job['state'],'stopped')
+            self.assertIsNotNone(job['child'].returncode)
+            self.assertFalse(job['structuredResult']['handoffEligible'])
+        finally:
             await tools.close();await manager.close();store.close()

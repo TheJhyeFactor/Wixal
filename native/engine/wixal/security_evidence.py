@@ -4,11 +4,11 @@ import json
 from .storage import now
 
 def capture(task,name,args,result):
-    if name not in ('website_assess','website_simulate','network_read'):return
+    if name not in ('website_assess','website_simulate','network_discover','network_read'):return
     if not isinstance(result,dict):return
     report=result.get('report',result)
     if not isinstance(report,dict):return
-    if name=='network_read' and result.get('structuredResult'):
+    if name in ('network_discover','network_read') and result.get('structuredResult'):
         discovery=result['structuredResult']
         if result.get('state')!='completed' or result.get('exitCode')!=0 or discovery.get('error'):return
         report=dict(summary=dict(coverage=discovery['coverage'],openPorts=len(discovery['services']),interpretation=discovery['interpretation']),findings=[],rawEvidence=discovery.get('evidence'),sourceResultSha256=discovery['resultSha256'])

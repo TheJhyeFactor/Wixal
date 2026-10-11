@@ -49,15 +49,15 @@ def facts(task):
         if isinstance(timestamp,(int,float)):return timestamp
         fallback=checkpoint.get('finished',checkpoint.get('created',0))
         return fallback if isinstance(fallback,(int,float)) else 0
-    candidates=[c for c in evidence_views(task) if c.get('status')=='finished' and c.get('name') in ('network_read','network_scan')]
+    candidates=[c for c in evidence_views(task) if c.get('status')=='finished' and c.get('name') in ('network_discover','network_read','network_scan')]
     for checkpoint in sorted(candidates,key=observed_time):
-        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
         try:result=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(result,dict) or result.get('error') or result.get('state')!='completed' or result.get('exitCode') not in (None,0):continue
         structured=result.get('structuredResult',result)
         if not isinstance(structured,dict) or structured.get('error'):continue
-        if checkpoint['name']=='network_read' and not (structured.get('handoffEligible') or structured.get('coverage')=='complete'):continue
+        if checkpoint['name'] in ('network_discover','network_read') and not (structured.get('handoffEligible') or structured.get('coverage')=='complete'):continue
         services=structured.get('services',[])
         if not isinstance(services,list):continue
         observed=False
@@ -132,7 +132,7 @@ def coverage_claim(task):
     """A completed discovery is not a per-port probe-completion ledger."""
     sources=[]
     for checkpoint in evidence_views(task):
-        if checkpoint.get('name')!='network_read' or checkpoint.get('status')!='finished':continue
+        if checkpoint.get('name') not in ('network_discover','network_read') or checkpoint.get('status')!='finished':continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(value,dict):continue
@@ -157,7 +157,7 @@ def evidence_invocation_claim(task):
     """
     options=set()
     for checkpoint in evidence_views(task):
-        if checkpoint.get('status')!='finished' or checkpoint.get('name')!='network_read':continue
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(value,dict) or value.get('error'):continue
@@ -185,7 +185,7 @@ def evidence_hash_claim(task):
     """
     hashes={};inspection_hashes=set();source_hashes=set()
     for checkpoint in evidence_views(task):
-        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(value,dict) or value.get('error'):continue

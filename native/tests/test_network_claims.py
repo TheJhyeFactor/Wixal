@@ -5,6 +5,13 @@ from wixal.network_claims import check,facts,inspection_claim,corrected_summary,
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_foreground_discovery_facts_are_graded_from_actual_receipt(self):
+        result=dict(session_id='foreground',state='completed',exitCode=0,structuredResult=dict(scanner='RustScan',handoffEligible=True,coverageDetail=dict(requestedPortCount=1,examinedPortCount=None),invocation=dict(coverage='selected',ports=[8123],addresses=['127.0.0.1']),services=[dict(host='127.0.0.1',port='8123',protocol='tcp',state='open')]))
+        task=dict(checkpoints=[dict(id='actual-discovery',name='network_discover',status='finished',result=json.dumps(result))],result='Port 8123 is closed.')
+        self.assertEqual(facts(task)[0]['127.0.0.1'][8123],'open')
+        self.assertEqual(check(task)['status'],'failed')
+        task['result']='The single requested port was examined.'
+        self.assertEqual(coverage_claim(task)['status'],'failed')
     def test_not_reported_open_claim_cannot_deny_current_observed_port(self):
         task=self.task('Port 9021 was not reported as open in the inspection output, indicating it was closed or filtered.')
         self.assertEqual(check(task)['status'],'failed')

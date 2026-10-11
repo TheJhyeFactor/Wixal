@@ -927,7 +927,7 @@
     "type": "function",
     "function": {
       "name": "network_discover",
-      "description": "Discover observed open TCP ports using isolated RustScan. Selected ports is the default; all_tcp requires an explicit user request. Does not identify services. Poll network_read; stop with network_stop. Follow up through network_scan source_session_id, without manual ports.",
+      "description": "Discover observed open TCP ports using isolated RustScan. By default this owned tool call awaits scanner termination and evidence finalization, returning the real result. Set await_results=false only to start in the background; collect that handle with network_read before reporting observations. Selected ports is the default; all_tcp requires an explicit user request. Does not identify services. Stop with network_stop. Follow up through network_scan source_session_id, without manual ports.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
@@ -945,6 +945,11 @@
               "selected",
               "all_tcp"
             ]
+          },
+          "await_results": {
+            "type": "boolean",
+            "default": true,
+            "description": "Keep this tool call owned until the bounded scanner and its saved evidence settle. False returns a running handle immediately and requires later network_read collection; it does not establish scan results."
           },
           "ports": {
             "type": "string",

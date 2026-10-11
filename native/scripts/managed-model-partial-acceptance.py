@@ -63,7 +63,7 @@ async def main(options):
                 await asyncio.sleep(.1)
                 installed = await client.call('addon-job', dict(id=installed['id']))
         assert installed['status'] == 'ready', installed
-        started = await client.call('tool', dict(name='network_discover', arguments=dict(target='127.0.0.1', coverage='all_tcp', timeout_seconds=30)))
+        started = await client.call('tool', dict(name='network_discover', arguments=dict(target='127.0.0.1', coverage='all_tcp', timeout_seconds=30, await_results=False)))
         await client.call('tool', dict(name='network_stop', arguments=dict(session_id=started['session_id'])))
         async with asyncio.timeout(45):
             while True:

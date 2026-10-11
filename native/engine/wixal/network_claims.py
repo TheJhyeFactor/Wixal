@@ -20,6 +20,10 @@ def reference_claim(task):
         for key in ('session_id','sourceSessionId'):
             reference=value.get(key)
             if isinstance(reference,str) and re.fullmatch(canonical,reference):known.add(reference)
+        handles=value.get('inspectionSessions',[])
+        for handle in handles if isinstance(handles,list) else []:
+            reference=handle.get('session_id') if isinstance(handle,dict) else None
+            if isinstance(reference,str) and re.fullmatch(canonical,reference):known.add(reference)
     if not known:return None
     separators='-\u2010\u2011\u2012\u2013\u2014\u2212\ufe63\uff0d'
     pattern=r'\b[0-9a-f]{8}(?:['+separators+r'][0-9a-f]{4}){3}['+separators+r'][0-9a-f]{12}\b'
@@ -229,12 +233,14 @@ def evidence_quote(task):
             sources.append(dict(checkpointId=checkpoint['id'],sha256=hashlib.sha256(output.encode()).hexdigest()))
     if not outputs:return None
     answer=task.get('result','');invalid=[]
-    for match in re.finditer(r'```xml\s*\n?(.*?)```',answer,re.I|re.S):
+    for match in re.finditer(r'```([^\n`]*)\n(.*?)```',answer,re.I|re.S):
+        language=match.group(1).strip().lower();body=match.group(2)
+        if language!='xml' and (language or not re.match(r'\s*<(?:\?xml\b|nmaprun\b|!DOCTYPE\s+nmaprun\b)',body,re.I)):continue
         context=answer[max(0,match.start()-240):match.start()]
         if re.search(r'\b(?:example|illustrative|schematic|simplified)\b',context,re.I):continue
         if not re.search(r'\b(?:output|excerpt|verbatim|verified)\b',context,re.I):continue
-        quote=re.sub(r'\s+',' ',match.group(1).strip())
-        if quote and not any(quote in output for output in outputs):invalid.append(hashlib.sha256(match.group(1).encode()).hexdigest())
+        quote=re.sub(r'\s+',' ',body.strip())
+        if quote and not any(quote in output for output in outputs):invalid.append(hashlib.sha256(body.encode()).hexdigest())
     if not invalid:return None
     return dict(check=dict(kind='network_evidence_quote'),status='failed',error='The purported XML output excerpt does not match completed current-task scanner output. Quote retained evidence exactly, or describe it explicitly as a summary.',quoteSha256=invalid,sources=sources)
 

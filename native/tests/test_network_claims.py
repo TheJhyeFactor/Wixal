@@ -118,6 +118,14 @@ class NetworkClaimsTests(unittest.TestCase):
         result=json.loads(t['checkpoints'][0]['result']);result['output']='<nmaprun scanner="nmap"><host/></nmaprun>';t['checkpoints'][0]['result']=json.dumps(result)
         self.assertIsNone(evidence_quote(t))
 
+    def test_unlabelled_xml_context_excerpt_cannot_be_reported_as_actual_output(self):
+        actual='<?xml version="1.0"?><nmaprun><host/><runstats/></nmaprun>'
+        t=self.task('Output (XML, truncated for brevity):\n```\n<?xml version="1.0"?>\n<?x\n[Excerpt; full evidence saved]\n</nmaprun>\n```')
+        result=json.loads(t['checkpoints'][0]['result']);result['output']=actual;t['checkpoints'][0]['result']=json.dumps(result)
+        self.assertEqual(evidence_quote(t)['status'],'failed')
+        t['result']='Nmap output excerpt:\n```\n'+actual+'\n```'
+        self.assertIsNone(evidence_quote(t))
+
     def test_old_or_failed_scanner_output_cannot_support_an_excerpt(self):
         t=self.task('Nmap output excerpt:\n```xml\n<nmaprun scanner="old"/>\n```')
         result=json.loads(t['checkpoints'][0]['result']);result['output']='<nmaprun scanner="current"/>';t['checkpoints'][0]['result']=json.dumps(result)

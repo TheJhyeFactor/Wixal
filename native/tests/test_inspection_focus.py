@@ -66,8 +66,15 @@ class InspectionFocusTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(task['checkpoints'],[dict(name='network_read',status='finished',result=json.dumps(source))],'Request preparation must not execute inspection')
         self.assertNotIn('tools',agent.request_body(session,supports_tools=True,tools_stopped=True))
         # Reporting retains the evidence reader without reoffering scanners.
-        task['checkpoints'].append(dict(name='network_scan',status='finished',result=json.dumps(dict(sourceSessionId='current-discovery',state='completed'))))
+        task['checkpoints'].append(dict(name='network_scan',status='finished',result=json.dumps(dict(sourceSessionId='current-discovery',state='completed',inspectionSessions=[dict(session_id='current-inspection')]))))
+        self.service.tools.jobs['current-discovery']=dict(owner=session['id'],projectId=self.service.store.project()['id'],state='completed')
+        self.service.tools.jobs['current-inspection']=dict(owner=session['id'],projectId=self.service.store.project()['id'],state='completed',exitCode=0)
         completed=agent.request_body(session,supports_tools=True)
+        self.assertIn('Discovery source IDs: ["current-discovery"]',completed['messages'][0]['content'])
+        self.assertIn('"session_id": "current-inspection"',completed['messages'][0]['content'])
+        self.service.tools.jobs['current-inspection']['owner']='another-conversation'
+        self.assertNotIn('"session_id": "current-inspection"',agent.request_body(session,supports_tools=True)['messages'][0]['content'])
+        self.service.tools.jobs.pop('current-discovery');self.service.tools.jobs.pop('current-inspection')
         self.assertIn('network_read',{t['function']['name'] for t in completed['tools']})
         self.assertNotIn('network_discover',{t['function']['name'] for t in completed['tools']})
         # Additional requested work can explicitly load another eligible schema.

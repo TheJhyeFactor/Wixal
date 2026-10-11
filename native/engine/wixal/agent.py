@@ -126,7 +126,7 @@ class Agent:
                   "Use verify_json for every required JSON report field against its source; use transform length for array/object counts. The controller records those checks and rechecks the saved bytes before completion. File, command, network and MCP actions have controller review. A declined action must not be retried another way. "
                   "Finish with actual results and limitations. Do not read or expose credentials.\n")
         if re.search(r'\b(?:file|code)\b|[\w/-]+\.(?:py|swift|js|ts|md|json)\b',query,re.I):
-            prompt += 'A context excerpt is not the complete file. Use search_files to locate the requested function and its character offset, then read_file with that offset and a bounded max_chars to inspect the relevant code. Reread missing portions before explaining them. Quote actual source exactly or label pseudocode as illustrative; do not invent source lines or infer a hash input from its field name.\n'
+            prompt += 'When the user names a file, read that file first with read_file and a bounded max_chars. search_files searches literal contents, not filenames; list_files finds paths. A context excerpt or single search match is not the complete relevant function. Locate its character offset with search_files, then read_file at that offset to inspect the surrounding checks. Reread missing portions before explaining them. Quote actual source exactly or label pseudocode as illustrative; do not invent source lines or infer a hash input from its field name.\n'
         prompt += "For a requested scan, installation or other action, obtain fresh tool evidence in this turn. Historical tool output and recalled answers describe earlier actions; they cannot establish current completion. Cite the current session/run identifiers. If no current tool executed, say the action was not performed. Reusing old evidence is appropriate only when the user asks to analyse that past evidence.\n"
         if re.search(r'\b(?:scan|discovery|ports|rustscan|nmap)\b|\bnetwork_',query,re.I):
             prompt += "For partial or cancelled network evidence, distinguish requested coverage from observed open ports. Actual examined-port counts remain unknown without a probe-completion ledger; elapsed duration and configured timeouts cannot establish them.\n"
@@ -244,6 +244,15 @@ class Agent:
         # or installer selection. Focus its schemas while other eligible tools
         # remain discoverable; preparing this request never executes the step.
         chosen_names={'workspace_info',*continuation,*requested} if continuation else {t['function']['name'] for t in chosen}
+        file_focus=not pending and re.search(r'\b(?:read|inspect|open)\s+(?:(?:the|project)\s+)?`?[\w./-]+\.(?:py|swift|js|ts|md|json|txt)\b',prompt,re.I)
+        if file_focus:
+            # A malformed search must not hide the reader for the named source.
+            # Other requested work can still load eligible schemas explicitly.
+            chosen_names={'workspace_info','read_file','search_files','list_files',*requested}
+            for checkpoint in task.get('checkpoints',[]):
+                if checkpoint.get('name')!='workspace_info' or checkpoint.get('status')!='finished':continue
+                arguments=checkpoint.get('arguments',{})
+                if arguments.get('tool') or arguments.get('category'):chosen_names.update(t['function']['name'] for t in select_tools(available,prompt,requested,arguments.get('category'),arguments.get('tool')))
         if pending and pending['status']=='passed':
             # Reporting still needs room for complete inspection evidence. A
             # later explicit schema load can advance other requested work.

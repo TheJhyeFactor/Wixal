@@ -100,6 +100,21 @@ class InspectionFocusTests(unittest.IsolatedAsyncioTestCase):
         agent.selected_tools={'workspace_info','read_file'}
         self.assertIn('read_file',{t['function']['name'] for t in agent.request_body(session,supports_tools=True)['tools']})
 
+    async def test_named_file_reader_survives_malformed_search_recovery(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['read_file','search_files','network_discover','network_scan']))
+        agent=self.service.agent;agent.model_info=dict(name='fixture',capabilities=['tools','thinking'])
+        session=self.service.store.session();prompt='Read network_discovery.py from this project and explain its source-session checks. Do not execute scans.'
+        session['messages']=[dict(role='user',content=prompt)]
+        task=dict(id='file-focus',sessionId=session['id'],status='running',prompt=prompt,checkpoints=[]);self.service.store.data['tasks'].append(task)
+        agent.selected_tools={'workspace_info','search_files'}
+        for context in (8192,4096):
+            agent.effective_context=lambda:context
+            names={t['function']['name'] for t in agent.request_body(session,supports_tools=True)['tools']}
+            self.assertIn('read_file',names);self.assertIn('search_files',names);self.assertIn('workspace_info',names)
+            self.assertNotIn('network_discover',names);self.assertNotIn('addon_install',names)
+        task['checkpoints'].append(dict(name='workspace_info',status='finished',arguments=dict(tool='write_file'),result='{}'))
+        self.assertIn('write_file',{t['function']['name'] for t in agent.request_body(session,supports_tools=True)['tools']})
+
     async def test_failed_verification_is_current_context_without_promoting_tool_text(self):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_scan','network_discover']))
         agent=self.service.agent

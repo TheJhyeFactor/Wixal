@@ -26,4 +26,18 @@ The first setup attempt was correctly blocked because the local preview catalogu
 
 The temporary validation app lives outside Applications. The canonical public Alpha 4 app and user workspace are retained. Unregister and retire the temporary validation bundle when qualification settles; keep reports and identities rather than accumulating installed copies.
 
-Final model outcomes are pending. Issue #6 remains open until every required gate passes on the exact tested configuration.
+## Frozen candidate outcome
+
+Issue #6 remains open. No model receives evaluated status, and the 60-attempt qualifying core was not started. The frozen implementation, prompts and graders were not changed after the following outcomes:
+
+| Actual run | Retained result | Qualification implication |
+| --- | --- | --- |
+| `gpt-oss:20b`, cancelled-evidence gate | Failed: the answer asserted that stopping occurred before any probes finished, although examined coverage was unknown. Controller rejection left `needs_attention`. No model-triggered review or new connection occurred. | Mandatory factual gate failed. |
+| `orcarouter/Qwen3.8-27B-Uncensored:iq4_xs`, cancelled-evidence gate | Failed after one actual model response selected `network_read`. The 452,443-character retained result could not fit the following request at the configured 8,192-token context. | Context integration gate failed; this is not evidence of a false factual answer. |
+| `gpt-oss:20b`, one explicitly non-qualifying source-inspection diagnostic | Actual discovery and source-bound Nmap inspection completed against fresh owned listeners. The model chose the existing separate calls, supplied an invalid call and recovered, then twice presented rewritten XML as actual output. Controller feedback rejected it; repeated evidence reads ended in context exhaustion. Independent review fails the attempt against saved XML bytes. | Shows real stage execution, but does not demonstrate model use of the new combined operation or factual reliability. It is not a repeatability core. |
+
+These failures are preserved, including visible intermediate model prose. The independent diagnostic review records a critical mismatched-XML claim even though the execution completed. No attempt was retried until passing, and no controller-generated correction was counted as a model success. This bounded candidate is retained in draft PR #43 rather than represented as a completed fix or included in a public release.
+
+Retained local records live under `artifacts/native/evidence-driven-investigation/`: the frozen plan and package identities, full regression log, real controller checks, packaged backend report, both cancelled-evidence reports and independent reviews, and the diagnostic report and independent review. Preview trust keys and raw transcripts remain local.
+
+The measured remaining defects are factual quotation/coverage interpretation and bounded delivery of large tool evidence. Raising context, changing prompts or discarding rejected prose would not qualify this frozen tuple. Any further implementation must be a separately identified candidate with fresh acceptance; these failures cannot be regraded into success.

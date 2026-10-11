@@ -541,7 +541,7 @@
     "type": "function",
     "function": {
       "name": "read_file",
-      "description": "Read a UTF-8 file inside the project. Use offset to read subsequent chunks of a large file.",
+      "description": "Read a UTF-8 file inside the project. Use search_files match offsets and a bounded max_chars to inspect relevant code without context excerpts. Use next_offset for subsequent chunks.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -553,6 +553,12 @@
             "type": "integer",
             "minimum": 0,
             "description": "Character offset, default 0"
+          },
+          "max_chars": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24000,
+            "description": "Maximum characters to return, integer 1 to 24000, default 24000; use smaller chunks when the context would excerpt a full read"
           }
         },
         "required": [
@@ -566,7 +572,7 @@
     "type": "function",
     "function": {
       "name": "search_files",
-      "description": "Find literal text in project files. Case insensitive; text files up to 1 MB. Use offset for later matches; traversal is bounded to 1200 files and 6 directory levels.",
+      "description": "Find literal text in project files. Matches include line numbers and character offsets for read_file. Case insensitive; text files up to 1 MB. Use offset for later matches; traversal is bounded to 1200 files and 6 directory levels.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -924,11 +930,13 @@
         "properties": {
           "target": {
             "type": "string",
-            "maxLength": 500
+            "maxLength": 500,
+            "description": "One authorised hostname, IP address or HTTP(S) origin; subnet/CIDR discovery is not supported"
           },
           "coverage": {
             "type": "string",
             "default": "selected",
+            "description": "selected is the default and supports up to 1024 ports; all_tcp covers 1–65535 and requires an explicit user request",
             "enum": [
               "selected",
               "all_tcp"
@@ -936,11 +944,13 @@
           },
           "ports": {
             "type": "string",
-            "maxLength": 8000
+            "maxLength": 8000,
+            "description": "Comma-separated ports or ranges from 1 to 65535, excluding zero. Selected coverage supports at most 1024 distinct ports. Omit for all_tcp coverage."
           },
           "pace": {
             "type": "string",
             "default": "careful",
+            "description": "Controller preset: careful is the default, balanced is an explicit alternative. This setting is not a RustScan command-line flag.",
             "enum": [
               "careful",
               "balanced"
@@ -949,7 +959,8 @@
           "timeout_seconds": {
             "type": "integer",
             "minimum": 10,
-            "maximum": 600
+            "maximum": 600,
+            "description": "Shared deadline in seconds, integer 10 to 600, default 180"
           }
         },
         "required": [

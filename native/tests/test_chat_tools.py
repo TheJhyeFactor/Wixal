@@ -92,6 +92,20 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
         info = await self.service.dispatch('context-info', {})
         self.assertIn('workspace_info', info['selectedTools'])
 
+    async def test_search_offsets_and_bounded_reads_preserve_exact_unicode_source(self):
+        await self.service.dispatch('settings',dict(enabledTools=['read_file','search_files']))
+        text='πreamble 👩🏽‍💻\n'+('irrelevant source\n'*2000)+'def source_result():\n    return "owned"\nTAIL'
+        (self.root/'bounded.py').write_text(text)
+        matches=await self.service.dispatch('tool',dict(name='search_files',arguments=dict(query='def source_result')))
+        match=next(m for m in matches if m['path']=='bounded.py')
+        self.assertEqual(match['offset'],text.index('def source_result'))
+        first=await self.service.dispatch('tool',dict(name='read_file',arguments=dict(path='bounded.py',offset=match['offset'],max_chars=20)))
+        second=await self.service.dispatch('tool',dict(name='read_file',arguments=dict(path='bounded.py',offset=first['next_offset'],max_chars=100)))
+        self.assertEqual(first['content']+second['content'],text[match['offset']:])
+        self.assertEqual(first['offset'],match['offset']);self.assertTrue(first['more']);self.assertFalse(second['more'])
+        for maximum in (0,24001):
+            with self.assertRaises(ValueError):await self.service.dispatch('tool',dict(name='read_file',arguments=dict(path='bounded.py',max_chars=maximum)))
+
     async def test_chat_missing_project_and_conversation_only_model_are_clear(self):
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
         await self.service.dispatch('project-select', dict(id=None))

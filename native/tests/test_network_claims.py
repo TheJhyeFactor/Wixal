@@ -1,10 +1,28 @@
 """Current tool facts, contradictory answers and host/stage boundaries."""
 import json
 import unittest
-from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim,evidence_hash_claim,evidence_invocation_claim,reference_claim
+from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim,evidence_hash_claim,evidence_invocation_claim,reference_claim,coverage_claim
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_completed_empty_discovery_does_not_prove_requested_ports_were_examined(self):
+        source=dict(session_id='owned',state='completed',exitCode=0,structuredResult=dict(scanner='RustScan',coverageDetail=dict(requestedPortCount=1,observedOpenEndpointCount=0,examinedPortCount=None)))
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(source))])
+        task['result']='The coverageDetail confirms that the single requested port was examined and no open endpoints were detected.'
+        self.assertEqual(coverage_claim(task)['status'],'failed')
+        for answer in ('The run requested one port and reported no open endpoints. Actual examined coverage remains unknown.','We cannot confirm whether the single requested port was examined.','Nmap inspection confirms the single requested port was examined.'):
+            task['result']=answer;self.assertIsNone(coverage_claim(task))
+        source['structuredResult']['coverageDetail']['examinedPortCount']=1
+        task['checkpoints'][0]['result']=json.dumps(source);task['result']='The single requested port was examined.'
+        self.assertIsNone(coverage_claim(task))
+
+    def test_discovery_binding_digest_cannot_be_labelled_as_inspection_output(self):
+        discovery='a'*64;inspection='b'*64
+        task=dict(checkpoints=[dict(name='network_scan',status='finished',result=json.dumps(dict(sourceResultSha256=discovery,evidence=[dict(stdoutSha256=inspection)])))])
+        task['result']='Inspection result SHA-256: `'+discovery+'`'
+        self.assertEqual(evidence_hash_claim(task)['status'],'failed')
+        for answer in ('Inspection stdout SHA-256: `'+inspection+'`','Discovery sourceResultSha256 used for inspection: `'+discovery+'`'):
+            task['result']=answer;self.assertIsNone(evidence_hash_claim(task))
     def test_reported_reference_must_preserve_copyable_punctuation_and_case(self):
         reference='c4864f82-9d17-4595-92fe-dfb15047bff8'
         checkpoint=dict(name='network_read',status='finished',result=json.dumps(dict(session_id=reference,state='stopped')))
@@ -172,6 +190,25 @@ from unittest.mock import patch
 class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
+
+    async def test_completed_empty_coverage_claim_keeps_attention_without_replaying(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_read']))
+        calls=0;reads=0
+        async def execute(name,args,session):
+            nonlocal reads
+            self.assertEqual(name,'network_read');reads+=1
+            return dict(session_id='owned-source',state='completed',exitCode=0,structuredResult=dict(scanner='RustScan',coverage='completed_attempts',services=[],interpretation='Observed endpoints only',resultSha256='a'*64,invocation=dict(target='127.0.0.1'),coverageDetail=dict(requestedPortCount=1,observedOpenEndpointCount=0,examinedPortCount=None)))
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='owned-source')))])
+            return dict(role='assistant',content='The coverageDetail confirms that the single requested port was examined and no open endpoints were detected.')
+        with patch.object(self.service.tools,'execute',execute),patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('chat',dict(text='Explain the retained discovery evidence. Do not run another scan.'))
+        self.assertEqual(calls,4);self.assertEqual(reads,1)
+        self.assertEqual(task['status'],'needs_attention')
+        self.assertTrue(any(r['check']['kind']=='network_coverage_claim' for r in task['verification']['checks']))
+        self.assertIn('unknown without',task['result'])
 
     async def test_invocation_feedback_corrects_metadata_without_replaying_actions(self):
         calls=0

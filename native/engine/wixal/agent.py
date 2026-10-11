@@ -85,10 +85,11 @@ from .agent_context import profile as active_profile, available_names
 class BudgetReached(RuntimeError):pass
 
 VERIFICATION_GUIDANCE={
+    'network_coverage_claim':'Requested discovery coverage does not establish the actual examined-port count, even after a completed empty run. Report the observed endpoint result and keep actual probe completion unknown without a per-port ledger.',
     'network_reference_claim':'Copy exact source session identifiers in code spans using their recorded ASCII hyphens and case. Typographic punctuation changes a copyable reference; never alter tool arguments to match a guessed identifier.',
     'network_execution_claim':'For cancelled or partial evidence, the number of completed probes is unknown, including whether zero completed. Remove claims that the stop occurred before any probes finished. Do not describe a failed or unfinished scan as completed.',
     'network_invocation_claim':'Remove options absent from retained argv. Controller presets such as pace are metadata, not executable flags; report them separately.',
-    'network_evidence_hash_claim':'Copy recorded SHA-256 values exactly. An empty output has a nonzero SHA-256 digest; a nonempty recorded digest field is not empty.',
+    'network_evidence_hash_claim':'Copy recorded SHA-256 values exactly. An empty output has a nonzero SHA-256 digest; a nonempty recorded digest field is not empty. sourceResultSha256 binds discovery evidence, not inspection XML; inspection stdout has its own digest.',
     'network_port_claim':'Report only the completed current-task observed port facts; requested ports do not establish observed state, services, safety or vulnerabilities.',
     'network_evidence_quote':'The claimed XML quotation is unsupported. Request excerpts, including [Excerpt] markers, are not scanner output. Use network_read on the owned inspectionSessions handles to retrieve saved XML when needed. Quote retained output exactly, or label a description as a summary.',
     'tool_scope_claim':'The listed native adapters are enabled in the current scope. Their installation, readiness and review requirements remain separate.',
@@ -124,6 +125,8 @@ class Agent:
                   "For counts or calculations derived from project data, calculate with a command or API when available and inspect the result before writing an answer or artifact. Read every required source field before writing; never substitute empty strings for fields you have not inspected. Prefer one command that extracts all required fields and calculates derived values together. Reading back a saved file proves what was saved; independently compare derived values with their sources before calling the result verified. "
                   "Use verify_json for every required JSON report field against its source; use transform length for array/object counts. The controller records those checks and rechecks the saved bytes before completion. File, command, network and MCP actions have controller review. A declined action must not be retried another way. "
                   "Finish with actual results and limitations. Do not read or expose credentials.\n")
+        if re.search(r'\b(?:file|code)\b|[\w/-]+\.(?:py|swift|js|ts|md|json)\b',query,re.I):
+            prompt += 'A context excerpt is not the complete file. Use search_files to locate the requested function and its character offset, then read_file with that offset and a bounded max_chars to inspect the relevant code. Reread missing portions before explaining them. Quote actual source exactly or label pseudocode as illustrative; do not invent source lines or infer a hash input from its field name.\n'
         prompt += "For a requested scan, installation or other action, obtain fresh tool evidence in this turn. Historical tool output and recalled answers describe earlier actions; they cannot establish current completion. Cite the current session/run identifiers. If no current tool executed, say the action was not performed. Reusing old evidence is appropriate only when the user asks to analyse that past evidence.\n"
         if re.search(r'\b(?:scan|discovery|ports|rustscan|nmap)\b|\bnetwork_',query,re.I):
             prompt += "For partial or cancelled network evidence, distinguish requested coverage from observed open ports. Actual examined-port counts remain unknown without a probe-completion ledger; elapsed duration and configured timeouts cannot establish them.\n"
@@ -138,7 +141,7 @@ class Agent:
         inventory=eligible(self.tools.catalog(),available_names(self.tools,self.store),self.store.project()) if self.tools else []
         names=[t['function']['name'] for t in inventory]
         if 'network_discover' in names:
-            prompt += 'For standalone TCP discovery, use network_discover and poll network_read to completion. Do not guess a shell scanner invocation when this native adapter is available. Report every observed open port from the completed evidence; copy any quoted output exactly.\n'
+            prompt += 'For standalone TCP discovery, use network_discover and poll network_read to completion. This native adapter accepts one host or website origin, not a subnet. Selected TCP ports must be 1–65535 (port zero is rejected), with at most 1,024 selected ports. Do not guess a shell scanner invocation when this native adapter is available. Report every observed open port from the completed evidence; copy any quoted output exactly.\n'
         prompt += "Available tool names within the current task scope: " + json.dumps(names[:100]) + "\nUse workspace_info with tool or category to load a schema not yet supplied. Additional connected tools can be discovered through workspace_info.\n"
         if self.tools:
             prompt += 'Observed command environment: '+json.dumps(self.tools.environment())+'\nUse an observed installed executable (for example python3 when python is absent). Inspect the project test configuration and never invent a passing command result.\n'
@@ -290,8 +293,8 @@ class Agent:
                         if not isinstance(handle,dict):continue
                         reference=handle.get('session_id');job=self.tools.jobs.get(reference)
                         if not job or job.get('owner')!=session['id'] or job.get('projectId')!=(self.store.project() or {}).get('id'):continue
-                        inspection_handles.append(dict(session_id=reference,state=job['state'],exitCode=job.get('exitCode')))
-                messages[0]['content'] += '\nThe current discovery-to-inspection completion check passed. Discovery source IDs: '+json.dumps(sorted(source_references))+'. Distinct owned inspection reader handles: '+json.dumps(inspection_handles[-8:])+'. sourceSessionId identifies discovery, not an inspection run. Report each stage from its actual retained result, including any explicitly skipped inspection. Do not restart completed stages. An excerpt in this model request does not establish truncation of saved evidence; use network_read on an inspection handle if more detail is needed. Other enabled tools remain discoverable through workspace_info for additional user-requested work.'
+                        inspection_handles.append(dict(session_id=reference,state=job['state'],exitCode=job.get('exitCode'),stdoutSha256=job.get('evidence',{}).get('stdoutSha256')))
+                messages[0]['content'] += '\nThe current discovery-to-inspection completion check passed. Discovery source IDs: '+json.dumps(sorted(source_references))+'. Distinct owned inspection reader handles: '+json.dumps(inspection_handles[-8:])+'. sourceSessionId identifies discovery, not an inspection run. sourceResultSha256 binds discovery evidence; inspection stdoutSha256 hashes its own saved XML. Report each stage from its actual retained result, including any explicitly skipped inspection. Do not restart completed stages. An excerpt in this model request does not establish truncation of saved evidence; use network_read on an inspection handle if more detail is needed. Other enabled tools remain discoverable through workspace_info for additional user-requested work.'
             return messages
         messages = task_context(self.context(session, skill, resolve_images, trim_history, len(json.dumps(definitions)) if definitions else 0))
         if requested and supports_tools and not tools_stopped:
@@ -530,7 +533,7 @@ class Agent:
                             self.store.save()
                             continue
                         from .network_claims import corrected_summary
-                        network_failed=any(r['status']=='failed' and r.get('check',{}).get('kind') in ('network_port_claim','network_evidence_quote','network_evidence_hash_claim','network_invocation_claim','network_execution_claim','network_reference_claim','requested_discovery_inspection','tool_scope_claim') for r in report['checks'])
+                        network_failed=any(r['status']=='failed' and r.get('check',{}).get('kind') in ('network_port_claim','network_evidence_quote','network_evidence_hash_claim','network_invocation_claim','network_execution_claim','network_coverage_claim','network_reference_claim','requested_discovery_inspection','tool_scope_claim') for r in report['checks'])
                         if network_failed:
                             message['unverifiedModelContent']=message.get('content','')
                             message['content']=corrected_summary(task);task['result']=message['content'];self.store.save()

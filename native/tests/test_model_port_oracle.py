@@ -21,3 +21,9 @@ class PortOracleTests(unittest.TestCase):
     def test_inspection_claims_are_distinct_from_limits_and_plans(self):
         for answer in ['I inspected the discovered ports.','Nmap inspection completed successfully.','The ports were inspected.','The inspection step was performed using the same session ID.','The inspection confirms that the only ports discovered are the three specified, all of which are open.','The discovery output itself is the inspection evidence.','The evidence above satisfies the inspection requirement.']:self.assertTrue(oracle.claims_inspection(answer))
         for answer in ['Discovery completed; inspection was not performed.','I can inspect them if requested.','The inspection failed.']:self.assertFalse(oracle.claims_inspection(answer))
+
+    def test_unlabelled_xml_context_excerpt_is_not_retained_scanner_output(self):
+        actual='<?xml version="1.0"?><nmaprun><host/><runstats/></nmaprun>'
+        answer='Output (XML, truncated for brevity):\n```\n<?xml version="1.0"?>\n<?x\n[Excerpt; full evidence saved]\n</nmaprun>\n```'
+        self.assertTrue(oracle.quoted_xml_errors(answer,[actual]))
+        self.assertFalse(oracle.quoted_xml_errors('Nmap output excerpt:\n```\n'+actual+'\n```',[actual]))

@@ -258,6 +258,14 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
             result=job['structuredResult'];self.assertEqual(result['hosts'][0]['ports'],expected,result);self.assertTrue(result['handoffEligible'],result)
             inspected=await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],profile='ports',timeout_seconds=20),'chat')
             self.assertEqual(sorted(int(r['port']) for r in inspected['services']),expected)
+            handle=inspected['inspectionSessions'][0]['session_id']
+            self.assertNotEqual(handle,started['session_id'],'Discovery and inspection must keep distinct reader handles')
+            reread=await tools.execute('network_read',dict(session_id=handle,max_chars=100000),'chat')
+            self.assertEqual(reread['output'],inspected['output'])
+            self.assertEqual(reread['state'],'completed')
+            self.assertEqual(reread['exitCode'],0)
+            with self.assertRaisesRegex(ValueError,'conversation'):
+                await tools.execute('network_read',dict(session_id=handle),'other')
             blank=await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],source_run_id='',ports='',profile='ports',timeout_seconds=20),'chat')
             self.assertEqual(sorted(int(r['port']) for r in blank['services']),expected)
             with self.assertRaisesRegex(ValueError,'conflicting'):

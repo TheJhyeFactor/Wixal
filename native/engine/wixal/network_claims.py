@@ -8,6 +8,37 @@ import json
 import re
 
 
+def reference_claim(task):
+    """A reported handle must remain copyable; never repair a tool argument."""
+    known=set()
+    canonical=r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+    for checkpoint in task.get('checkpoints',[]):
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict):continue
+        for key in ('session_id','sourceSessionId'):
+            reference=value.get(key)
+            if isinstance(reference,str) and re.fullmatch(canonical,reference):known.add(reference)
+        handles=value.get('inspectionSessions',[])
+        for handle in handles if isinstance(handles,list) else []:
+            reference=handle.get('session_id') if isinstance(handle,dict) else None
+            if isinstance(reference,str) and re.fullmatch(canonical,reference):known.add(reference)
+    if not known:return None
+    separators='-\u2010\u2011\u2012\u2013\u2014\u2212\ufe63\uff0d'
+    pattern=r'\b[0-9a-f]{8}(?:['+separators+r'][0-9a-f]{4}){3}['+separators+r'][0-9a-f]{12}\b'
+    translate=str.maketrans({separator:'-' for separator in separators})
+    incorrect=[];references=set()
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r'\b(?:example|invalid|malformed|incorrect|not\s+(?:a\s+)?(?:valid|exact)|do\s+not\s+use)\b',sentence,re.I):continue
+        for match in re.finditer(pattern,sentence,re.I):
+            reported=match.group();normal=reported.translate(translate).lower()
+            if normal in known and reported!=normal:
+                incorrect.append(reported);references.add(normal)
+    if not incorrect:return None
+    return dict(check=dict(kind='network_reference_claim'),status='failed',incorrectReferences=sorted(set(incorrect)),canonicalReferences=sorted(references),error='Reported scanner references changed punctuation or case. Copy the exact recorded IDs in code spans; tool arguments are never normalised or repaired.')
+
+
 def facts(task):
     hosts={};sources=[]
     def observed_time(checkpoint):
@@ -96,6 +127,27 @@ def execution_claim(task):
     return None
 
 
+def coverage_claim(task):
+    """A completed discovery is not a per-port probe-completion ledger."""
+    sources=[]
+    for checkpoint in task.get('checkpoints',[]):
+        if checkpoint.get('name')!='network_read' or checkpoint.get('status')!='finished':continue
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict):continue
+        structured=value.get('structuredResult',{})
+        detail=structured.get('coverageDetail',{}) if isinstance(structured,dict) else {}
+        if isinstance(structured,dict) and structured.get('scanner')=='RustScan' and isinstance(detail,dict) and detail.get('examinedPortCount','absent') is None:sources.append(value.get('session_id'))
+    if not sources:return None
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r'\b(?:did|does)\s+not\s+(?:finish|complete)\s+(?:probing|testing|examining)\s+(?:all|every)\b',sentence,re.I) and not re.search(r'\b(?:whether|unknown|cannot|example|historical)\b',sentence,re.I):
+            return dict(check=dict(kind='network_coverage_claim'),status='failed',sourceSessions=sources,error='A stopped run or partial coverage label does not establish whether zero, some or all requested probes completed. The actual examined count is unknown without a probe-completion ledger; report termination without inferring probe completion.')
+        if re.search(r"\b(?:unknown|which|whether|not|cannot|can't|never|example|historical|inspection|nmap)\b",sentence,re.I):continue
+        if re.search(r'\b(?:single|all|every|\d+)\s+(?:(?:requested|selected|TCP)\s+)?ports?\s+(?:was|were|have been|has been)\s+(?:examined|tested|probed)\b',sentence,re.I):
+            return dict(check=dict(kind='network_coverage_claim'),status='failed',sourceSessions=sources,error='Discovery records requested coverage and observed open endpoints, not a completed per-port probe ledger. Even after a completed empty run, the actual examined count remains unknown; do not assert that requested ports were examined.')
+    return None
+
+
 def evidence_invocation_claim(task):
     """Check explicit invocation option claims against the retained argv.
 
@@ -130,19 +182,29 @@ def evidence_hash_claim(task):
     Empty bytes have a real SHA-256 digest, not an all-zero digest. This covers
     explicit stdout/stderr hash claims, not arbitrary factual model prose.
     """
-    hashes={}
+    hashes={};inspection_hashes=set();source_hashes=set()
     for checkpoint in task.get('checkpoints',[]):
         if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(value,dict) or value.get('error'):continue
         evidence=value.get('evidence',{})
-        for label in ('stdout','stderr'):
-            digest=evidence.get(label+'Sha256') if isinstance(evidence,dict) else None
-            if isinstance(digest,str) and re.fullmatch(r'[0-9a-f]{64}',digest):hashes.setdefault(label,set()).add(digest)
-    if not hashes:return None
+        source_digest=value.get('sourceResultSha256')
+        if checkpoint.get('name')=='network_scan' and isinstance(source_digest,str) and re.fullmatch(r'[0-9a-f]{64}',source_digest):
+            source_hashes.add(source_digest)
+            for item in evidence if isinstance(evidence,list) else [evidence]:
+                digest=item.get('stdoutSha256') if isinstance(item,dict) else None
+                if isinstance(digest,str) and re.fullmatch(r'[0-9a-f]{64}',digest):inspection_hashes.add(digest)
+        for item in evidence if isinstance(evidence,list) else [evidence]:
+            for label in ('stdout','stderr'):
+                digest=item.get(label+'Sha256') if isinstance(item,dict) else None
+                if isinstance(digest,str) and re.fullmatch(r'[0-9a-f]{64}',digest):hashes.setdefault(label,set()).add(digest)
+    if not hashes and not inspection_hashes:return None
     errors=[]
     for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if inspection_hashes and re.search(r'\binspection\b.{0,60}\b(?:sha|hash|digest)\b',sentence,re.I) and not re.search(r'\b(?:source|discovery|not|example)\b|sourceResultSha256',sentence,re.I):
+            for claimed in re.findall(r'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])',sentence,re.I):
+                if claimed.lower() in source_hashes and claimed.lower() not in inspection_hashes:errors.append('The discovery sourceResultSha256 was labelled as an inspection digest; inspection XML has its own stdout digest')
         if re.search(r'\b(?:stdout|stderr)Sha256\b.{0,100}\b(?:are|is)\s+empty\b',sentence,re.I) and not re.search(r'\b(?:not|cannot|example|historical)\b',sentence,re.I):
             errors.append('Retained output SHA-256 fields contain digests, not empty values')
         if not re.search(r'\b(?:sha[- ]?256|hash|digest)\b',sentence,re.I):continue
@@ -156,7 +218,7 @@ def evidence_hash_claim(task):
                 if claimed.lower() not in expected:errors.append('Named output digest differs from retained evidence')
     if not errors:return None
     return dict(check=dict(kind='network_evidence_hash_claim'),status='failed',errors=sorted(set(errors)),
-                actualHashes={label:sorted(values) for label,values in hashes.items()},
+                actualHashes={**{label:sorted(values) for label,values in hashes.items()},**({'inspectionStdout':sorted(inspection_hashes)} if inspection_hashes else {})},
                 error='Copy the retained stdout/stderr SHA-256 exactly or omit a digest claim. An empty file has the SHA-256 of empty bytes, not the zero hash.')
 
 
@@ -172,7 +234,8 @@ def check(task):
         if re.search(r"\b(?:not necessarily|cannot|can't|could|may|might|outside|other|unscanned|elsewhere)\b",sentence,re.I):continue
         if ports and re.search(r'\b(?:no|zero)\s+open\s+(?:tcp\s+)?ports\b|\ball\s+(?:(?:selected|tested|scanned|specified|requested|tcp)\s+)*(?:ports\s+)?(?:are\s+|were\s+)?(?:closed|filtered)\b',sentence,re.I):errors.append('The answer denies the observed open ports')
         if re.search(r'\b(?:open|closed)\s*\|\s*filtered\b',sentence,re.I):continue
-        denies=bool(re.search(r'\bneither\b.*\bopen\b|\bnot\s+open\b',sentence,re.I))
+        reported_denial=re.search(r'\bnot\s+reported\s+(?:as\s+)?open\b',sentence,re.I) and not re.search(r'\b(?:if|whether|example|historical|previous)\b',sentence,re.I)
+        denies=bool(re.search(r'\bneither\b.*\bopen\b|\bnot\s+open\b',sentence,re.I) or reported_denial)
         for port in ports:
             if not re.search(r'(?<!\d)'+str(port)+r'(?!\d)',sentence):continue
             if denies or re.search(r'\b(?:closed|filtered)\b',sentence,re.I) and not re.search(r'\bnot\b',sentence,re.I):errors.append(f'The answer contradicts observed open TCP port {port}')
@@ -202,12 +265,14 @@ def evidence_quote(task):
             sources.append(dict(checkpointId=checkpoint['id'],sha256=hashlib.sha256(output.encode()).hexdigest()))
     if not outputs:return None
     answer=task.get('result','');invalid=[]
-    for match in re.finditer(r'```xml\s*\n?(.*?)```',answer,re.I|re.S):
+    for match in re.finditer(r'```([^\n`]*)\n(.*?)```',answer,re.I|re.S):
+        language=match.group(1).strip().lower();body=match.group(2)
+        if language!='xml' and (language or not re.match(r'\s*<(?:\?xml\b|nmaprun\b|!DOCTYPE\s+nmaprun\b)',body,re.I)):continue
         context=answer[max(0,match.start()-240):match.start()]
         if re.search(r'\b(?:example|illustrative|schematic|simplified)\b',context,re.I):continue
         if not re.search(r'\b(?:output|excerpt|verbatim|verified)\b',context,re.I):continue
-        quote=re.sub(r'\s+',' ',match.group(1).strip())
-        if quote and not any(quote in output for output in outputs):invalid.append(hashlib.sha256(match.group(1).encode()).hexdigest())
+        quote=re.sub(r'\s+',' ',body.strip())
+        if quote and not any(quote in output for output in outputs):invalid.append(hashlib.sha256(body.encode()).hexdigest())
     if not invalid:return None
     return dict(check=dict(kind='network_evidence_quote'),status='failed',error='The purported XML output excerpt does not match completed current-task scanner output. Quote retained evidence exactly, or describe it explicitly as a summary.',quoteSha256=invalid,sources=sources)
 
@@ -221,6 +286,10 @@ def corrected_summary(task):
         lines.append(f"- {host}: observed open TCP ports {', '.join(map(str,ports)) or 'none in this evidence' }.")
     if hosts:lines.append('These are observations from the selected scan coverage. Inspect the retained tool evidence; they do not prove service safety or a vulnerability.')
     for row in task.get('verification',{}).get('checks',[]):
+        if row.get('check',{}).get('kind')=='network_coverage_claim' and row['status']=='failed':
+            lines.append('Requested coverage and observed endpoints do not establish the actual examined-port count. It remains unknown without a completed per-port probe ledger.')
+        if row.get('check',{}).get('kind')=='network_reference_claim' and row['status']=='failed':
+            lines.append('Canonical source session references: '+', '.join('`'+reference+'`' for reference in row['canonicalReferences'])+'. Copy these exactly; no tool argument was repaired or retried.')
         if row.get('check',{}).get('kind')=='network_invocation_claim' and row['status']=='failed':
             lines.append('Retained executable options: '+', '.join(row['actualOptions'])+'. Controller presets are separate metadata.')
         if row.get('check',{}).get('kind')=='network_evidence_hash_claim' and row['status']=='failed':

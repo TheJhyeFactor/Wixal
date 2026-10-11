@@ -1,10 +1,65 @@
 """Current tool facts, contradictory answers and host/stage boundaries."""
 import json
 import unittest
-from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim,evidence_hash_claim,evidence_invocation_claim
+from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim,evidence_hash_claim,evidence_invocation_claim,reference_claim,coverage_claim
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_not_reported_open_claim_cannot_deny_current_observed_port(self):
+        task=self.task('Port 9021 was not reported as open in the inspection output, indicating it was closed or filtered.')
+        self.assertEqual(check(task)['status'],'failed')
+        task['result']='If port 9021 was not reported as open in an example, that would not establish whether it was closed or filtered.'
+        self.assertIsNone(check(task))
+    def test_completed_empty_discovery_does_not_prove_requested_ports_were_examined(self):
+        source=dict(session_id='owned',state='completed',exitCode=0,structuredResult=dict(scanner='RustScan',coverageDetail=dict(requestedPortCount=1,observedOpenEndpointCount=0,examinedPortCount=None)))
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(source))])
+        task['result']='The coverageDetail confirms that the single requested port was examined and no open endpoints were detected.'
+        self.assertEqual(coverage_claim(task)['status'],'failed')
+        for answer in ('The run requested one port and reported no open endpoints. Actual examined coverage remains unknown.','We cannot confirm whether the single requested port was examined.','Nmap inspection confirms the single requested port was examined.'):
+            task['result']=answer;self.assertIsNone(coverage_claim(task))
+        source['structuredResult']['coverageDetail']['examinedPortCount']=1
+        task['checkpoints'][0]['result']=json.dumps(source);task['result']='The single requested port was examined.'
+        self.assertIsNone(coverage_claim(task))
+
+    def test_partial_label_does_not_prove_not_all_requested_probes_finished(self):
+        source=dict(session_id='owned',state='stopped',structuredResult=dict(scanner='RustScan',coverageDetail=dict(examinedPortCount=None)))
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(source))],result='The run was interrupted, so the scanner did not finish probing all requested ports.')
+        self.assertEqual(coverage_claim(task)['status'],'failed')
+        task['result']='The process was stopped. Whether zero, some or all requested probes finished remains unknown.'
+        self.assertIsNone(coverage_claim(task))
+
+    def test_discovery_binding_digest_cannot_be_labelled_as_inspection_output(self):
+        discovery='a'*64;inspection='b'*64
+        task=dict(checkpoints=[dict(name='network_scan',status='finished',result=json.dumps(dict(sourceResultSha256=discovery,evidence=[dict(stdoutSha256=inspection)])))])
+        task['result']='Inspection result SHA-256: `'+discovery+'`'
+        self.assertEqual(evidence_hash_claim(task)['status'],'failed')
+        for answer in ('Inspection stdout SHA-256: `'+inspection+'`','Discovery sourceResultSha256 used for inspection: `'+discovery+'`'):
+            task['result']=answer;self.assertIsNone(evidence_hash_claim(task))
+    def test_reported_reference_must_preserve_copyable_punctuation_and_case(self):
+        reference='c4864f82-9d17-4595-92fe-dfb15047bff8'
+        checkpoint=dict(name='network_read',status='finished',result=json.dumps(dict(session_id=reference,state='stopped')))
+        task=dict(checkpoints=[checkpoint.copy()])
+        for reported in (reference.replace('-','\u2011'),reference.replace('-','\u2013'),reference.upper()):
+            task['result']='Evidence from session '+reported
+            failure=reference_claim(task)
+            self.assertEqual(failure['canonicalReferences'],[reference])
+            self.assertEqual(task['checkpoints'],[checkpoint],'Verification must not repair any checkpoint or tool argument')
+            task['verification']=dict(checks=[failure])
+            self.assertIn('`'+reference+'`',corrected_summary(task))
+        task['result']='Evidence from session `'+reference+'`'
+        self.assertIsNone(reference_claim(task))
+
+    def test_reference_check_does_not_infer_unknown_handles_or_reject_invalid_examples(self):
+        reference='c4864f82-9d17-4595-92fe-dfb15047bff8'
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(dict(session_id=reference,state='stopped')))])
+        task['result']='This example is an invalid reference: '+reference.replace('-','\u2011')+'. Use `'+reference+'`.'
+        self.assertIsNone(reference_claim(task))
+        task['result']='An unknown reference: 00000000\u20110000\u20110000\u20110000\u2011000000000000'
+        self.assertIsNone(reference_claim(task))
+        task['checkpoints'][0]['status']='error'
+        task['result']='Evidence from session '+reference.replace('-','\u2011')
+        self.assertIsNone(reference_claim(task))
+
     def test_controller_preset_cannot_become_a_claimed_invocation_option(self):
         task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(dict(structuredResult=dict(invocation=dict(argv=['rustscan','--range','1-65535','--timeout','2000'])))))])
         task['result']='Invocation parameters: `--range 1-65535`, `--timeout 2000`, `--pace careful`.'
@@ -93,6 +148,14 @@ class NetworkClaimsTests(unittest.TestCase):
         result=json.loads(t['checkpoints'][0]['result']);result['output']='<nmaprun scanner="nmap"><host/></nmaprun>';t['checkpoints'][0]['result']=json.dumps(result)
         self.assertIsNone(evidence_quote(t))
 
+    def test_unlabelled_xml_context_excerpt_cannot_be_reported_as_actual_output(self):
+        actual='<?xml version="1.0"?><nmaprun><host/><runstats/></nmaprun>'
+        t=self.task('Output (XML, truncated for brevity):\n```\n<?xml version="1.0"?>\n<?x\n[Excerpt; full evidence saved]\n</nmaprun>\n```')
+        result=json.loads(t['checkpoints'][0]['result']);result['output']=actual;t['checkpoints'][0]['result']=json.dumps(result)
+        self.assertEqual(evidence_quote(t)['status'],'failed')
+        t['result']='Nmap output excerpt:\n```\n'+actual+'\n```'
+        self.assertIsNone(evidence_quote(t))
+
     def test_old_or_failed_scanner_output_cannot_support_an_excerpt(self):
         t=self.task('Nmap output excerpt:\n```xml\n<nmaprun scanner="old"/>\n```')
         result=json.loads(t['checkpoints'][0]['result']);result['output']='<nmaprun scanner="current"/>';t['checkpoints'][0]['result']=json.dumps(result)
@@ -139,6 +202,25 @@ from unittest.mock import patch
 class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
+
+    async def test_completed_empty_coverage_claim_keeps_attention_without_replaying(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_read']))
+        calls=0;reads=0
+        async def execute(name,args,session):
+            nonlocal reads
+            self.assertEqual(name,'network_read');reads+=1
+            return dict(session_id='owned-source',state='completed',exitCode=0,structuredResult=dict(scanner='RustScan',coverage='completed_attempts',services=[],interpretation='Observed endpoints only',resultSha256='a'*64,invocation=dict(target='127.0.0.1'),coverageDetail=dict(requestedPortCount=1,observedOpenEndpointCount=0,examinedPortCount=None)))
+        async def stream(endpoint,body,emit):
+            nonlocal calls
+            calls+=1
+            if calls==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='owned-source')))])
+            return dict(role='assistant',content='The coverageDetail confirms that the single requested port was examined and no open endpoints were detected.')
+        with patch.object(self.service.tools,'execute',execute),patch('wixal.agent.stream_chat',stream):
+            task=await self.service.dispatch('chat',dict(text='Explain the retained discovery evidence. Do not run another scan.'))
+        self.assertEqual(calls,4);self.assertEqual(reads,1)
+        self.assertEqual(task['status'],'needs_attention')
+        self.assertTrue(any(r['check']['kind']=='network_coverage_claim' for r in task['verification']['checks']))
+        self.assertIn('unknown without',task['result'])
 
     async def test_invocation_feedback_corrects_metadata_without_replaying_actions(self):
         calls=0

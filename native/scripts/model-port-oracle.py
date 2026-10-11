@@ -33,10 +33,12 @@ def quoted_xml_errors(answer,outputs):
     """Grade purported raw XML excerpts against retained scanner bytes."""
     actual=[re.sub(r'\s+',' ',value.strip()) for value in outputs if isinstance(value,str) and value.strip()]
     errors=[]
-    for match in re.finditer(r'```xml\s*\n?(.*?)```',answer,re.I|re.S):
+    for match in re.finditer(r'```([^\n`]*)\n(.*?)```',answer,re.I|re.S):
+        language=match.group(1).strip().lower();body=match.group(2)
+        if language!='xml' and (language or not re.match(r'\s*<(?:\?xml\b|nmaprun\b|!DOCTYPE\s+nmaprun\b)',body,re.I)):continue
         context=answer[max(0,match.start()-240):match.start()]
         if re.search(r'\b(?:example|illustrative|schematic|simplified)\b',context,re.I):continue
         if not re.search(r'\b(?:output|excerpt|verbatim|verified)\b',context,re.I):continue
-        quote=re.sub(r'\s+',' ',match.group(1).strip())
+        quote=re.sub(r'\s+',' ',body.strip())
         if quote and not any(quote in raw for raw in actual):errors.append('Purported scanner XML excerpt differs from retained actual output')
     return errors

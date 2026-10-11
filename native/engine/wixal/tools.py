@@ -421,8 +421,12 @@ class Tools:
                     continue
                 if name == "read_file":
                     offset = args.get("offset", 0)
-                    return dict(content=text[offset:offset+24000], next_offset=min(len(text), offset+24000), more=offset+24000<len(text))
-                results.extend(dict(path=relative, line=i+1, text=line[:400]) for i,line in enumerate(text.splitlines()) if args["query"].lower() in line.lower())
+                    maximum=args.get('max_chars',24000)
+                    return dict(content=text[offset:offset+maximum], offset=offset, next_offset=min(len(text), offset+maximum), more=offset+maximum<len(text))
+                character_offset=0
+                for i,line in enumerate(text.splitlines(keepends=True)):
+                    if args['query'].lower() in line.lower():results.append(dict(path=relative,line=i+1,offset=character_offset,text=line.rstrip('\r\n')[:400]))
+                    character_offset+=len(line)
             return results[args.get("offset", 0):][:100]
         if name in ("write_file", "edit_file", "make_directory"):
             file = safe_path(root, args["path"], True)

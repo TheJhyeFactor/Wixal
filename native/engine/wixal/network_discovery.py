@@ -189,11 +189,11 @@ async def inspect(tools,args,session):
         selected=host['ports']
         if args.get('profile')=='ssh':selected=[p for p in selected if p==22]
         for offset in range(0,len(selected),256):mapping.append(dict(target=host['host'],ports=','.join(map(str,selected[offset:offset+256])),profile=args.get('profile','services')))
-    if not mapping:return dict(state='completed',services=[],sourceResultSha256=result['resultSha256'],sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),skipped=True,reason='No open ports detected for the selected profile')
+    if not mapping:return dict(state='completed',services=[],inspectionSessions=[],sourceResultSha256=result['resultSha256'],sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),skipped=True,reason='No open ports detected for the selected profile')
     authorize(result['invocation'],profile.get() or {})
     path=shutil.which('nmap') or ('/opt/homebrew/bin/nmap' if Path('/opt/homebrew/bin/nmap').exists() else None)
     if not path:raise ValueError('Nmap is required for inspection; discovery evidence remains available')
-    end=time.monotonic()+args.get('timeout_seconds',180);outputs=[];services=[];evidence=[]
+    end=time.monotonic()+args.get('timeout_seconds',180);outputs=[];services=[];evidence=[];inspection_sessions=[]
     for bound in mapping:
         remaining=int(end-time.monotonic())
         if remaining<1:raise ValueError('Shared inspection deadline exhausted')
@@ -202,11 +202,12 @@ async def inspect(tools,args,session):
         if not isinstance(started,dict):raise ValueError(str(started))
         job=tools.jobs[started['session_id']]
         await job['collector']
+        inspection_sessions.append(dict(session_id=job['id'],state=job['state'],exitCode=job['exitCode'],target=bound['target'],ports=bound['ports'],profile=bound['profile']))
         raw=Path(job['evidence']['stdoutPath']).read_text(errors='replace');outputs.append(raw);evidence.append(job['evidence'])
         if job['state']!='completed' or job['exitCode']!=0 or job['evidence']['incomplete']:
-            return dict(state='failed',coverage='partial',error='Inspection failed or incomplete; raw evidence retained',services=services,evidence=evidence,sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),sourceResultSha256=result['resultSha256'],output='\n'.join(outputs)[-100000:])
+            return dict(state='failed',coverage='partial',error='Inspection failed or incomplete; raw evidence retained',services=services,inspectionSessions=inspection_sessions,evidence=evidence,sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),sourceResultSha256=result['resultSha256'],output='\n'.join(outputs)[-100000:])
         from .nmap_results import parse
         for service in parse(raw.encode()):
             if service['host']!=bound['target'] or int(service['port']) not in ports(bound['ports']):raise ValueError('Inspection result escapes source binding')
             services.append(service)
-    return dict(state='completed',services=services,sourceResultSha256=result['resultSha256'],sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),invocations=mapping,evidence=evidence,output='\n'.join(outputs)[-100000:])
+    return dict(state='completed',services=services,inspectionSessions=inspection_sessions,sourceResultSha256=result['resultSha256'],sourceRunId=args.get('source_run_id'),sourceSessionId=args.get('source_session_id'),invocations=mapping,evidence=evidence,output='\n'.join(outputs)[-100000:])

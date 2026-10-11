@@ -25,6 +25,11 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
     names = {t['function']['name'] for t in available}
     if load_name and load_name not in names: raise ValueError('That tool is not enabled or available in this workspace')
     if load_category and load_category not in CATEGORIES: raise ValueError('Choose a supported tool category')
+    if not load_name and not load_category and re.search(r'\b(?:with|using)\s+network_read\b',prompt,re.I) and re.search(r'\b(?:retained|past|previous|stopped|cancelled|canceled|interrupted)\b',prompt,re.I):
+        # A named retained-evidence read needs its reader, not every scanner
+        # and installer schema. This is selection only, not new authority.
+        chosen={'workspace_info','network_read',*requested}
+        return [t for t in available if t['function']['name'] in chosen]
     if len(available) <= 8 and not load_name and not load_category: return available
     chosen = {'workspace_info', 'recall_memory', 'load_skill', *requested}
     if re.search(r'\b(workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('workflow_manage')

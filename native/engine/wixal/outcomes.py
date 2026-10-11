@@ -181,7 +181,11 @@ async def verify(store,tools,task,checks=None):
             row['status']='passed'
         except (ValueError,OSError,KeyError,IndexError,TypeError,UnicodeError) as error:row['error']=str(error)
         rows.append(row)
-    from .network_claims import check as network_claim_check,evidence_quote,execution_claim,evidence_hash_claim,evidence_invocation_claim
+    from .network_claims import check as network_claim_check,evidence_quote,execution_claim,evidence_hash_claim,evidence_invocation_claim,reference_claim,coverage_claim
+    reference=reference_claim(task)
+    if reference:rows.append(reference)
+    coverage=coverage_claim(task)
+    if coverage:rows.append(coverage)
     execution=execution_claim(task)
     if execution:rows.append(execution)
     contradiction=network_claim_check(task)

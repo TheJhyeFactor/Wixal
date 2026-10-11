@@ -1,16 +1,14 @@
 # Wixal native alpha
 
-**0.7.10 Alpha 3** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.3); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
+**0.7.10 Alpha 4** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.4); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 
-The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. Alpha 3 brings these changes into the public download; the dated reports retain their earlier build identities.
+The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. Alpha 4 brings these changes into the public download; the dated reports retain their earlier build identities.
 
-## Alpha 3 changes
+## Alpha 4 changes
 
-The [high priority acceptance record](HIGH_PRIORITY_ACCEPTANCE_2026-10-10.md) covers subsequent development changes for JSON report verification, independent agent outcomes and network interpretation checks. It records exact package identities and bounded model coverage separately from the public Alpha 3 release.
-
-The public package includes the queue/recovery, acknowledged editing and activity/output fixes described in the [release notes](../docs/release-0.7.10-alpha.3.md). The [completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) describes the earlier development build. Exact public-package checks and identities accompany the release in `release-info.json`.
+Alpha 4 includes the merged control, long-chat recovery, scheduler fairness and evidence/context fixes completed after Alpha 3. See the [release notes](../docs/release-0.7.10-alpha.4.md) for what changed and the exact release validation. Dated development reports retain their original helper hashes and are not transferred to this release. Cybersecurity model qualification remains open.
 
 Public managed downloads remain gated; no production catalogue or tool payload is bundled. Contributor GitHub OAuth also requires a registered client ID. See [the current alpha guide](../docs/native-alpha.md#tool-library-and-reporting) for usable paths and boundaries.
 
@@ -82,3 +80,17 @@ Swift communicates through JSON-line IPC; the owner-only Unix socket supports sh
 Agents include reusable profiles, workflows, queue/history, schedules, artifact checks, skills and explicit skill evaluation. Cybersecurity includes scope, investigations, evidence and findings. Local tests do not establish production security quality. Remote execution, messaging/voice gateways, autonomous skill promotion, broader model/service acceptance, full accessibility, notarisation and automatic updates remain incomplete.
 
 An adapted Hermes duration parser is included under MIT with [its notice](third_party/hermes/NOTICE.md). The main engine is Wixal’s implementation; this alpha does not claim full Hermes parity.
+
+
+## Installation cleanup required after every release
+
+Keep exactly one installed application: `/Applications/Wixal.app`. After packaging, verification, installation and launch acceptance succeed, inventory and retire older Wixal test/preview installs from `/Applications` and `~/Applications`:
+
+```sh
+native/.venv/bin/python native/scripts/cleanup-installs.py
+native/.venv/bin/python native/scripts/cleanup-installs.py --apply
+```
+
+The cleanup script verifies the canonical app, refuses to move running obsolete bundles, unregisters obsolete LaunchServices entries and moves only recognised Wixal app bundles to Trash. It preserves workspace databases, models, credentials, preferences and retained acceptance reports. Review the cleanup report and confirm only the canonical app remains in application folders before calling a release complete. Never empty Trash as part of release automation.
+
+Create future isolated builds under a temporary validation directory rather than accumulating named copies in `/Applications`. If an installed copy is needed for a specific acceptance case, remove it after the case settles. The installer updates only scheduler commands already belonging to the canonical app; it must not activate schedules from test installations. Retain exact bundle/helper/source hashes and reports; archive a binary only when a future reproduction requires its exact bytes. Keep one compressed rollback bundle outside application folders and review older build archives separately. Do not delete user data or edit historical evidence to imply an old build was tested on the new release.

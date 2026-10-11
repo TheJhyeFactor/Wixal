@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.10 Alpha 4 — 2026-10-11
+
+- Preserve accepted guidance through final-answer streaming and keep runs controllable until verification settles.
+- Retain queued task identities and owner/run guidance drafts through navigation and restart.
+- Improve long-chat and uncertain-effect recovery; schedule the oldest due background job first.
+- Keep unfinished scanner stages, owned evidence handles and controller feedback in model context; add bounded source reads and stronger factual verification.
+- Add independently checked specialist TLS/capture and native browser recovery runners, with exact development-build evidence boundaries.
+- Require one canonical installed app and retire obsolete preview/test installs after release verification.
+- Cybersecurity model qualification, signing/notarisation, production tool distribution and other documented external gates remain open.
+
+See [release notes](docs/release-0.7.10-alpha.4.md).
+
 ## 0.7.10 Alpha 3 — 2026-10-10
 
 - Keep queue/cancel available during active runs, freeze queued profiles and project context, and bind stop/guidance to the actual executing task.

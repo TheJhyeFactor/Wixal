@@ -1,20 +1,18 @@
-# Wixal 0.7.10 Alpha 3
+# Wixal 0.7.10 Alpha 4
 
 The public download is a single native **Wixal.app** for Apple Silicon Macs running macOS 14 or newer. It uses SwiftUI/AppKit, a persistent Python engine and a bundled local Ollama runner. Python and Node do not need to be installed to use the app. Model weights are separate downloads.
 
 ## Installation and updates
 
-Download `Wixal-0.7.10-alpha.3-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.3), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
+Download `Wixal-0.7.10-alpha.4-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.4), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
 
 The alpha is ad-hoc signed and **not Developer ID signed or notarised**. macOS may block the first launch. After reviewing the source and release notes, use System Settings → Privacy & Security → Open Anyway. This alpha has no automatic updater; download and install newer releases manually.
 
 Native data remains at `~/Library/Application Support/Wixal Native`. Replacing the app does not remove the workspace or model library. Back up important projects and workspace data before testing. Use Settings → Data to explicitly import earlier Electron records; credentials and account sessions are not imported.
 
-## What changed in Alpha 3
+## What changed in Alpha 4
 
-This release brings the agent recovery, editor and activity fixes into the public download. See the [release notes](release-0.7.10-alpha.3.md) for changes and the verification record.
-
-Subsequent development work adds source-bound JSON report checks and checks of model interpretations against recorded TCP evidence. The [high priority acceptance record](../native/HIGH_PRIORITY_ACCEPTANCE_2026-10-10.md) identifies the tested development helper and measured model coverage. Those changes and results do not replace the public Alpha 3 download described here.
+This release brings mixed-run controls, long-chat recovery, scheduler fairness and stronger model/evidence context into the public download. See the [release notes](release-0.7.10-alpha.4.md). Cybersecurity model qualification remains incomplete; development acceptance records belong to their recorded helpers.
 
 ## First use
 
@@ -77,3 +75,8 @@ Settings can prepare a sanitized local bug-report bundle for review. In-app cont
 - The native alpha is not full Hermes parity. It includes an adapted Hermes duration parser with its MIT notice; the main engine is Wixal’s implementation.
 
 See [agent acceptance](../native/AGENTS_COMPLETION_ACCEPTANCE_2026-10-08.md) and [the native guide](../native/README.md). The dated reports describe earlier verified builds; the release notes record checks repeated on the public alpha bundle.
+
+
+## Replacing older installations
+
+Keep one `/Applications/Wixal.app`. Quit the current app, install the new release, verify it launches and retains your workspace, then move obsolete Wixal preview/test apps from application folders to Trash. Do not remove `~/Library/Application Support/Wixal Native` or the model library. Developer release work must follow the [installation cleanup checklist](../native/README.md#installation-cleanup-required-after-every-release).

@@ -46,6 +46,10 @@ class NetworkClaimsTests(unittest.TestCase):
         self.assertIsNone(execution_claim(task))
         task['result']='The run was stopped before any probes finished.'
         self.assertEqual(execution_claim(task)['status'],'failed')
+        task['result']='No output was produced; the scan produced no warnings or errors.'
+        self.assertIsNone(execution_claim(task))
+        task['result']='The scan produced no errors and completed successfully.'
+        self.assertEqual(execution_claim(task)['status'],'failed')
 
     def test_output_digest_claim_uses_the_actual_retained_hash(self):
         import hashlib
@@ -212,7 +216,7 @@ class ProductionNetworkClaimTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any('scan found no open ports' in m.get('unverifiedModelContent','') for m in self.service.store.session()['messages']))
 
     async def test_false_enabled_scope_claim_gets_bounded_feedback_without_effects(self):
-        await self.service.dispatch('settings',dict(mode='chat'))
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_discover']))
         count=0
         async def stream(endpoint,body,emit):
             nonlocal count

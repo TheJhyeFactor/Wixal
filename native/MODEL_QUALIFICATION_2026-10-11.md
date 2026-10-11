@@ -35,13 +35,20 @@ Further retained attempts:
 | `508024825065` with Qwen | Supplemental automatic pass independently rejected for a zero-probe inference from duration. Prerequisites interrupted; core not started. Actual model context was 4096. |
 | `7ba7761b12fd` | Supplemental automatic pass independently rejected for an invented `--pace` option. Core not started. |
 | `22ff962b0e50` | Supplemental check failed. Review distinguished a false null-count rejection from unsupported zero-probe and empty-digest-field claims. Core not started. |
-| `0fd599bf75dc` | Current frozen candidate; qualification in progress. |
+| `0fd599bf75dc` | Supplemental check failed on a controller false positive for zero warnings/errors. Raw outcome retained. |
+| `f4848e545eac` | Supplemental check and independent review pass; current qualification candidate. |
 
 The pipeline now requires an independently reviewed, hash-matched supplemental report before starting prerequisites or core attempts. Final exact-helper counts and installed desktop results will be recorded after execution. **No evaluated-model status is granted yet.**
 
-The current full Python suite passes **371 tests**. A preceding run retained one response-budget regression; the added network guidance is now scoped to network requests and the meaningful budget check passes unchanged. Production Swift interaction, activity and Markdown checks passed **24 / 29 / 5**. All installed candidates matched their 126 source-manifest entries and 542 staged files and passed strict signature verification.
+The current full Python suite passes **372 tests**. A preceding run retained one response-budget regression; the added network guidance is now scoped to network requests and the meaningful budget check passes unchanged. Production Swift interaction, activity and Markdown checks passed **24 / 29 / 5**. All installed candidates matched their 126 source-manifest entries and 542 staged files and passed strict signature verification.
 
-Current helper: `0fd599bf75dcfb020cf520b94d7cc66ad9d3daf47745518c659a310523265cb8`; source manifest: `757ee08c09da9dcb9af740c2694ef1b5c8d389be460146ca9b94ed83ffca7260`. The separate app is **Wixal Backlog Acceptance**. Its name does not imply a passed model qualification.
+The automatic tool inventory now respects the existing native scanner off switches. Previously it offered scanner schemas which actual execution rejected, so tool-scope verification could reject a truthful disabled-adapter explanation. The regression fails on the prior implementation and passes after the correction; other Chat tools retain automatic discovery. The disabled-tool prerequisite now requires a completed explanation without native scan, installation or command workaround calls.
+
+The completion detector also distinguishes a report of zero warnings/errors from a completed scan. Null examined coverage remains unknown and does not prevent an accurate partial-evidence explanation from completing.
+
+Current helper: `f4848e545eac105fe06d7561cc1a4f2534dae42b45a7734b60cfda2610c13ed8`; source manifest: `7e476797a0c8d6f4a5b28aba8f735c50ab81e026532aad8ffa0752e913414ba7`. The separate app is **Wixal Backlog Scope**.
+
+This helper's supplemental cancelled-evidence check passes both automatic and independent review. The exact source was read, raw empty output digests match independent files, no new action or review occurred, and the answer preserves unknown examined coverage and port-state limitations. Prerequisites and held-out checks are running; full qualification is not yet claimed. The earlier `0fd599bf75dc` attempt remains failed because its controller falsely rejected a zero-warning report; it is not regraded or transferred.
 
 A live feedback-role diagnostic returned the corrected colour with both later system and user messages. Template inspection alone therefore did not establish a feedback-delivery defect; no transport change or qualification result is inferred from that diagnostic.
 

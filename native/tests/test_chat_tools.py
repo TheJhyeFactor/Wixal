@@ -14,6 +14,19 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown = fixtures.AgentRuntimeTests.asyncTearDown
     scripted = fixtures.AgentRuntimeTests.scripted
 
+    async def test_disabled_native_scanners_are_absent_from_automatic_scope(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=[]))
+        from wixal.agent_context import available_names
+        names=available_names(self.service.tools,self.service.store)
+        self.assertNotIn('network_discover',names)
+        self.assertNotIn('network_scan',names)
+        self.assertIn('read_file',names,'Other Chat tools retain automatic discovery')
+        with self.assertRaisesRegex(ValueError,'switched off|outside'):
+            await self.service.tools.execute('network_scan',dict(target='127.0.0.1',ports='8123'),self.service.store.session()['id'])
+        await self.service.dispatch('settings',dict(enabledTools=['network_scan','network_discover']))
+        self.assertIn('network_discover',available_names(self.service.tools,self.service.store))
+        self.assertIn('network_scan',available_names(self.service.tools,self.service.store))
+
     async def chat(self, text, calls, final='Observed the actual result'):
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
         context, seen = self.scripted(calls, final)
@@ -134,7 +147,7 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
     async def test_requested_inspection_schema_survives_discovery_error_recovery(self):
         import json
         from wixal.context_policy import token_estimate
-        await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
+        await self.service.dispatch('settings', dict(mode='chat', enabledTools=['network_scan','network_discover']))
         agent = self.service.agent
         agent.model_info = dict(name='fixture', capabilities=['tools', 'thinking'])
         agent.effective_context = lambda: 8192
@@ -159,6 +172,7 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('network_scan', [t['function']['name'] for t in agent.request_body(session, supports_tools=True)['tools']])
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
         # Discovery-only tasks must keep their existing selection.
+        await self.service.dispatch('settings', dict(enabledTools=['network_scan','network_discover']))
         self.service.store.data['tasks'][-1]['prompt'] = 'Discover selected ports. Do not inspect services.'
         self.assertNotIn('network_scan', [t['function']['name'] for t in agent.request_body(session, supports_tools=True)['tools']])
 

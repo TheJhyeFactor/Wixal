@@ -46,11 +46,11 @@ try:
     except BaseException:
         if backup.exists():backup.rename(destination)
         raise
-    # Retain configured native schedules when the canonical app replaces a preview.
+    # Retain schedules belonging to this canonical install, without activating test apps.
     for agent in (Path.home()/"Library/LaunchAgents").glob("app.wixal.native.scheduler.*.plist"):
         content=plistlib.loads(agent.read_bytes())
         command=content.get("ProgramArguments",[])
-        if command and "/Applications/Wixal" in command[0]:
+        if command and Path(command[0]) == destination/"Contents/Resources/engine/wixal-engine":
             command[0]=str(destination/"Contents/Resources/engine/wixal-engine")
             if "--runtime" in command:command[command.index("--runtime")+1]=str(destination/"Contents/Resources/ollama")
             subprocess.run(["launchctl","bootout","gui/"+str(os.getuid()),str(agent)],capture_output=True)

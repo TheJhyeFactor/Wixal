@@ -40,6 +40,6 @@ See [metrics setup](../docs/download-metrics.md). Google Analytics loads only af
 
 GitHub counts DMG/ZIP downloads, including repeat downloads. These are separate from opted-in website visitors and do not establish installations or active app users.
 
-## Alpha 3 publication
+## Alpha 4 publication
 
-The current download is 0.7.10 Alpha 3. Home, Workspace, Tools, Guides and Download describe the current queue/recovery and editor behaviour, with public managed-tool downloads and contributor OAuth visibly gated. The download badge is derived from the engine version, matching the asset URL. Publish and verify the prerelease assets before merging the website/version update into main.
+The current download is 0.7.10 Alpha 4. Home, Workspace, Tools, Guides and Download describe the current queue/recovery and editor behaviour, with public managed-tool downloads and contributor OAuth visibly gated. The download badge is derived from the engine version, matching the asset URL. Publish and verify the prerelease assets before merging the website/version update into main.

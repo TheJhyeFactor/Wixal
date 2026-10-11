@@ -140,6 +140,8 @@ def coverage_claim(task):
         if isinstance(structured,dict) and structured.get('scanner')=='RustScan' and isinstance(detail,dict) and detail.get('examinedPortCount','absent') is None:sources.append(value.get('session_id'))
     if not sources:return None
     for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r'\b(?:did|does)\s+not\s+(?:finish|complete)\s+(?:probing|testing|examining)\s+(?:all|every)\b',sentence,re.I) and not re.search(r'\b(?:whether|unknown|cannot|example|historical)\b',sentence,re.I):
+            return dict(check=dict(kind='network_coverage_claim'),status='failed',sourceSessions=sources,error='A stopped run or partial coverage label does not establish whether zero, some or all requested probes completed. The actual examined count is unknown without a probe-completion ledger; report termination without inferring probe completion.')
         if re.search(r"\b(?:unknown|which|whether|not|cannot|can't|never|example|historical|inspection|nmap)\b",sentence,re.I):continue
         if re.search(r'\b(?:single|all|every|\d+)\s+(?:(?:requested|selected|TCP)\s+)?ports?\s+(?:was|were|have been|has been)\s+(?:examined|tested|probed)\b',sentence,re.I):
             return dict(check=dict(kind='network_coverage_claim'),status='failed',sourceSessions=sources,error='Discovery records requested coverage and observed open endpoints, not a completed per-port probe ledger. Even after a completed empty run, the actual examined count remains unknown; do not assert that requested ports were examined.')

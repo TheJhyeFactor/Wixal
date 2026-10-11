@@ -21,6 +21,13 @@ class NetworkClaimsTests(unittest.TestCase):
         task['checkpoints'][0]['result']=json.dumps(source);task['result']='The single requested port was examined.'
         self.assertIsNone(coverage_claim(task))
 
+    def test_partial_label_does_not_prove_not_all_requested_probes_finished(self):
+        source=dict(session_id='owned',state='stopped',structuredResult=dict(scanner='RustScan',coverageDetail=dict(examinedPortCount=None)))
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(source))],result='The run was interrupted, so the scanner did not finish probing all requested ports.')
+        self.assertEqual(coverage_claim(task)['status'],'failed')
+        task['result']='The process was stopped. Whether zero, some or all requested probes finished remains unknown.'
+        self.assertIsNone(coverage_claim(task))
+
     def test_discovery_binding_digest_cannot_be_labelled_as_inspection_output(self):
         discovery='a'*64;inspection='b'*64
         task=dict(checkpoints=[dict(name='network_scan',status='finished',result=json.dumps(dict(sourceResultSha256=discovery,evidence=[dict(stdoutSha256=inspection)])))])

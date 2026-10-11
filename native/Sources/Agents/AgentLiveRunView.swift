@@ -11,6 +11,14 @@ struct AgentLiveRunView:View {
     var guidanceDraftError:String=""
     private var status:String{textValue(run["status"])}
     private var active:Bool{["running","waiting_review","queued"].contains(status)}
+    private func planIcon(_ status:String)->String {
+        switch status {
+        case "completed":return "checkmark.circle"
+        case "in_progress":return "circle.dotted"
+        case "cancelled":return "minus.circle"
+        default:return "circle"
+        }
+    }
     var body:some View{VStack(alignment:.leading,spacing:20){
         if !guidanceDraftError.isEmpty{Text(guidanceDraftError).wixalFont(size:11).foregroundStyle(.orange).textSelection(.enabled)}
         HStack(alignment:.top){Text(workflow ? textValue((run["definition"] as? [String:Any])?["name"]) : textValue(run["prompt"])).wixalFont(size:23,weight:.medium).textSelection(.enabled);Spacer();Label(agentOutcomeLabel(run),systemImage:active ? "circle.dotted" : status=="completed" ? "checkmark.circle" : "exclamationmark.circle").wixalFont(size:11).foregroundStyle(theme.accent)}
@@ -19,6 +27,19 @@ struct AgentLiveRunView:View {
         if active{Label(engine.activity,systemImage:"bolt").wixalFont(size:12);if !engine.streaming.isEmpty{Text(engine.streaming).wixalFont(size:13).textSelection(.enabled)}}
         if !textValue(run["error"]).isEmpty{Text(textValue(run["error"])).wixalFont(size:12).foregroundStyle(.orange).textSelection(.enabled).wixalCard()}
         if workflow{ForEach(Array(records(run["stages"]).enumerated()),id:\.offset){_,stage in VStack(alignment:.leading,spacing:9){HStack{Text(textValue(stage["name"])).wixalFont(size:15,weight:.medium);Spacer();Text(textValue(stage["status"]).capitalized).foregroundStyle(theme.muted)};if let changes=stage["changes"]{DisclosureGroup("Isolated changes"){Text(pretty(changes)).wixalFont(size:11,design:.monospaced).textSelection(.enabled)};if textValue(stage["mergeStatus"])=="pending_review"{Button("Review and merge branch"){engine.action("workflow-merge",["runId":textValue(run["id"]),"stageId":textValue(stage["id"])])}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy)}};Text(textValue(stage["result"])).wixalFont(size:12).textSelection(.enabled);if let task=records(engine.state["tasks"]).first(where:{textValue($0["id"])==textValue(stage["taskId"])}){DisclosureGroup("Stage tool evidence"){Text(pretty(task["checkpoints"] ?? [])).wixalFont(size:11,design:.monospaced).textSelection(.enabled)}};if !textValue(stage["error"]).isEmpty{Text(textValue(stage["error"])).foregroundStyle(.orange)}}.wixalCard()}}
+        if let plan=run["plan"] as? [String:Any], !records(plan["todos"]).isEmpty {
+            WixalSection(title:"Task checklist",detail:"Agent-reported progress. Verification results are shown separately.") {
+                ForEach(Array(records(plan["todos"]).enumerated()),id:\.offset) { _,item in
+                    HStack(alignment:.top,spacing:10) {
+                        Image(systemName:planIcon(textValue(item["status"]))).foregroundStyle(theme.accent)
+                        Text(textValue(item["content"])).wixalFont(size:12).textSelection(.enabled)
+                        Spacer()
+                        Text(textValue(item["status"]).replacingOccurrences(of:"_",with:" ").capitalized).wixalFont(size:11).foregroundStyle(theme.muted)
+                    }.accessibilityElement(children:.combine)
+                        .accessibilityLabel(textValue(item["content"])+": "+textValue(item["status"]).replacingOccurrences(of:"_",with:" "))
+                }
+            }
+        }
         if !textValue(run["result"]).isEmpty{WixalSection(title:"Agent result"){MarkdownMessage(content:textValue(run["result"]))}}
         if !records(run["securityEvidence"]).isEmpty{WixalSection(title:"Security observations",detail:"Tool-produced findings and raw evidence references. An observation does not establish a verified exploit."){Text(pretty(run["securityFindings"] ?? [])).wixalFont(size:11,design:.monospaced).textSelection(.enabled);DisclosureGroup("Assessment evidence"){Text(pretty(run["securityEvidence"] ?? [])).wixalFont(size:11,design:.monospaced).textSelection(.enabled)}}}
         if run["verification"] != nil{DisclosureGroup("Verification evidence"){Text(pretty(run["verification"]!)).wixalFont(size:11,design:.monospaced).textSelection(.enabled)}}

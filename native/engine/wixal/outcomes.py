@@ -27,7 +27,7 @@ def criteria(value):
         if row['kind']=='json_matches_source':
             source=row.get('sourcePath','')
             if not source or PurePath(source).is_absolute() or '..' in PurePath(source).parts:raise ValueError('Source checks require a project-relative path')
-            if row.get('transform','identity') not in ('identity','length'):raise ValueError('Unsupported source transform')
+            if row.get('transform','identity') not in ('identity','length','sum'):raise ValueError('Unsupported source transform')
         checked.append(row)
     return checked
 
@@ -100,6 +100,46 @@ def json_pointer(value,pointer=''):
         else:value=value[component]
     return value
 
+def source_value(raw,path,pointer='',transform='identity'):
+    """Derive a bounded numeric check directly from retained source bytes."""
+    import csv
+    import io
+    from decimal import Decimal, InvalidOperation, localcontext
+    if str(path).lower().endswith('.csv'):
+        if transform!='sum' or not pointer.startswith('/') or '/' in pointer[1:]:
+            raise ValueError('CSV verification requires transform sum and sourcePointer /column_name')
+        column=pointer[1:].replace('~1','/').replace('~0','~')
+        try:
+            reader=csv.DictReader(io.StringIO(raw.decode('utf-8-sig')))
+            if column not in (reader.fieldnames or []):raise ValueError('CSV source column is missing')
+            if len(reader.fieldnames)!=len(set(reader.fieldnames)):raise ValueError('CSV source has duplicate columns')
+            value=[]
+            for row in reader:
+                if None in row or row.get(column) is None:raise ValueError('CSV source row does not match its headers')
+                value.append(row[column])
+        except (csv.Error,UnicodeError) as error:raise ValueError('CSV source is malformed') from error
+    else:
+        value=json_pointer(json.loads(raw),pointer)
+    if transform=='length':
+        if not isinstance(value,(list,dict)):raise ValueError('Length requires a JSON array or object')
+        return len(value)
+    if transform=='sum':
+        if not isinstance(value,list):raise ValueError('Sum requires a numeric JSON array or CSV column')
+        try:
+            numbers=[Decimal(str(v)) for v in value if not isinstance(v,bool)]
+            if len(numbers)!=len(value) or any(not v.is_finite() for v in numbers):raise ValueError('Sum requires finite numeric values')
+            if any(abs(v.adjusted())>308 or len(v.as_tuple().digits)>308 or v.as_tuple().exponent < -308 for v in numbers):
+                raise ValueError('Source values exceed supported numeric bounds')
+            with localcontext() as context:
+                context.prec=640
+                total=sum(numbers,Decimal(0))
+            result=int(total) if total==total.to_integral_value() else float(total)
+            import math
+            if isinstance(result,float) and not math.isfinite(result):raise ValueError('Source sum exceeds numeric bounds')
+            return result
+        except (InvalidOperation,TypeError) as error:raise ValueError('Sum requires numeric values in every source row') from error
+    return value
+
 def unsupported_artifact_claim(task):
     if not any(c.get('name') in ('write_file','edit_file') and successful(c) for c in task.get('checkpoints',[])):return False
     text=re.sub(r'```.*?```','',task.get('result',''),flags=re.S)
@@ -137,10 +177,7 @@ async def verify(store,tools,task,checks=None):
                         if source==path:raise ValueError('Verification requires a separate source artifact')
                         if not source.is_file() or source.stat().st_size>4*1024*1024:raise ValueError('Source is missing or exceeds 4 MB')
                         source_raw=source.read_bytes()
-                        expected=json_pointer(json.loads(source_raw),check.get('sourcePointer',''))
-                        if check.get('transform')=='length':
-                            if not isinstance(expected,(list,dict)):raise ValueError('Length requires a JSON array or object')
-                            expected=len(expected)
+                        expected=source_value(source_raw,source,check.get('sourcePointer',''),check.get('transform','identity'))
                         row.update(expected=expected,sourceSha256=hashlib.sha256(source_raw).hexdigest())
                     if not equal(value,expected):raise ValueError('JSON value differs from the required result')
             elif kind=='command_exit':
@@ -205,6 +242,10 @@ async def verify(store,tools,task,checks=None):
         if availability:rows.append(availability)
     follow_up=discovery_follow_up(task)
     if follow_up:rows.append(follow_up)
+    pending_plan=[item['id'] for item in task.get('plan',{}).get('todos',[]) if item.get('status') in ('pending','in_progress')]
+    if pending_plan:
+        rows.append(dict(check=dict(kind='unfinished_task_plan'),status='failed',pendingItems=pending_plan,
+                         error='The task checklist still has unfinished steps. Finish the requested work or explain blocked steps; do not mark work completed without evidence.',checked=now()))
     latest={}
     for checkpoint in task.get('checkpoints',[]):
         # Corrected arguments can recover; later unrelated command success cannot hide a failed command.
@@ -213,7 +254,13 @@ async def verify(store,tools,task,checks=None):
         latest[key]=checkpoint
     def recovered_schema(checkpoint):
         result=decode(checkpoint.get('result',''))
-        return checkpoint.get('status')=='error' and isinstance(result,dict) and result.get('inputs') and any(c['name']==result.get('toolMatch',checkpoint['name']) and successful(c) for c in task.get('checkpoints',[])[task['checkpoints'].index(checkpoint)+1:])
+        matches={result.get('toolMatch',checkpoint['name'])} if isinstance(result,dict) else set()
+        if checkpoint['name']=='workspace_info' and isinstance(checkpoint.get('arguments',{}).get('tool'),str):
+            # A corrected invocation of the specifically requested tool proves
+            # that failed schema discovery was recovered. Explicit criteria
+            # for workspace_info still require its own successful result.
+            matches.add(checkpoint['arguments']['tool'])
+        return checkpoint.get('status')=='error' and isinstance(result,dict) and result.get('inputs') and any(c['name'] in matches and successful(c) for c in task.get('checkpoints',[])[task['checkpoints'].index(checkpoint)+1:])
     unresolved=[c['id'] for c in latest.values() if not successful(c) and not recovered_schema(c)]
     if not rows and unsupported_artifact_claim(task):
         rows.append(dict(check=dict(kind='artifact_verification_claim'),status='failed',error='The saved artifact has no independent source checks. Use verify_json for every required field or explicitly report that the artifact remains unverified.',checked=now()))

@@ -30,7 +30,17 @@ def validate_record(collection,row):
         if len({s['id'] for s in stages})!=len(stages):raise ValueError('Duplicate stage identifiers')
         from .workflow_graph import validate_graph
         validate_graph(row)
-    elif collection=='skills':bounded('name',100);bounded('content')
+    elif collection=='skills':
+        bounded('name',100);bounded('content')
+        from pathlib import PurePosixPath
+        resources=row.get('resources',{})
+        if not isinstance(resources,dict) or len(resources)>32:raise ValueError('Invalid skill supporting files')
+        total=0
+        for path,content in resources.items():
+            if not isinstance(path,str) or len(path)>500 or PurePosixPath(path).is_absolute() or '..' in PurePosixPath(path).parts or not isinstance(content,str) or len(content.encode())>24000:
+                raise ValueError('Invalid skill supporting file')
+            total+=len(content.encode())
+        if total>192000:raise ValueError('Skill supporting files exceed 192 KB')
     elif collection=='schedules':
         bounded('name',100);bounded('prompt');bounded('agentID',200);criteria(row.get('successCriteria'))
         from .agents import TIMINGS,next_calendar

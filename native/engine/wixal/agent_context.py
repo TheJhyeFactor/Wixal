@@ -4,7 +4,7 @@ from contextvars import ContextVar
 profile = ContextVar('wixal_agent_profile', default=None)
 automatic = ContextVar('wixal_automatic_tools', default=False)
 READ_TOOLS = {'workspace_info','list_files','read_file','verify_json','search_files','search_history',
-              'recall_memory','load_skill','web_search','http_request','addon_catalog','addon_job','addon_discover'}
+              'recall_memory','todo_list','tool_result_read','load_skill','web_search','http_request','addon_catalog','addon_job','addon_discover'}
 
 def available_names(tools, store):
     active = profile.get()
@@ -15,6 +15,8 @@ def available_names(tools, store):
     if active is None:
         return scanner_scope([t['function']['name'] for t in tools.catalog()]) if automatic.get() or store.data.get('mode') == 'chat' else store.data['enabledTools']
     names = scanner_scope([t['function']['name'] for t in tools.catalog()])
+    if active.get('_delegateTools') is not None:
+        names = [n for n in names if n in active['_delegateTools']]
     if active.get('reviewPolicy') == 'Read only':
         return [n for n in names if n in READ_TOOLS]
     return names

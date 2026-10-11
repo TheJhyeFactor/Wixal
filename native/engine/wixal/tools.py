@@ -68,6 +68,8 @@ def validate(args, schema):
                 raise ValueError("Too many items")
             for item in value:
                 validate({"item": item}, {"properties": {"item": rule.get("items", {})}})
+        if isinstance(value,dict) and rule.get('properties'):
+            validate(value,rule)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -376,24 +378,33 @@ class Tools:
             if name=="addon_run":
                 from .addon_execution import run
                 return await run(manager,self,args,session_id)
+        from .task_state import NAMES as task_tools, execute as task_tool
+        if name in task_tools:
+            return task_tool(self.store, name, args, session_id)
         if name == "load_skill":
-            skill = next((s for s in self.store.data["skills"] if s["name"]==args["name"]),None)
-            if not skill: raise ValueError("Unknown skill")
-            return dict(name=skill["name"],instructions=skill["content"])
+            from .skill_resources import load
+            return load(self.store, args)
         if name == "delegate_task":
             if not self.delegate: raise ValueError("Delegation is unavailable in a child agent")
-            return await self.delegate(args["prompt"])
+            return await self.delegate(args["prompt"], args.get("context", ""))
         if name == "workspace_info":
-            from .context_policy import eligible,category
+            from .context_policy import eligible,category,search_tools
             available=eligible(self.catalog(),available_names(self,self.store),self.store.project())
+            if args.get('query'):available=search_tools(available,args['query'])
             return dict(app="Wixal Native",environment=self.environment(), project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name']),description=t['function']['description']) for t in available],memory=self.store.memory.snapshot()['policy'])
         if name == "verify_json":
-            from .outcomes import criteria,verify
+            from .outcomes import criteria,verify,source_value
             check=criteria([dict(kind='json_matches_source',**args)])[0]
             # Invalid tool inputs must not install an impossible success
             # criterion. Retain the failed call and allow corrected inputs.
             if safe_path(root,check['path'])==safe_path(root,check['sourcePath']):
                 raise ValueError('Verification requires a separate source artifact')
+            source=safe_path(root,check['sourcePath'])
+            if not source.is_file() or source.stat().st_size>4*1024*1024:
+                raise ValueError('Verification source is missing or exceeds 4 MB')
+            try:source_value(source.read_bytes(),source,check.get('sourcePointer',''),check.get('transform','identity'))
+            except (ValueError,KeyError,IndexError,TypeError) as error:
+                raise ValueError('Invalid verification source or transform: '+str(error)) from error
             task=next((t for t in reversed(self.store.data['tasks']) if t.get('sessionId')==session_id and t.get('status')=='running'),None)
             if task is not None:
                 checks=task.setdefault('successCriteria',[])

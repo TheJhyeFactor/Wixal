@@ -1,18 +1,18 @@
-# Wixal 0.7.10 Alpha 4
+# Wixal 0.7.10 Alpha 5
 
 The public download is a single native **Wixal.app** for Apple Silicon Macs running macOS 14 or newer. It uses SwiftUI/AppKit, a persistent Python engine and a bundled local Ollama runner. Python and Node do not need to be installed to use the app. Model weights are separate downloads.
 
 ## Installation and updates
 
-Download `Wixal-0.7.10-alpha.4-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.4), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
+Download `Wixal-0.7.10-alpha.5-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.5), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
 
 The alpha is ad-hoc signed and **not Developer ID signed or notarised**. macOS may block the first launch. After reviewing the source and release notes, use System Settings → Privacy & Security → Open Anyway. This alpha has no automatic updater; download and install newer releases manually.
 
 Native data remains at `~/Library/Application Support/Wixal Native`. Replacing the app does not remove the workspace or model library. Back up important projects and workspace data before testing. Use Settings → Data to explicitly import earlier Electron records; credentials and account sessions are not imported.
 
-## What changed in Alpha 4
+## What changed in Alpha 5
 
-This release brings mixed-run controls, long-chat recovery, scheduler fairness and stronger model/evidence context into the public download. See the [release notes](release-0.7.10-alpha.4.md). Cybersecurity model qualification remains incomplete; development acceptance records belong to their recorded helpers.
+Agents now retain durable task checklists, recover full checkpoint evidence, load skill support files and use bounded child handoffs. Long tasks preserve more controller and tool context. See the [release notes](release-0.7.10-alpha.5.md), [agent tools guide](agent-tools.md) and [Hermes comparison](hermes-agent-improvements-2026-10-12.md). Cybersecurity model qualification remains incomplete; dated acceptance records belong to their recorded helpers.
 
 ## First use
 
@@ -38,7 +38,9 @@ Run a small task first: inspect a real project document, write a summary within 
 
 Workflows connect agent steps with dependencies and bounded parallel branches. Inspect step status and artifacts, fix failed conditions and retry recoverable work. Uncertain side effects are not automatically replayed after interruption.
 
-Skills hold reusable procedures. Candidate skill changes can be evaluated against explicit cases and compared with the current version before promotion. Fully autonomous skill evaluation and promotion remains incomplete.
+Use the live-run checklist to inspect progress. An unfinished checklist prevents an ordinary successful conclusion, and completed items still need independent success criteria. Agents can retrieve retained checkpoint text without rerunning an action.
+
+Skills hold reusable procedures and snapshots of supporting text resources. Candidate skill changes can be evaluated against explicit cases and compared with the current version before promotion. Fully autonomous skill evaluation and promotion remains incomplete.
 
 ## Queue, stop and resume
 

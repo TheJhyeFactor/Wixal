@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 from .storage import identity, now
+from .network_investigation import evidence_views
 
 KINDS=('file_exists','file_contains','json_equals','command_exit','tool_succeeded','tool_contains','json_matches_source')
 
@@ -74,7 +75,7 @@ def discovery_follow_up(task):
     if not re.search(r'\b(inspect|inspection|enumerate|enumeration|nmap)\b',prompt):return None
     if re.search(r"\b(?:do not|don't|without|no|skip)\b[^.!?\n]{0,160}\b(?:inspect\w*|enumerat\w*|nmap)\b",prompt):return None
     sources=[];inspections=[]
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         result=decode(checkpoint.get('result',''))
         if checkpoint.get('status')!='finished' or not isinstance(result,dict):continue
         structured=result.get('structuredResult',{})

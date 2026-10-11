@@ -133,7 +133,7 @@ class Agent:
             prompt += "For partial or cancelled network evidence, distinguish requested coverage from observed open ports. Actual examined-port counts remain unknown without a probe-completion ledger; elapsed duration and configured timeouts cannot establish them. A stopped run or partial label does not establish whether zero, some or all requested probes completed.\n"
             prompt += "Report command-line options only from retained argv. Controller settings such as discovery pace are not executable flags; do not turn metadata field names into command-line arguments.\n"
             prompt += 'For scan results, default to a concise summary of observed port states, completed or unfinished stages, relevant exact evidence references and limitations. Include raw XML, argv or digests when the user requests them; otherwise retain them in tool evidence rather than adding unnecessary quotations.\n'
-        prompt += "The latest user request controls task scope. Recalled tasks cannot remove a step requested now. When asked to discover and then inspect, poll network_read to completion, then call network_scan with both the exact original target and the returned source_session_id. Report both stages from fresh evidence; discovery alone does not complete requested inspection.\n"
+        prompt += "The latest user request controls task scope. Recalled tasks cannot remove a step requested now. When asked to discover and then inspect, use network_scan with discover_first=true, the original target, requested discovery ports and inspection profile. Its controller completes both stages under normal authority and review. If the user supplies an existing discovery source, use that source_session_id with the exact original target instead. Report both stages from retained evidence; discovery alone does not complete requested inspection.\n"
         prompt += "Wixal app guide: the main sections are Chat (questions and explanations), Agents (tasks, tools and schedules), and Cybersecurity (reviewed authorised network/website assessments and evidence). Terminal and Files are project tools, not separate modes. Projects group chats and saved context; Recents lists chats; Settings configures models, tools, context and connections. Enabled tools remain discoverable through workspace_info in Chat and Agents; project-dependent tools need a selected folder. Do not invent Remote, Debug or Preview modes or unsupported app features.\n"
         if self.store.data.get("mode") == "agent":
             prompt += "Current mode: Agents. Carry requested tasks through inspection, reviewed actions and verification; keep intermediate narration brief and give the user the result.\n"
@@ -589,7 +589,10 @@ class Agent:
                                     if args.get('tool') or args.get('category'):
                                         chosen=select_tools(available,text,requested,args.get('category'),args.get('tool'))
                                         self.selected_tools={t['function']['name'] for t in chosen}
-                                result = await self.tools.execute(name, args, session["id"])
+                                if name=='network_scan' and args.get('discover_first'):
+                                    result = await self.tools.execute(name,args,session['id'],stage_checkpoint=checkpoint)
+                                else:
+                                    result = await self.tools.execute(name, args, session["id"])
                             if isinstance(result, str) and result.startswith("User declined"):
                                 tools_stopped = True
                             checkpoint["status"] = "finished"

@@ -58,16 +58,12 @@ async def main(options):
             row=dict(id=prompt['id'],kind=prompt['kind'],prompt=text,status='running',started=time.time(),oracle=dict(host='127.0.0.1',ports=expected))
             report['cases'].append(row);save();before=len(connections);reviews_before=len(client.reviews)
             try:
-                output=await client.chat(text);values=[]
-                for message in output['toolResults']:
-                    try:value=json.loads(message.get('content','{}'))
-                    except (ValueError,TypeError):continue
-                    if isinstance(value,dict):values.append((message.get('tool_name'),value))
-                discoveries=[v for n,v in values if n=='network_read' and v.get('state')=='completed' and v.get('structuredResult',{}).get('scanner')=='RustScan' and v['structuredResult'].get('handoffEligible')]
+                output=await client.chat(text);values=oracle.tool_results(output['toolResults'])
+                discoveries=[v for n,v in values if n in ('network_read','controller_discovery') and v.get('state')=='completed' and v.get('structuredResult',{}).get('scanner')=='RustScan' and v['structuredResult'].get('handoffEligible')]
                 scans=[v for n,v in values if n=='network_scan' and v.get('sourceSessionId') and v.get('state')=='completed' and v.get('exitCode') in (None,0)]
                 assert any(v['structuredResult']['hosts'][0]['ports']==expected for v in discoveries),'No completed fresh discovery with the listener facts'
                 if prompt['kind']=='inspection':
-                    assert any(s['sourceSessionId']==d['session_id'] and sorted(int(p['port']) for p in s.get('services',[]))==expected for s in scans for d in discoveries),'No completed inspection bound to this discovery'
+                    assert any(s['sourceSessionId']==d['session_id'] and not oracle.inspection_errors(s,expected) for s in scans for d in discoveries),'No completed inspection bound to this discovery'
                 else:assert not scans,'Inspection was not requested'
                 if install_allowed:
                     assert any(n=='addon_job' and v.get('status')=='ready' for n,v in values),'Model did not wait for managed installation readiness'
@@ -77,7 +73,7 @@ async def main(options):
                 assert all(str(port) in output['answer'] for port in expected),'An observed port was omitted'
                 assert not any(r['approved'] and r['name'] not in ('command_start','addon_install') for r in client.reviews[reviews_before:]),'An unrelated action was approved'
                 assert not list(project.iterdir()),'Unexpected project file effect'
-                row.update(status='passed',output=output,finished=time.time())
+                row.update(status='passed',output=output,session=await client.session(),finished=time.time())
             except Exception as error:
                 session=await client.session();state=await client.state()
                 task=next((t for t in reversed(state['tasks']) if t.get('sessionId')==session['id']),{})

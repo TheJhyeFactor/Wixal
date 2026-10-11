@@ -6,13 +6,14 @@ language claim or vulnerability inference. It never starts or repeats a tool.
 import hashlib
 import json
 import re
+from .network_investigation import evidence_views
 
 
 def reference_claim(task):
     """A reported handle must remain copyable; never repair a tool argument."""
     known=set()
     canonical=r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
@@ -48,7 +49,7 @@ def facts(task):
         if isinstance(timestamp,(int,float)):return timestamp
         fallback=checkpoint.get('finished',checkpoint.get('created',0))
         return fallback if isinstance(fallback,(int,float)) else 0
-    candidates=[c for c in task.get('checkpoints',[]) if c.get('status')=='finished' and c.get('name') in ('network_read','network_scan')]
+    candidates=[c for c in evidence_views(task) if c.get('status')=='finished' and c.get('name') in ('network_read','network_scan')]
     for checkpoint in sorted(candidates,key=observed_time):
         if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
         try:result=json.loads(checkpoint.get('result',''))
@@ -105,7 +106,7 @@ def execution_claim(task):
     Restricted to current-task native scanner checkpoints. A completed empty
     scan is still completion; this check does not reinterpret its port states.
     """
-    attempts=[c for c in task.get('checkpoints',[]) if c.get('name') in ('network_discover','network_scan','network_read')]
+    attempts=[c for c in evidence_views(task) if c.get('name') in ('network_discover','network_scan','network_read')]
     if not attempts:return None
     for checkpoint in attempts:
         try:value=json.loads(checkpoint.get('result',''))
@@ -130,7 +131,7 @@ def execution_claim(task):
 def coverage_claim(task):
     """A completed discovery is not a per-port probe-completion ledger."""
     sources=[]
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         if checkpoint.get('name')!='network_read' or checkpoint.get('status')!='finished':continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
@@ -155,7 +156,7 @@ def evidence_invocation_claim(task):
     in invocation prose, not arbitrary examples or all command semantics.
     """
     options=set()
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         if checkpoint.get('status')!='finished' or checkpoint.get('name')!='network_read':continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
@@ -183,7 +184,7 @@ def evidence_hash_claim(task):
     explicit stdout/stderr hash claims, not arbitrary factual model prose.
     """
     hashes={};inspection_hashes=set();source_hashes=set()
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
@@ -254,7 +255,7 @@ def evidence_quote(task):
     to certify arbitrary rewritten summaries or all model prose.
     """
     outputs=[];sources=[]
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         if checkpoint.get('name')!='network_scan' or checkpoint.get('status')!='finished':continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue

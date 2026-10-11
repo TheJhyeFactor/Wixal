@@ -89,17 +89,18 @@ async def main():
                     fresh=sorted(s.sockets[0].getsockname()[1] for s in servers)
                     prompt=base_prompt.replace(port_text,','.join(map(str,fresh)));expected=fresh
                     await c.call('session-new');record=dict(scenario=scenario,attempt=attempt+1,started=time.time(),status='running',oracle=dict(host='127.0.0.1',ports=expected));report['modelAttempts'].append(record);save()
+                    ledger_start=len(connections);review_start=len(c.reviews)
                     try:
                         output=await c.chat(prompt);calls=output['toolResults'];names=[r.get('tool_name') for r in calls]
                         discoveries=[];inspections=[]
-                        for call in calls:
-                            try:value=json.loads(call.get('content','{}'))
-                            except (ValueError,TypeError):continue
+                        for name,value in port_oracle.tool_results(calls):
                             if value.get('structuredResult'):discoveries.append(value['structuredResult'])
                             if value.get('sourceSessionId') and value.get('services') is not None:inspections.append(value)
                         passed=any(r['hosts'][0]['ports']==expected and r['handoffEligible'] for r in discoveries) and all(str(p) in output['answer'] for p in expected)
                         if scenario=='sourceInspection':passed=passed and any(sorted(int(s['port']) for s in r['services'])==expected for r in inspections)
                         factual_errors=port_oracle.contradictions(output['answer'],expected)
+                        if scenario=='sourceInspection':
+                            for inspection in inspections:factual_errors.extend(port_oracle.inspection_errors(inspection,expected))
                         factual_errors.extend(port_oracle.quoted_xml_errors(output['answer'],[r.get('output','') for r in inspections]))
                         if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(output['answer']):factual_errors.append('Answer claims an inspection without fresh source-bound inspection evidence')
                         passed=passed and not factual_errors
@@ -115,6 +116,10 @@ async def main():
                         factual_errors.extend(port_oracle.quoted_xml_errors(interpreted,[json.loads(c['result']).get('output','') for c in inspections]))
                         if scenario=='sourceInspection' and not inspections and port_oracle.claims_inspection(interpreted):factual_errors.append('Failed task nevertheless claims inspection without fresh evidence')
                         record.update(status='failed',error=str(error),task=task,session=session,rejectedModelInterpretation=rejected,factualErrors=factual_errors,fabricatedSuccess=bool(factual_errors),finished=time.time())
+                    record['connectionLedger']=connections[ledger_start:];record['reviews']=c.reviews[review_start:]
+                    record.setdefault('session',await c.session())
+                    if record['status']=='passed' and set(p['port'] for p in record['connectionLedger'])!=set(expected):
+                        record.update(status='failed',error='Independent listeners did not receive the expected connections')
                     save();print(json.dumps(dict(scenario=scenario,attempt=attempt+1,status=record['status'])),flush=True)
             report['qualification']='limited_evidence' # Full held-out/authority/injection suite remains mandatory.
         model_failed=any(r['status']!='passed' for r in report['modelAttempts'])

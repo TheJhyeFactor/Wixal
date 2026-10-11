@@ -344,7 +344,7 @@ class Tools:
                     reason=job["reason"], output=output, offset=start, next_offset=start+len(output.encode('utf-16-le'))//2,
                     more=start+len(output.encode('utf-16-le'))//2<job["base"]+units, earliest_offset=job["base"], started=job["started"], finished=job.get("finished"))
 
-    async def execute(self, name, args, session_id):
+    async def execute(self, name, args, session_id, stage_checkpoint=None):
         from .agent_context import available_names
         definition = next((t for t in self.catalog() if t["function"]["name"]==name), None)
         if not definition:raise ValueError("Unknown tool name. Inspect workspace_info for the exact available tool names.")
@@ -474,7 +474,11 @@ class Tools:
                 return await self.read_job(dict(session_id=result["session_id"], wait_ms=0), session_id)
             return result
         if name in ("command_read", "network_read"):
-            return await self.read_job(args, session_id)
+            result=await self.read_job(args, session_id)
+            if name=='network_read' and result.get('structuredResult'):
+                from .network_investigation import report
+                result['evidenceReport']=report(result)
+            return result
         if name in ("command_stop", "network_stop", "command_write", "command_save_output"):
             result = await self.read_job(dict(session_id=args["session_id"], wait_ms=0), session_id)
             job = self.jobs[args["session_id"]]
@@ -501,6 +505,9 @@ class Tools:
             from .network_discovery import start
             return await start(self,args,session_id)
         if name == 'network_scan':
+            if args.get('discover_first'):
+                from .network_investigation import run
+                return await run(self,args,session_id,stage_checkpoint)
             if args.get('source_run_id') or args.get('source_session_id'):
                 from .network_discovery import inspect
                 return await inspect(self,args,session_id)

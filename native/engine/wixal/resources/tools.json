@@ -89,7 +89,7 @@
     "type": "function",
     "function": {
       "name": "network_scan",
-      "description": "Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence. Optional source_run_id (investigation) or source_session_id (this chat) derives exact ports from completed discovery. Omit ports for source-bound inspection.",
+      "description": "For requested discovery followed by inspection, set discover_first=true: the controller completes RustScan discovery and binds Nmap inspection to its exact evidence, with ordinary approval for each stage and one shared deadline. Use network_discover for discovery alone. Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence. Optional source_run_id (investigation) or source_session_id (this chat) derives exact ports from completed discovery. Omit ports for source-bound inspection.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -128,6 +128,10 @@
             "type": "string",
             "maxLength": 100,
             "description": "Copy the complete session_id returned by network_discover in this chat after network_read confirms completion. Do not also provide source_run_id; omit manual ports."
+          },
+          "discover_first": {
+            "type": "boolean",
+            "description": "Complete discovery and source-bound inspection as one bounded operation. Ports selects discovery coverage only. Do not combine with source IDs or profile discovery."
           }
         },
         "required": [
@@ -936,7 +940,7 @@
           "coverage": {
             "type": "string",
             "default": "selected",
-            "description": "selected is the default and supports up to 1024 ports; all_tcp covers 1–65535 and requires an explicit user request",
+            "description": "selected is the default and supports up to 1024 ports; all_tcp covers 1\u201365535 and requires an explicit user request",
             "enum": [
               "selected",
               "all_tcp"

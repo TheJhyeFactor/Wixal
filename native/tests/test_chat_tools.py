@@ -1,5 +1,6 @@
 """Chat tool discovery with actual files, subprocesses and controller review."""
 import asyncio
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -129,6 +130,23 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first['offset'],match['offset']);self.assertTrue(first['more']);self.assertFalse(second['more'])
         for maximum in (0,24001):
             with self.assertRaises(ValueError):await self.service.dispatch('tool',dict(name='read_file',arguments=dict(path='bounded.py',max_chars=maximum)))
+
+    async def test_context_bounded_file_page_can_continue_without_hidden_gap(self):
+        from wixal.context_policy import bounded_evidence
+        await self.service.dispatch('settings',dict(enabledTools=['read_file']))
+        text=('πreamble 👩🏽‍💻\n'*100)+'def ownership_check():\n    return "owned"\nTAIL'
+        (self.root/'paged.py').write_text(text)
+        full=await self.service.tools.execute('read_file',dict(path='paged.py'),'chat')
+        self.assertFalse(full['more'])
+        for limit in (400,1000):
+            page=json.loads(bounded_evidence(json.dumps(full),limit))
+            self.assertTrue(page['more']);self.assertTrue(page['excerpt'])
+            self.assertEqual(page['content'],text[:page['next_offset']])
+            remainder=await self.service.tools.execute('read_file',dict(path='paged.py',offset=page['next_offset']),'chat')
+            self.assertEqual(page['content']+remainder['content'],text)
+            smaller=json.loads(bounded_evidence(json.dumps(page),250))
+            self.assertEqual(smaller['content'],text[:smaller['next_offset']])
+            self.assertLessEqual(len(json.dumps(smaller,ensure_ascii=False)),250)
 
     async def test_chat_missing_project_and_conversation_only_model_are_clear(self):
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))

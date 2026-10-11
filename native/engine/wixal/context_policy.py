@@ -92,6 +92,20 @@ def bounded_evidence(content, limit):
     except (ValueError, TypeError):
         room=max(0,limit-100);head=room//3
         return content[:head]+'\n[Excerpt; full evidence saved in conversation]\n'+content[-(room-head):]
+    if isinstance(value,dict) and isinstance(value.get('content'),str) and type(value.get('offset')) is int and type(value.get('next_offset')) is int and type(value.get('more')) is bool:
+        # A bounded file page must keep a cursor into the exact source. A
+        # head/tail excerpt with the original end cursor hides unread text.
+        text=value['content'];page={**value,'more':True,'excerpt':True,'fullEvidenceSaved':True}
+        def encode(length):
+            return json.dumps({**page,'content':text[:length],'next_offset':value['offset']+length},ensure_ascii=False)
+        low=0;high=len(text)
+        while low<high:
+            middle=(low+high+1)//2
+            if len(encode(middle))<=limit:low=middle
+            else:high=middle-1
+        if low and len(encode(low))<=limit:
+            newline=text.rfind('\n',0,low)
+            return encode(newline+1 if newline>=0 else low)
     if isinstance(value,dict) and value.get('modelView') is True:
         from .network_evidence import fit_view
         compact=fit_view(value,limit)

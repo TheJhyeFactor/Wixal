@@ -8,6 +8,33 @@ import json
 import re
 
 
+def reference_claim(task):
+    """A reported handle must remain copyable; never repair a tool argument."""
+    known=set()
+    canonical=r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+    for checkpoint in task.get('checkpoints',[]):
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict):continue
+        for key in ('session_id','sourceSessionId'):
+            reference=value.get(key)
+            if isinstance(reference,str) and re.fullmatch(canonical,reference):known.add(reference)
+    if not known:return None
+    separators='-\u2010\u2011\u2012\u2013\u2014\u2212\ufe63\uff0d'
+    pattern=r'\b[0-9a-f]{8}(?:['+separators+r'][0-9a-f]{4}){3}['+separators+r'][0-9a-f]{12}\b'
+    translate=str.maketrans({separator:'-' for separator in separators})
+    incorrect=[];references=set()
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r'\b(?:example|invalid|malformed|incorrect|not\s+(?:a\s+)?(?:valid|exact)|do\s+not\s+use)\b',sentence,re.I):continue
+        for match in re.finditer(pattern,sentence,re.I):
+            reported=match.group();normal=reported.translate(translate).lower()
+            if normal in known and reported!=normal:
+                incorrect.append(reported);references.add(normal)
+    if not incorrect:return None
+    return dict(check=dict(kind='network_reference_claim'),status='failed',incorrectReferences=sorted(set(incorrect)),canonicalReferences=sorted(references),error='Reported scanner references changed punctuation or case. Copy the exact recorded IDs in code spans; tool arguments are never normalised or repaired.')
+
+
 def facts(task):
     hosts={};sources=[]
     def observed_time(checkpoint):
@@ -221,6 +248,8 @@ def corrected_summary(task):
         lines.append(f"- {host}: observed open TCP ports {', '.join(map(str,ports)) or 'none in this evidence' }.")
     if hosts:lines.append('These are observations from the selected scan coverage. Inspect the retained tool evidence; they do not prove service safety or a vulnerability.')
     for row in task.get('verification',{}).get('checks',[]):
+        if row.get('check',{}).get('kind')=='network_reference_claim' and row['status']=='failed':
+            lines.append('Canonical source session references: '+', '.join('`'+reference+'`' for reference in row['canonicalReferences'])+'. Copy these exactly; no tool argument was repaired or retried.')
         if row.get('check',{}).get('kind')=='network_invocation_claim' and row['status']=='failed':
             lines.append('Retained executable options: '+', '.join(row['actualOptions'])+'. Controller presets are separate metadata.')
         if row.get('check',{}).get('kind')=='network_evidence_hash_claim' and row['status']=='failed':

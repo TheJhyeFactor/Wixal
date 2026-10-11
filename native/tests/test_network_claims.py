@@ -1,10 +1,35 @@
 """Current tool facts, contradictory answers and host/stage boundaries."""
 import json
 import unittest
-from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim,evidence_hash_claim,evidence_invocation_claim
+from wixal.network_claims import check,facts,inspection_claim,corrected_summary,evidence_quote,availability_claim,execution_claim,evidence_hash_claim,evidence_invocation_claim,reference_claim
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_reported_reference_must_preserve_copyable_punctuation_and_case(self):
+        reference='c4864f82-9d17-4595-92fe-dfb15047bff8'
+        checkpoint=dict(name='network_read',status='finished',result=json.dumps(dict(session_id=reference,state='stopped')))
+        task=dict(checkpoints=[checkpoint.copy()])
+        for reported in (reference.replace('-','\u2011'),reference.replace('-','\u2013'),reference.upper()):
+            task['result']='Evidence from session '+reported
+            failure=reference_claim(task)
+            self.assertEqual(failure['canonicalReferences'],[reference])
+            self.assertEqual(task['checkpoints'],[checkpoint],'Verification must not repair any checkpoint or tool argument')
+            task['verification']=dict(checks=[failure])
+            self.assertIn('`'+reference+'`',corrected_summary(task))
+        task['result']='Evidence from session `'+reference+'`'
+        self.assertIsNone(reference_claim(task))
+
+    def test_reference_check_does_not_infer_unknown_handles_or_reject_invalid_examples(self):
+        reference='c4864f82-9d17-4595-92fe-dfb15047bff8'
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(dict(session_id=reference,state='stopped')))])
+        task['result']='This example is an invalid reference: '+reference.replace('-','\u2011')+'. Use `'+reference+'`.'
+        self.assertIsNone(reference_claim(task))
+        task['result']='An unknown reference: 00000000\u20110000\u20110000\u20110000\u2011000000000000'
+        self.assertIsNone(reference_claim(task))
+        task['checkpoints'][0]['status']='error'
+        task['result']='Evidence from session '+reference.replace('-','\u2011')
+        self.assertIsNone(reference_claim(task))
+
     def test_controller_preset_cannot_become_a_claimed_invocation_option(self):
         task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(dict(structuredResult=dict(invocation=dict(argv=['rustscan','--range','1-65535','--timeout','2000'])))))])
         task['result']='Invocation parameters: `--range 1-65535`, `--timeout 2000`, `--pace careful`.'

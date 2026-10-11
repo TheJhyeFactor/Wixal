@@ -19,7 +19,12 @@ class InspectionFocusTests(unittest.IsolatedAsyncioTestCase):
         source=dict(session_id='current-discovery',state='completed',structuredResult=dict(handoffEligible=True))
         task=dict(id='focus',sessionId=session['id'],status='running',prompt=prompt,checkpoints=[dict(name='network_read',status='finished',result=json.dumps(source))])
         self.service.store.data['tasks'].append(task)
+        self.service.tools.jobs['current-discovery']=dict(owner=session['id'],projectId=self.service.store.project()['id'],state='completed',structuredResult=dict(invocation=dict(target='127.0.0.1')))
         body=agent.request_body(session,supports_tools=True)
+        self.assertIn('"target": "127.0.0.1", "source_session_id": "current-discovery"',body['messages'][0]['content'])
+        self.service.tools.jobs['current-discovery']['owner']='another-conversation'
+        self.assertNotIn('"target": "127.0.0.1", "source_session_id": "current-discovery"',agent.request_body(session,supports_tools=True)['messages'][0]['content'])
+        self.service.tools.jobs.pop('current-discovery')
         names={t['function']['name'] for t in body['tools']}
         self.assertIn('network_scan',names)
         self.assertIn('network_read',names)

@@ -25,9 +25,25 @@ Every changed helper receives a fresh qualification run. Prior failures are reta
 | `2579626ef98a` | Supplemental cancelled-evidence check passed; prerequisites 12/14. Two false disabled-tool claims failed. Core not started. |
 | `297ad1ce141f` | Supplemental cancelled-evidence check failed. Independent review distinguishes an automated negation false positive from unsupported examined-port provenance. Core not started. |
 
-The next candidate includes the examined-coverage correction. Final exact-helper counts and installed desktop results will be recorded after execution. **No evaluated-model status is granted yet.**
+The scanner result now separates requested port/connection coverage, observed open endpoints and the unknown examined-port count. Its metadata states that elapsed duration cannot establish a probe-completion ledger and that pace is a Wixal controller preset, not an executable option. Explicit invocation options are checked against retained argv. Null examined counts remain valid; assertions that no probes finished and claims that nonempty SHA-256 fields are empty receive bounded feedback.
 
-The latest completed full Python suite passed **368 tests**, before the final examined-coverage correction; that correction's 27 focused regressions pass and a fresh full suite is running. Production Swift interaction, activity and Markdown checks passed **24 / 29 / 5**. All installed candidates matched their 126 source-manifest entries and 542 staged files and passed strict signature verification.
+Further retained attempts:
+
+| Candidate helper prefix | Measured result |
+| --- | --- |
+| `508024825065` with gpt-oss | Supplemental check failed after repeated examined-coverage claims. Core not started. |
+| `508024825065` with Qwen | Supplemental automatic pass independently rejected for a zero-probe inference from duration. Prerequisites interrupted; core not started. Actual model context was 4096. |
+| `7ba7761b12fd` | Supplemental automatic pass independently rejected for an invented `--pace` option. Core not started. |
+| `22ff962b0e50` | Supplemental check failed. Review distinguished a false null-count rejection from unsupported zero-probe and empty-digest-field claims. Core not started. |
+| `0fd599bf75dc` | Current frozen candidate; qualification in progress. |
+
+The pipeline now requires an independently reviewed, hash-matched supplemental report before starting prerequisites or core attempts. Final exact-helper counts and installed desktop results will be recorded after execution. **No evaluated-model status is granted yet.**
+
+The current full Python suite passes **371 tests**. A preceding run retained one response-budget regression; the added network guidance is now scoped to network requests and the meaningful budget check passes unchanged. Production Swift interaction, activity and Markdown checks passed **24 / 29 / 5**. All installed candidates matched their 126 source-manifest entries and 542 staged files and passed strict signature verification.
+
+Current helper: `0fd599bf75dcfb020cf520b94d7cc66ad9d3daf47745518c659a310523265cb8`; source manifest: `757ee08c09da9dcb9af740c2694ef1b5c8d389be460146ca9b94ed83ffca7260`. The separate app is **Wixal Backlog Acceptance**. Its name does not imply a passed model qualification.
+
+A live feedback-role diagnostic returned the corrected colour with both later system and user messages. Template inspection alone therefore did not establish a feedback-delivery defect; no transport change or qualification result is inferred from that diagnostic.
 
 The runner starts the core only after all mandatory gates pass, retains exactly 30 distinct attempts per core scenario, and runs an independent grader. Installed desktop history/model-switch acceptance remains a separate gate. Earlier desktop evidence belongs only to its recorded helper.
 

@@ -181,7 +181,7 @@ async def verify(store,tools,task,checks=None):
             row['status']='passed'
         except (ValueError,OSError,KeyError,IndexError,TypeError,UnicodeError) as error:row['error']=str(error)
         rows.append(row)
-    from .network_claims import check as network_claim_check,evidence_quote,execution_claim,evidence_hash_claim
+    from .network_claims import check as network_claim_check,evidence_quote,execution_claim,evidence_hash_claim,evidence_invocation_claim
     execution=execution_claim(task)
     if execution:rows.append(execution)
     contradiction=network_claim_check(task)
@@ -190,6 +190,8 @@ async def verify(store,tools,task,checks=None):
     if quote:rows.append(quote)
     hash_claim=evidence_hash_claim(task)
     if hash_claim:rows.append(hash_claim)
+    invocation=evidence_invocation_claim(task)
+    if invocation:rows.append(invocation)
     if hasattr(tools,'catalog'):
         from .agent_context import available_names
         from .context_policy import eligible

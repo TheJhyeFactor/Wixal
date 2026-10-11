@@ -84,13 +84,43 @@ def execution_claim(task):
         # A cancelled invocation records requested ports, not a completed
         # per-port probe ledger. Table headings can make the same unsupported
         # claim as prose even when another paragraph admits partial coverage.
-        if re.search(r'\bports\s+(?:examined|tested|probed)\s*\*?\*?\s*\|',sentence,re.I) and not re.search(r'\b(?:unknown|undetermined|not established|not recorded)\b',sentence,re.I):
+        if re.search(r'\bports\s+(?:examined|tested|probed)\s*\*?\*?\s*\|',sentence,re.I) and not re.search(r'\b(?:unknown|undetermined|not established|not recorded)\b|examinedPortCount\s*:\s*null',sentence,re.I):
             return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='Requested invocation ports do not establish which ports were examined before cancellation. No completed per-port probe ledger is retained. Describe requested coverage separately and mark actual examined coverage unknown.')
+        if re.search(r'\bno\s+ports?\s+(?:(?:could|would)\s+have\s+been|(?:was|were))\s+(?:tested|examined|probed)\b|\bbefore\s+any\s+probes?\s+(?:finished|completed)\b',sentence,re.I) and not re.search(r'\b(?:unknown|whether|cannot establish|cannot say)\b',sentence,re.I):
+            return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='Cancelled scan evidence has no per-port completion ledger. Elapsed duration or configured timeouts cannot prove that zero ports were examined. Report actual examined coverage as unknown.')
         if re.search(r"\b(?:not|never|unable|cannot|can't|failed|error|declined|stopped|halted|cancelled|running|unfinished|incomplete|pending|if|whether|would|could|example|historical|previous|earlier)\b",sentence,re.I):continue
         if re.search(r'\b(?:no|neither)\s+(?:(?:native|scanner|network)\s+)?(?:scan|discovery|inspection)\b|\b(?:returned|produced)\s+no\s+(?:results|evidence|output)\b',sentence,re.I):continue
         if re.search(r'\b(?:scan|discovery|inspection)\b.{0,100}\b(?:completed|finished|found|observed|returned|produced)\b|\b(?:I|we)\s+(?:have\s+)?(?:scanned|inspected)\b|\b(?:complete|actual|retained|verified)\s+(?:Nmap\s+)?XML\b',sentence,re.I):
             return dict(check=dict(kind='network_execution_claim'),status='failed',checkpointIds=[c['id'] for c in attempts],error='No current-task native scanner attempt completed successfully. Do not describe completed scans, observed port results or retained XML evidence. Report the actual failed or unfinished attempt; do not replay an action to justify this answer.')
     return None
+
+
+def evidence_invocation_claim(task):
+    """Check explicit invocation option claims against the retained argv.
+
+    Controller presets are not CLI switches. This covers named long options
+    in invocation prose, not arbitrary examples or all command semantics.
+    """
+    options=set()
+    for checkpoint in task.get('checkpoints',[]):
+        if checkpoint.get('status')!='finished' or checkpoint.get('name')!='network_read':continue
+        try:value=json.loads(checkpoint.get('result',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict) or value.get('error'):continue
+        structured=value.get('structuredResult')
+        if not isinstance(structured,dict):continue
+        invocation=structured.get('invocation')
+        if not isinstance(invocation,dict):continue
+        argv=invocation.get('argv',[])
+        if isinstance(argv,list):options.update(a for a in argv if isinstance(a,str) and re.fullmatch(r'--[a-z][a-z0-9-]*',a))
+    if not options:return None
+    invalid=set()
+    for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if not re.search(r'\b(?:invocation|command[- ]line|executed|arguments|parameters)\b',sentence,re.I):continue
+        if re.search(r"\b(?:not|never|example|illustrative|hypothetical|previous|historical)\b",sentence,re.I):continue
+        invalid.update(flag for flag in re.findall(r'--[a-z][a-z0-9-]*',sentence) if flag not in options)
+    if not invalid:return None
+    return dict(check=dict(kind='network_invocation_claim'),status='failed',unsupportedOptions=sorted(invalid),actualOptions=sorted(options),error='These claimed invocation options are absent from retained argv. Describe controller metadata separately; copy executable options only from actual argv.')
 
 
 def evidence_hash_claim(task):
@@ -112,6 +142,8 @@ def evidence_hash_claim(task):
     if not hashes:return None
     errors=[]
     for sentence in re.split(r'[.!?\n]',task.get('result','')):
+        if re.search(r'\b(?:stdout|stderr)Sha256\b.{0,100}\b(?:are|is)\s+empty\b',sentence,re.I) and not re.search(r'\b(?:not|cannot|example|historical)\b',sentence,re.I):
+            errors.append('Retained output SHA-256 fields contain digests, not empty values')
         if not re.search(r'\b(?:sha[- ]?256|hash|digest)\b',sentence,re.I):continue
         if re.search(r"\b(?:not|never|cannot|can't|example|historical|previous)\b",sentence,re.I):continue
         labels=[label for label in hashes if re.search(r'\b'+label+r'\b',sentence,re.I)]
@@ -188,6 +220,8 @@ def corrected_summary(task):
         lines.append(f"- {host}: observed open TCP ports {', '.join(map(str,ports)) or 'none in this evidence' }.")
     if hosts:lines.append('These are observations from the selected scan coverage. Inspect the retained tool evidence; they do not prove service safety or a vulnerability.')
     for row in task.get('verification',{}).get('checks',[]):
+        if row.get('check',{}).get('kind')=='network_invocation_claim' and row['status']=='failed':
+            lines.append('Retained executable options: '+', '.join(row['actualOptions'])+'. Controller presets are separate metadata.')
         if row.get('check',{}).get('kind')=='network_evidence_hash_claim' and row['status']=='failed':
             lines.append('Retained output SHA-256 digests: '+json.dumps(row['actualHashes'],sort_keys=True)+'.')
         if row.get('check',{}).get('kind')=='tool_scope_claim' and row['status']=='failed':

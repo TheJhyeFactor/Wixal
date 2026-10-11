@@ -23,7 +23,7 @@ def model_view(name, content):
         source=result.get('structuredResult',{})
         result_view={k:result[k] for k in ('session_id','state','exitCode','reason','error','sourceSessionId','sourceRunId','sourceResultSha256','skipped') if k in result}
         if source:
-            result_view['structuredResult']={k:source[k] for k in ('scanner','handoffEligible','resultSha256','coverage','termination') if k in source}
+            result_view['structuredResult']={k:source[k] for k in ('scanner','handoffEligible','resultSha256','coverage','coverageMeaning','evidenceStatus','termination') if k in source}
             invocation=source.get('invocation',{})
             request={k:invocation[k] for k in ('target','coverage','argv') if k in invocation}
             if len(json.dumps(request.get('argv',[])))>2000:
@@ -70,6 +70,8 @@ def fit_view(value, limit):
     """Keep essential scanner facts readable when even the normal view is too big."""
     essential={k:value[k] for k in ('session_id','state','exitCode','sourceSessionId','skipped') if k in value}
     source=value.get('structuredResult',{})
+    for key in ('coverage','evidenceStatus'):
+        if key in source:essential[key]=source[key]
     coverage=source.get('coverageDetail',{})
     if coverage:
         essential['coverageDetail']={k:coverage[k] for k in ('requestedPortCount','examinedPortCount') if k in coverage}

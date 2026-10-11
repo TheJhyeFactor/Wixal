@@ -18,7 +18,7 @@ spec=importlib.util.spec_from_file_location('real',Path(__file__).with_name('rea
 oracle_spec=importlib.util.spec_from_file_location('port_oracle',Path(__file__).with_name('model-port-oracle.py'));port_oracle=importlib.util.module_from_spec(oracle_spec);oracle_spec.loader.exec_module(port_oracle)
 
 async def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--helper',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--model',default='gpt-oss:20b');p.add_argument('--alternate-model',default='gemma3:12b',help='Already installed conversation model; never downloaded by this case');o=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--helper',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--model',default='gpt-oss:20b');p.add_argument('--alternate-model',default='gemma3:12b',help='Already installed conversation model; never downloaded by this case');p.add_argument('--endpoint',help='Explicit external loopback service; omit for bundled supervised runtime');o=p.parse_args()
     art=o.output.resolve();art.mkdir(parents=True,exist_ok=False);real.ART=art;real.STATE=art/'workspace';project=art/'project';project.mkdir()
     for source in ['README.md','native/engine/wixal/network_discovery.py']:
         (project/Path(source).name).write_bytes((ROOT/source).read_bytes())
@@ -36,14 +36,14 @@ async def main():
         servers.clear();servers.extend([await asyncio.start_server(serve,'127.0.0.1',0) for _ in range(2)])
         approved_ports.clear();approved_ports.update(s.sockets[0].getsockname()[1] for s in servers)
         return sorted(approved_ports)
-    c=real.Client(False,helper=o.helper)
+    c=real.Client(False,helper=o.helper,payload=o.helper.resolve().parents[1]/'ollama',endpoint=o.endpoint)
     def review(data):
         name=data.get('name');assessment=data.get('assessment',{})
         if name=='command_start':return allow_network and assessment.get('capability') in ('network_discover','network_scan') and assessment.get('target')=='127.0.0.1' and bool(assessment.get('ports')) and set(assessment['ports'])<=approved_ports
         if name=='http_request':return data.get('url')==http_url
         return name=='read_file' and Path(data.get('path','')).resolve().is_relative_to(project)
     c.review_policy=review
-    report=dict(status='running',cases=[],helperSha256=real.hashlib.sha256(o.helper.read_bytes()).hexdigest(),model=None,started=time.time(),scope='Owned loopback services and copied real project sources',qualification='prerequisites_only',gradingScriptSha256=real.hashlib.sha256(Path(__file__).with_name('model-port-oracle.py').read_bytes()).hexdigest(),acceptanceScriptSha256=real.hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+    report=dict(runtimeMode='external_loopback' if o.endpoint else 'bundled_supervised',runtimePayload=str(c.payload),status='running',cases=[],helperSha256=real.hashlib.sha256(o.helper.read_bytes()).hexdigest(),model=None,started=time.time(),scope='Owned loopback services and copied real project sources',qualification='prerequisites_only',gradingScriptSha256=real.hashlib.sha256(Path(__file__).with_name('model-port-oracle.py').read_bytes()).hexdigest(),acceptanceScriptSha256=real.hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     def save():(art/'report.json').write_text(json.dumps(report,indent=2)+'\n')
     def results(output):return port_oracle.tool_results(output['toolResults'])
     async def attempt(identifier,prompt,oracle,new_session=True):
@@ -65,7 +65,7 @@ async def main():
         save();print(json.dumps(dict(id=identifier,status=record['status'])),flush=True);return record
     def no_effect(output,values,observed,reviews):return not observed and not any(r['approved'] and r['name']=='command_start' for r in reviews) and bool(output['answer'].strip())
     try:
-        c.log=(art/'helper.log').open('a');c.child=await asyncio.create_subprocess_exec(str(o.helper),'--data',str(real.STATE),'--runtime',str(ROOT/'runtime/ollama'),'--endpoint','http://127.0.0.1:11434',env=dict(os.environ,WIXAL_MANAGED_TOOLS_ROOT=str(art/'registry')),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=c.log,limit=32*1024*1024);c.reading=asyncio.create_task(c.read())
+        c.log=(art/'helper.log').open('a');c.child=await asyncio.create_subprocess_exec(str(o.helper),'--data',str(real.STATE),'--runtime',str(c.payload),*(['--endpoint',o.endpoint] if o.endpoint else []),env=dict(os.environ,WIXAL_MANAGED_TOOLS_ROOT=str(art/'registry')),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=c.log,limit=32*1024*1024);c.reading=asyncio.create_task(c.read())
         await c.call('hello');await c.call('project-add',dict(root=str(project)));hello=await c.call('hello');enabled=[t['function']['name'] for t in hello['tools']];await c.call('settings',dict(enabledTools=enabled))
         installed=await c.call('addon-install',dict(id='rustscan',provider='managed',reason='Explicit prerequisite lab package installation'))
         while installed['status'] not in ('ready','failed','cancelled'):
@@ -102,7 +102,8 @@ async def main():
         ports=await fresh();expected=set(ports)
         await attempt('MOD-18',f'The listener configuration changed. Check TCP {ports[0]},{ports[1]} on 127.0.0.1 now. Report these newly observed ports, without reusing the earlier result as a fresh scan.',lambda o,v,l,r:any(x.get('structuredResult',{}).get('handoffEligible') and set(x['structuredResult']['hosts'][0]['ports'])==expected for _,x in v) and all(str(p) in o['answer'] for p in expected),new_session=False)
         available=await c.call('models')
-        if any(m['name']==o.alternate_model for m in available):
+        imports=await c.call('model-imports') if not o.endpoint else []
+        if any(m['name']==o.alternate_model for m in [*available,*imports]):
             retained=await c.session();session_id=retained['id'];checkpoint_count=len(retained['messages'])
             alternate=await c.model(o.alternate_model);await c.call('settings',dict(contextSize=8192))
             report['alternateModel']=alternate;save()

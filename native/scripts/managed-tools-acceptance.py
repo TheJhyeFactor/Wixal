@@ -18,12 +18,12 @@ spec=importlib.util.spec_from_file_location('real',ROOT/'native/scripts/real-acc
 oracle_spec=importlib.util.spec_from_file_location('port_oracle',Path(__file__).with_name('model-port-oracle.py'));port_oracle=importlib.util.module_from_spec(oracle_spec);oracle_spec.loader.exec_module(port_oracle)
 
 async def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');parser.add_argument('--output',type=Path);parser.add_argument('--repository',type=Path);parser.add_argument('--scenario',choices=['naturalDiscovery','sourceInspection']);options=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');parser.add_argument('--output',type=Path);parser.add_argument('--repository',type=Path);parser.add_argument('--scenario',choices=['naturalDiscovery','sourceInspection']);parser.add_argument('--endpoint',help='Explicit external loopback service; omit for bundled supervised runtime');options=parser.parse_args()
     if options.repeats<1:parser.error('Repeat count must be positive')
     if options.repository and not options.source:parser.error('Packaged helpers require embedded repository trust')
     art=(options.output or ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged')).resolve();art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
-    c=real.Client(options.source,helper=options.helper);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
-    report=dict(schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),acceptanceScriptSha256=digest(Path(__file__)))
+    c=real.Client(options.source,helper=options.helper,payload=options.helper.resolve().parents[1]/'ollama' if options.helper else None,endpoint=options.endpoint);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
+    report=dict(runtimeMode='external_loopback' if options.endpoint else 'bundled_supervised',schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),acceptanceScriptSha256=digest(Path(__file__)))
     if options.helper:
         for key,name in [('sourceManifestSha256','SOURCE_MANIFEST.json'),('toolTrustManifestSha256','TOOL_TRUST_MANIFEST.json')]:
             path=options.helper.resolve().parents[1]/name
@@ -38,7 +38,7 @@ async def main():
         command=[sys.executable,str(ROOT/'native/engine/engine_main.py')] if options.source else [str(options.helper)]
         env=dict(os.environ,WIXAL_MANAGED_TOOLS_ROOT=str(art/'registry'))
         if options.repository:env.update(WIXAL_NATIVE_ACCEPTANCE='1',WIXAL_ACCEPTANCE_REPOSITORY=str(options.repository.resolve()))
-        c.log=(art/'helper.log').open('a');c.child=await asyncio.create_subprocess_exec(*command,'--data',str(real.STATE),'--runtime',str(ROOT/'runtime/ollama'),'--endpoint','http://127.0.0.1:11434',env=env,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=c.log,limit=32*1024*1024);c.reading=asyncio.create_task(c.read());await c.call('hello')
+        c.log=(art/'helper.log').open('a');c.child=await asyncio.create_subprocess_exec(*command,'--data',str(real.STATE),'--runtime',str(c.payload),*(['--endpoint',options.endpoint] if options.endpoint else []),env=env,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=c.log,limit=32*1024*1024);c.reading=asyncio.create_task(c.read());await c.call('hello')
     async def read(started):
         async with asyncio.timeout(90):
             while True:

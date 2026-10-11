@@ -53,8 +53,6 @@ async def main(options):
         project = base/'project'
         project.mkdir()
         await client.call('project-add', dict(root=str(project)))
-        models = await client.call('models')
-        assert any(m['name'] == options.model for m in models), 'Model must already be installed'
         report['model'] = await client.model(options.model)
         await client.call('settings', dict(contextSize=8192))
         installed = await client.call('addon-install', dict(id='rustscan', provider='managed', reason='Explicit owned-loopback partial-evidence acceptance'))
@@ -122,5 +120,5 @@ if __name__ == '__main__':
     parser.add_argument('--helper', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--model', default='gpt-oss:20b')
-    parser.add_argument('--endpoint', default='http://127.0.0.1:11434')
+    parser.add_argument('--endpoint', help='Explicit external loopback service; omit to qualify the bundled supervised runtime')
     asyncio.run(main(parser.parse_args()))

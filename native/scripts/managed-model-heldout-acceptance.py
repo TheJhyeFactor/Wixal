@@ -27,7 +27,7 @@ async def main(options):
     (art/'prompt-set.json').write_bytes(options.prompt_set.read_bytes())
     real.ART=art;real.STATE=art/'workspace';project=art/'project';project.mkdir()
     os.environ['WIXAL_MANAGED_TOOLS_ROOT']=str(art/'registry')
-    client=real.Client(False,helper=options.helper,endpoint='http://127.0.0.1:11434')
+    client=real.Client(False,helper=options.helper,payload=options.helper.resolve().parents[1]/'ollama',endpoint=options.endpoint)
     expected=[];servers=[];connections=[];install_allowed=False
     async def accept(reader,writer):
         connections.append(dict(port=writer.get_extra_info('sockname')[1],time=time.time()))
@@ -38,7 +38,7 @@ async def main(options):
         assessment=details.get('assessment',{})
         return details.get('name')=='command_start' and assessment.get('capability') in ('network_discover','network_scan') and assessment.get('target')=='127.0.0.1' and bool(assessment.get('ports')) and set(assessment['ports'])<=set(expected)
     client.review_policy=review
-    report=dict(status='running',started=time.time(),cases=[],helperSha256=digest(options.helper),promptSetSha256=digest(options.prompt_set),acceptanceScriptSha256=digest(Path(__file__)),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),qualification='additional_gates_only')
+    report=dict(runtimeMode='external_loopback' if options.endpoint else 'bundled_supervised',status='running',started=time.time(),cases=[],helperSha256=digest(options.helper),promptSetSha256=digest(options.prompt_set),acceptanceScriptSha256=digest(Path(__file__)),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),qualification='additional_gates_only')
     def save():(art/'report.json').write_text(json.dumps(report,indent=2))
     save()
     try:
@@ -93,4 +93,5 @@ if __name__=='__main__':
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--prompt-set',type=Path,required=True)
     parser.add_argument('--model',default='gpt-oss:20b')
+    parser.add_argument('--endpoint',help='Explicit external loopback service; omit for bundled supervised runtime')
     asyncio.run(main(parser.parse_args()))

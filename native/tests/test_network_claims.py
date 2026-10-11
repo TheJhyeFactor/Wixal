@@ -5,6 +5,16 @@ from wixal.network_claims import check,facts,inspection_claim,corrected_summary,
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_stopped_execution_does_not_establish_a_port_completion_count(self):
+        source=dict(session_id='stopped',state='stopped',exitCode=-9,structuredResult=dict(scanner='RustScan',coverage='unknown',evidenceStatus='interrupted',coverageDetail=dict(examinedPortCount=None)))
+        task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(source))])
+        for answer in ('The scan did not complete all ports.','The scan did not complete 65535 ports.'):
+            task['result']=answer
+            self.assertEqual(coverage_claim(task)['status'],'failed')
+        for answer in ('The scanner was stopped and did not complete.','Whether all requested ports completed is unknown.'):
+            task['result']=answer
+            self.assertIsNone(coverage_claim(task))
+
     def test_foreground_discovery_facts_are_graded_from_actual_receipt(self):
         result=dict(session_id='foreground',state='completed',exitCode=0,structuredResult=dict(scanner='RustScan',handoffEligible=True,coverageDetail=dict(requestedPortCount=1,examinedPortCount=None),invocation=dict(coverage='selected',ports=[8123],addresses=['127.0.0.1']),services=[dict(host='127.0.0.1',port='8123',protocol='tcp',state='open')]))
         task=dict(checkpoints=[dict(id='actual-discovery',name='network_discover',status='finished',result=json.dumps(result))],result='Port 8123 is closed.')

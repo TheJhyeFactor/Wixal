@@ -15,6 +15,23 @@ def stopped_result():
 
 
 class EvidenceViewTests(unittest.TestCase):
+    def test_probe_coverage_is_unknown_independent_of_artifact_completion(self):
+        invocation=dict(target='127.0.0.1',addresses=['127.0.0.1'],ports=[8123,8124],coverage='selected')
+        for complete,status in ((True,'complete'),(False,'interrupted')):
+            result=parse('127.0.0.1 -> [8123]\n',invocation,complete)
+            self.assertEqual(result['coverage'],'unknown')
+            self.assertEqual(result['evidenceStatus'],status)
+            self.assertEqual(result['hosts'][0]['ports'],[8123])
+            self.assertIsNone(result['coverageDetail']['examinedPortCount'])
+            self.assertEqual(result['handoffEligible'],complete)
+            receipt=dict(session_id='source',state='completed' if complete else 'stopped',structuredResult=result)
+            view=json.loads(model_view('network_discover',json.dumps(receipt)))
+            self.assertEqual(view['structuredResult']['coverage'],'unknown')
+            self.assertEqual(view['structuredResult']['evidenceStatus'],status)
+            small=json.loads(bounded_evidence(json.dumps(view),400))
+            self.assertEqual(small['coverage'],'unknown')
+            self.assertEqual(small['evidenceStatus'],status)
+
     def test_compact_range_preserves_exact_requested_set(self):
         for values in ([1,2,3,8,10,11,65535],list(range(1,65536))):
             self.assertEqual(ports(port_ranges(values)),values)

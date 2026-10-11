@@ -73,6 +73,11 @@ class Client:
         return dict(prompt=prompt,answer=answer['content'],usage=answer['usage'],requests=session.get('requests',[]),memorySources=session.get('memorySources',[]),sessionId=session['id'],toolResults=[m for m in session['messages'] if m['role']=='tool'])
     async def model(self,name):
         models=await self.call('models')
+        if self.endpoint is None and not any(m['name']==name for m in models):
+            item=next((m for m in await self.call('model-imports') if m['name']==name),None)
+            if item:
+                await self.call('model-import',item)
+                models=await self.call('models')
         if not any(m['name']==name for m in models):
             existing=next((d for d in (await self.call('model-status'))['downloads'] if d['name']==name and d['state'] in ('paused','failed','downloading','queued')),None)
             if existing and existing['state'] in ('paused','failed'):await self.call('model-download-action',dict(id=existing['id'],action='resume' if existing['state']=='paused' else 'retry'))

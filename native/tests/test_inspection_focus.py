@@ -8,6 +8,35 @@ class InspectionFocusTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.AgentRuntimeTests.asyncSetUp
     asyncTearDown=fixtures.AgentRuntimeTests.asyncTearDown
 
+    async def test_controller_feedback_is_delivered_without_changing_task_or_budget_boundary(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_read']))
+        agent=self.service.agent
+        agent.model_info=dict(name='fixture',capabilities=['tools','thinking'])
+        session=self.service.store.session()
+        prompt='Read retained evidence using network_read. CURRENT-USER-SCOPE'
+        session['messages']=[dict(role='user',content='OLD-TURN '+('x'*30000)),dict(role='assistant',content='Old answer'),
+                             dict(role='user',content=prompt),dict(role='assistant',content='',tool_calls=[dict(function=dict(name='network_read',arguments=dict(session_id='owned-reference')))]),
+                             dict(role='tool',tool_name='network_read',content=json.dumps(dict(session_id='owned-reference',state='stopped',output='evidence '*500)),controllerFeedback=True),
+                             dict(role='assistant',content='Rejected interpretation'),dict(role='system',content='Unmarked historical system data'),
+                             dict(role='system',content='Correct the retained reference. CONTROLLER-CORRECTION',controllerFeedback=True)]
+        original=json.loads(json.dumps(session['messages']))
+        for context in (8192,4096):
+            agent.effective_context=lambda:context
+            body=agent.request_body(session,supports_tools=True)
+            self.assertEqual(body['messages'][-1]['role'],'user')
+            self.assertIn('not a new user request',body['messages'][-1]['content'])
+            self.assertIn('CONTROLLER-CORRECTION',body['messages'][-1]['content'])
+            self.assertTrue(any(m.get('content')==prompt for m in body['messages']))
+            self.assertTrue(any(m['role']=='assistant' and m.get('tool_calls') for m in body['messages']))
+            self.assertTrue(any(m['role']=='tool' and m.get('tool_name')=='network_read' for m in body['messages']))
+            self.assertTrue(any(m['role']=='system' and m['content']=='Unmarked historical system data' for m in body['messages']))
+            self.assertFalse(any('controllerFeedback' in m for m in body['messages']))
+            self.assertEqual(session['messages'],original)
+        agent.effective_context=lambda:8192
+        body=agent.request_body(session,supports_tools=False)
+        self.assertEqual(body['messages'][-1]['role'],'user')
+        self.assertEqual(session['messages'],original)
+
     async def test_completed_discovery_focuses_inspection_without_reoffering_installs(self):
         await self.service.dispatch('settings',dict(mode='chat',enabledTools=['network_scan','network_discover']))
         agent=self.service.agent

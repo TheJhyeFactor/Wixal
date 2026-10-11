@@ -1,6 +1,6 @@
-"""Real testssl.sh invocation and cancellation against an owned TLS fixture.
+"""Real testssl.sh invocation against an owned TLS fixture.
 
-This validates a bounded partial execution, not a completed TLS assessment.
+The default validates cancellation; --complete waits for one bounded assessment.
 The generated fixture key is temporary and is never included in the report.
 """
 import argparse
@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import ipaddress
 import json
+import re
 import ssl
 import tempfile
 import time
@@ -24,9 +25,13 @@ real=importlib.util.module_from_spec(spec);spec.loader.exec_module(real)
 
 async def main(options):
     base=options.output.resolve();base.mkdir(parents=True,exist_ok=False);project=base/'project';project.mkdir()
+    (base/'acceptance-script.py').write_bytes(Path(__file__).read_bytes())
     real.ART=base;real.STATE=base/'workspace';helper=options.helper.resolve()
     client=real.Client(False,helper=helper,endpoint='http://127.0.0.1:11434');server=None;ledger=[]
-    report=dict(status='running',helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),started=time.time(),scope='Owned loopback TLS fixture; intentional cancellation, not a completed TLS assessment')
+    report=dict(status='running',helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),started=time.time(),scope='Owned loopback TLS fixture',mode='complete' if options.complete else 'cancel',completedTLSAssessment=False)
+    resources=helper.parents[3]/'Contents/Resources'
+    report['sourceManifestSha256']=hashlib.sha256((resources/'SOURCE_MANIFEST.json').read_bytes()).hexdigest()
+    report['acceptanceScriptSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     try:
         with tempfile.TemporaryDirectory(prefix='wixal-tls-fixture-') as temporary:
             directory=Path(temporary);key=rsa.generate_private_key(public_exponent=65537,key_size=2048)
@@ -46,25 +51,40 @@ async def main(options):
             target=f'https://127.0.0.1:{server.sockets[0].getsockname()[1]}'
             client.review_policy=lambda details:details.get('name')=='command_start' and details.get('assessment',{}).get('capability')=='addon:testssl' and details['assessment'].get('target')==target
             await client.start();await client.call('project-add',dict(root=str(project)))
-            started=await client.call('tool',dict(name='addon_run',arguments=dict(id='testssl',target=target,timeout_seconds=60)))
+            started=await client.call('tool',dict(name='addon_run',arguments=dict(id='testssl',target=target,timeout_seconds=600 if options.complete else 60)))
             deadline=time.monotonic()+30
             while not ledger and time.monotonic()<deadline:
                 result=await client.call('tool',dict(name='command_read',arguments=dict(session_id=started['session_id'],wait_ms=200,max_chars=100000)))
                 if result['state']!='running':break
             assert ledger,dict(error='No actual TLS handshake observed',result=result)
-            await client.call('tool',dict(name='command_stop',arguments=dict(session_id=started['session_id'])))
-            while True:
-                result=await client.call('tool',dict(name='command_read',arguments=dict(session_id=started['session_id'],wait_ms=200,max_chars=100000)))
-                if result['state']!='running':break
-            assert result['state']=='stopped',result
-            report.update(status='passed',target=target,certificateSha256=cert.fingerprint(hashes.SHA256()).hex(),ledger=ledger,result=result,reviews=client.reviews,completedTLSAssessment=False)
-    except BaseException as error:report.update(status='failed',error=str(error),ledger=ledger);raise
+            if not options.complete:
+                await client.call('tool',dict(name='command_stop',arguments=dict(session_id=started['session_id'])))
+            async with asyncio.timeout(620):
+                while True:
+                    result=await client.call('tool',dict(name='command_read',arguments=dict(session_id=started['session_id'],wait_ms=1000,max_chars=100000)))
+                    if result['state']!='running':break
+            report.update(target=target,certificateSha256=cert.fingerprint(hashes.SHA256()).hex(),ledger=ledger,result=result,reviews=client.reviews)
+            assert result['state']==('completed' if options.complete else 'stopped'),result
+            if options.complete:
+                assert result['exitCode']==0,result
+                evidence=result['evidence'];output=Path(evidence['stdoutPath']).read_bytes()
+                assert hashlib.sha256(output).hexdigest()==evidence['stdoutSha256'], 'Saved output hash mismatch'
+                assert b'Wixal disposable TLS fixture' in output, 'Certificate identity missing from assessment'
+                text=output.decode(errors='replace')
+                assert re.search(r'^\s*SHA256\s+'+report['certificateSha256'],text,re.M|re.I), 'Wrong certificate fingerprint'
+                assert all(re.search(r'^\s*TLS '+version+r'\s+offered',text,re.M) for version in ('1.2','1.3')), 'Supported protocols missing'
+                assert all(re.search(r'^\s*TLS '+version+r'\s+not offered',text,re.M) for version in ('1','1.1')), 'Unsupported protocols reported as offered'
+                assert {row['protocol'] for row in ledger}=={'TLSv1.2','TLSv1.3'}, 'Independent handshake protocols differ'
+                assert 'NOT ok (self signed)' in text, 'Self-signed certificate limitation missing'
+                report['completedTLSAssessment']=True
+            report['status']='passed'
+    except BaseException as error:report.update(status='failed',error=str(error)[:4000],ledger=ledger);raise
     finally:
         if server:server.close();await server.wait_closed()
         if hasattr(client,'child'):await client.close()
         report['finished']=time.time();(base/'results.json').write_text(json.dumps(report,indent=2))
-    print(json.dumps(dict(status=report['status'],handshakes=len(ledger),completedTLSAssessment=False)))
+    print(json.dumps(dict(status=report['status'],handshakes=len(ledger),completedTLSAssessment=report['completedTLSAssessment'])))
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--helper',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--helper',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--complete',action='store_true')
     asyncio.run(main(parser.parse_args()))

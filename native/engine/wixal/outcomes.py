@@ -41,6 +41,15 @@ def successful(checkpoint):
     if checkpoint.get('status')!='finished':return False
     if isinstance(result,str):return not result.startswith(('User declined','Not executed:'))
     if not isinstance(result,dict):return True
+    # Reading retained terminal evidence is a successful read even when the
+    # scanner it describes was cancelled or failed. This must not promote the
+    # discovery/inspection execution itself or bypass explicit claim checks.
+    if (checkpoint.get('name')=='network_read' and not result.get('error')
+            and result.get('state') in ('completed','stopped','failed')
+            and isinstance(result.get('structuredResult'),dict)
+            and result.get('session_id')
+            and result['session_id']==checkpoint.get('arguments',{}).get('session_id')):
+        return True
     pending=('running','stopped','failed','cancelled','interrupted','queued','waiting_review','needs_attention','paused')
     return not result.get('error') and result.get('exitCode') in (None,0) and result.get('state') not in pending and result.get('status') not in pending and result.get('saved') is not False
 
@@ -172,13 +181,15 @@ async def verify(store,tools,task,checks=None):
             row['status']='passed'
         except (ValueError,OSError,KeyError,IndexError,TypeError,UnicodeError) as error:row['error']=str(error)
         rows.append(row)
-    from .network_claims import check as network_claim_check,evidence_quote,execution_claim
+    from .network_claims import check as network_claim_check,evidence_quote,execution_claim,evidence_hash_claim
     execution=execution_claim(task)
     if execution:rows.append(execution)
     contradiction=network_claim_check(task)
     if contradiction:rows.append(contradiction)
     quote=evidence_quote(task)
     if quote:rows.append(quote)
+    hash_claim=evidence_hash_claim(task)
+    if hash_claim:rows.append(hash_claim)
     if hasattr(tools,'catalog'):
         from .agent_context import available_names
         from .context_policy import eligible

@@ -1,31 +1,38 @@
 # Model qualification continuation — 11 October 2026
 
-Issue [#6](https://github.com/TheJhyeFactor/Wixal/issues/6) remains open while fresh exact-helper qualification runs. This work is in a separate **Wixal Priority** development app. The public release and unfinished design files are unchanged.
+Issue [#6](https://github.com/TheJhyeFactor/Wixal/issues/6) remains open. Work uses isolated development apps and disposable owned-loopback workspaces. The public release and unfinished design files are unchanged.
 
-## Reproduced defect and correction
+## Reproduced defects and corrections
 
-An invalid discovery call can narrow the selected tool schemas to those retained in that request. After discovery completes, the requested inspection check correctly identifies unfinished work. Previously, context fitting intersected the required continuation schemas with the already narrowed selection, so it could not restore `network_scan`. The retained 10 October failure includes the model concluding that no ports-profile tool was available.
+After an invalid discovery call narrowed selected schemas, the requested source-bound inspection could not restore `network_scan`. `Agent.request_body` now restores an unfinished requested continuation from eligible schemas before context fitting. The regression fails on the prior source and passes at 4K and 8K, including unavailable-tool, discovery-only and stopped-execution boundaries.
 
-`Agent.request_body` now restores an explicitly requested, unfinished source-bound inspection from schemas eligible in the current task before context fitting. It keeps lifecycle schemas available at supported context limits. Execution still requires a model tool call, source ownership checks and controller review. Discovery-only requests, unavailable tools and stopped execution retain their boundaries.
+Reading retained cancelled or failed scan evidence previously counted as a failed action. A successful `network_read` of the exact requested terminal session now counts as a completed read while the original scan remains unsuccessful. An accurate explanation that a scan was halted also no longer triggers the completed-scan claim detector. Production-controller regressions verify correction without replaying scan actions.
 
-The regression failed before the correction and passes at 4K and 8K context, including stop and disabled-tool checks. The full Python regression suite passed **364 tests**. Production Swift interaction, activity and Markdown checks passed **24 / 29 / 5**. Native development packaging and strict signature verification passed.
+Independent review found the model describing empty stdout/stderr as the zero hash. Explicit output-digest claims are now checked against retained SHA-256 metadata. Bounded feedback supplies the actual digests; exhausted correction preserves rejected model content and returns a factual controller summary.
 
-## Frozen development identity
+Another exact-helper prerequisite run returned “network_discover is currently disabled” despite receiving its enabled schema. Verification now detects that wording as well as existing disabled-tool claims. Installation, readiness and review remain separate checks.
 
-```text
-helper SHA-256:     79a0720209d75ca0cbe9bee2ff57932df6bcdb6d6a423ded217f1cab536a8a7e
-source manifest:    4fc050755205a68a38c144788da68d00e8a53dcfa18327239cb4b957b2eb85bc
-model:              gpt-oss:20b
-model digest:       17052f91a42e97930aa6e28a6c6c06a983e6a58dbb00434885a0cf5313e376f7
-context:            8192
-```
+A cancelled-scan answer presented invocation ports under “Ports examined.” Requested coverage cannot establish which probes completed before cancellation. Verification now rejects that explicit table claim unless actual examined coverage is marked unknown. The supplemental grader also avoids falsely rejecting negated universal-port claims.
 
-All **126 source-manifest entries** and **542 installed files** match the staged package. The embedded TUF repository is a local, single-operator preview using an explicitly repackaged existing RustScan binary; it does not establish source reproducibility, independent production custody or public distribution readiness.
+## Retained qualification attempts
 
-## Qualification status
+Every changed helper receives a fresh qualification run. Prior failures are retained and never transferred to a newer helper.
 
-The fresh prerequisite suite has passed the previously failing `MOD-14-c` source-bound inspection case. The suite and core attempts are still running; no final prerequisite count, core threshold pass or evaluated-model status is claimed here.
+| Candidate helper prefix | Measured result |
+| --- | --- |
+| `79a0720209d7` | 14/14 prerequisites; 16 completed core attempts passed before interruption to fix cancelled-evidence handling. No completed core qualification. |
+| `9b3f9c76ac03` | Supplemental automated pass independently rejected for an unsupported zero-hash claim. Prerequisites interrupted; core not started. |
+| `2579626ef98a` | Supplemental cancelled-evidence check passed; prerequisites 12/14. Two false disabled-tool claims failed. Core not started. |
+| `297ad1ce141f` | Supplemental cancelled-evidence check failed. Independent review distinguishes an automated negation false positive from unsupported examined-port provenance. Core not started. |
 
-The sequential runner starts the core only if all 14 prerequisites pass. It retains exactly 30 distinct attempts for each of natural discovery and source-bound inspection, then runs the independent grader. Failed attempts are never retried or regraded as passes. Mandatory desktop model-switch acceptance remains separate.
+The next candidate includes the examined-coverage correction. Final exact-helper counts and installed desktop results will be recorded after execution. **No evaluated-model status is granted yet.**
 
-Local reports are under `artifacts/native/priority-20261011/`: `python-regression.log`, `interactions.log`, `activity.log`, `markdown.log`, `installed-identity.json`, `qualification-identity.json`, `prerequisites/report.json`, and, if prerequisite gates pass, `core/report.json` and `core/independent-review.json`. Invalid local activity-check invocations are retained separately and do not count as passing component checks. Raw transcripts, workspace contents and preview private keys are excluded from publication.
+The latest completed full Python suite passed **368 tests**, before the final examined-coverage correction; that correction's 27 focused regressions pass and a fresh full suite is running. Production Swift interaction, activity and Markdown checks passed **24 / 29 / 5**. All installed candidates matched their 126 source-manifest entries and 542 staged files and passed strict signature verification.
+
+The runner starts the core only after all mandatory gates pass, retains exactly 30 distinct attempts per core scenario, and runs an independent grader. Installed desktop history/model-switch acceptance remains a separate gate. Earlier desktop evidence belongs only to its recorded helper.
+
+## Evidence boundary
+
+Local reports are retained under `artifacts/native/priority-20261011/`, including frozen identities, raw attempts, independent reviews, regression logs and interrupted-run audits. Raw transcripts, workspace contents and preview private keys are excluded from publication.
+
+The embedded TUF repository is a local single-operator preview repackaging an existing RustScan binary. This does not establish reproducible upstream builds, independent production key custody or public distribution readiness. The model remains `gpt-oss:20b`, digest `17052f91a42e97930aa6e28a6c6c06a983e6a58dbb00434885a0cf5313e376f7`, at 8192 context. Qualifications must match the exact helper, source manifest, model, adapter, package and content identities.

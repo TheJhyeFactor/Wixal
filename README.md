@@ -73,7 +73,7 @@ Agents keep durable task checklists, retrieve full saved tool evidence and conti
 
 ## Alpha status
 
-Real local agent acceptance has passed with **gpt-oss:20b** for implemented workflows, including tools, artifact verification, schedules and reusable skills. This does not establish equal reliability across models or full Hermes parity. The alpha is intended for testing and feedback.
+Real local agent acceptance has passed with **gpt-oss:20b** for implemented workflows, including tools, artifact verification, schedules and reusable skills. This does not establish equal reliability across models or full Hermes parity. Fresh Alpha 5 packaged acceptance passed four of five cases; selecting the wrong saved checkpoint correctly left one task needing attention. See the release notes for exact evidence. The alpha is intended for testing and feedback.
 
 Remaining work includes remote/off-Mac execution, messaging and voice gateways, broader model/service acceptance, production security evaluation, actual sleep/wake/reboot acceptance, full accessibility coverage, Developer ID signing, notarisation and automatic updates. Encrypted sync still needs a real two-Mac acceptance run; service-specific OAuth and account lifecycle flows need broader live verification.
 

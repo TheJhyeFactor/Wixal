@@ -23,6 +23,20 @@ The implementation’s earlier installed development build passed 417 engine tes
 
 Alpha 5 is packaged afresh with its own version and provenance. Release-specific results, package hashes, archive extraction and source-manifest verification are recorded in the attached `release-info.json` and `release-verification.json`. The release also includes `implementation-validation.json`, a sanitized copy of the earlier development summary. Earlier failed local trials remain retained; passing final cases do not establish reliability across all models.
 
+Fresh Alpha 5 package checks:
+
+| Check | Result |
+| --- | --- |
+| Full engine regression suite | 417 passed |
+| Swift interaction / activity / Markdown | 24 / 29 / 5 passed |
+| Native startup, including slow and failed database | 5/5 passed |
+| Source manifest and strict deep signature | 129/129 source entries matched; signature passed |
+| ZIP extraction and package identity | Passed; extracted hashes match the tested package |
+| Fresh packaged `gpt-oss:20b` cases | 4/5 passed |
+| Website | Build, link/consent checks and six desktop/mobile page cases passed |
+
+The fresh model run passed skill snapshots, isolated delegation, keyword discovery and CSV source verification. In the durable-plan/evidence case, the model read the checklist checkpoint instead of the requested `read_file` checkpoint. Independent verification rejected the missing marker and retained `needs_attention`, even though the model checked off its plan. This is a retained qualification failure, not a passing evidence-retrieval acceptance. The earlier development 5/5 and this fresh package 4/5 are separate runs; neither establishes general model reliability.
+
 ## Known limits
 
 This release does not establish full Hermes platform parity. Remote execution, messaging gateways, voice/media integration and broader model/provider qualification remain unfinished. Cybersecurity model qualification remains failed/incomplete; inspect retained evidence and use independent criteria for important tasks.

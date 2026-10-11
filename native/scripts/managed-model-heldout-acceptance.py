@@ -38,14 +38,14 @@ async def main(options):
         assessment=details.get('assessment',{})
         return details.get('name')=='command_start' and assessment.get('capability') in ('network_discover','network_scan') and assessment.get('target')=='127.0.0.1' and bool(assessment.get('ports')) and set(assessment['ports'])<=set(expected)
     client.review_policy=review
-    report=dict(runtimeMode='external_loopback' if options.endpoint else 'bundled_supervised',status='running',started=time.time(),cases=[],helperSha256=digest(options.helper),promptSetSha256=digest(options.prompt_set),acceptanceScriptSha256=digest(Path(__file__)),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),qualification='additional_gates_only')
+    report=dict(requestedContext=options.context,runtimeMode='external_loopback' if options.endpoint else 'bundled_supervised',status='running',started=time.time(),cases=[],helperSha256=digest(options.helper),promptSetSha256=digest(options.prompt_set),acceptanceScriptSha256=digest(Path(__file__)),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),qualification='additional_gates_only')
     def save():(art/'report.json').write_text(json.dumps(report,indent=2))
     save()
     try:
         await client.start();await client.call('project-add',dict(root=str(project)))
         hello=await client.call('hello');await client.call('settings',dict(enabledTools=[t['function']['name'] for t in hello['tools']]))
         await client.call('addon-managed-refresh')
-        report['model']=await client.model(options.model);await client.call('settings',dict(contextSize=8192));save()
+        report['model']=await client.model(options.model);await client.call('settings',dict(contextSize=options.context));save()
         for prompt in prompts:
             assert digest(options.prompt_set)==report['promptSetSha256'],'Prompt set changed'
             assert digest(options.helper)==report['helperSha256'],'Installed helper changed'
@@ -93,5 +93,6 @@ if __name__=='__main__':
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--prompt-set',type=Path,required=True)
     parser.add_argument('--model',default='gpt-oss:20b')
+    parser.add_argument('--context',type=int,choices=[4096,8192,16384,32768],default=8192,help='Requested application context; safe_context remains enforced')
     parser.add_argument('--endpoint',help='Explicit external loopback service; omit for bundled supervised runtime')
     asyncio.run(main(parser.parse_args()))

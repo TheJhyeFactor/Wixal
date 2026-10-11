@@ -18,12 +18,12 @@ spec=importlib.util.spec_from_file_location('real',ROOT/'native/scripts/real-acc
 oracle_spec=importlib.util.spec_from_file_location('port_oracle',Path(__file__).with_name('model-port-oracle.py'));port_oracle=importlib.util.module_from_spec(oracle_spec);oracle_spec.loader.exec_module(port_oracle)
 
 async def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');parser.add_argument('--output',type=Path);parser.add_argument('--repository',type=Path);parser.add_argument('--scenario',choices=['naturalDiscovery','sourceInspection']);parser.add_argument('--endpoint',help='Explicit external loopback service; omit for bundled supervised runtime');options=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--helper',type=Path);parser.add_argument('--source',action='store_true');parser.add_argument('--model',default='gpt-oss:20b');parser.add_argument('--repeats',type=int,default=5);parser.add_argument('--skip-model',action='store_true');parser.add_argument('--output',type=Path);parser.add_argument('--repository',type=Path);parser.add_argument('--scenario',choices=['naturalDiscovery','sourceInspection']);parser.add_argument('--endpoint',help='Explicit external loopback service; omit for bundled supervised runtime');parser.add_argument('--context',type=int,choices=[4096,8192,16384,32768],default=8192,help='Requested application context; safe_context remains enforced');options=parser.parse_args()
     if options.repeats<1:parser.error('Repeat count must be positive')
     if options.repository and not options.source:parser.error('Packaged helpers require embedded repository trust')
     art=(options.output or ROOT/'artifacts/native/managed-tools'/('source' if options.source else 'packaged')).resolve();art.mkdir(parents=True,exist_ok=True);real.ART=art;real.STATE=art/'runs'/str(time.time_ns())/'workspace'
     c=real.Client(options.source,helper=options.helper,payload=options.helper.resolve().parents[1]/'ollama' if options.helper else None,endpoint=options.endpoint);c.allowed.update({'network_discover','network_scan','command_start','addon_install'})
-    report=dict(runtimeMode='external_loopback' if options.endpoint else 'bundled_supervised',schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),acceptanceScriptSha256=digest(Path(__file__)))
+    report=dict(requestedContext=options.context,runtimeMode='external_loopback' if options.endpoint else 'bundled_supervised',schemaVersion=1,status='running',execution='source' if options.source else 'packaged',cases={},modelAttempts=[],started=time.time(),qualification='unevaluated',workspace=str(real.STATE),gradingScriptSha256=digest(Path(__file__).with_name('model-port-oracle.py')),acceptanceScriptSha256=digest(Path(__file__)))
     if options.helper:
         for key,name in [('sourceManifestSha256','SOURCE_MANIFEST.json'),('toolTrustManifestSha256','TOOL_TRUST_MANIFEST.json')]:
             path=options.helper.resolve().parents[1]/name
@@ -78,7 +78,7 @@ async def main():
                 await asyncio.sleep(.2)
         assert len(runs)==2 and runs[1]['result']['sourceRunId']==runs[0]['id'],runs;report['cases']['linkedInvestigation']=runs;save()
         if not options.skip_model:
-            metadata=await c.model(options.model);await c.call('settings',dict(contextSize=8192));report['model']=metadata
+            metadata=await c.model(options.model);await c.call('settings',dict(contextSize=options.context));report['model']=metadata
             scenarios=[('naturalDiscovery',f'Determine which of these TCP ports are open on my authorised loopback host 127.0.0.1: {port_text}. Use standalone TCP discovery and wait for its finished evidence. Do not install tools or inspect service versions. Report only observed ports and coverage limits.'),('sourceInspection',f'For my authorised loopback host 127.0.0.1, discover TCP ports {port_text} and then inspect only the discovered ports using the ports profile. Use the source session reference for inspection. Wait for both stages and report evidence. Do not install tools or use shell commands.')]
             for scenario,prompt in scenarios:
                 if options.scenario and scenario!=options.scenario:continue

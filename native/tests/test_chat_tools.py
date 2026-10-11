@@ -131,6 +131,37 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('workspace_info', [t['function']['name'] for t in body['tools']])
         self.assertLessEqual(token_estimate(body['messages'], body['tools'])[0]+body['options']['num_predict'], 4096)
 
+    async def test_requested_inspection_schema_survives_discovery_error_recovery(self):
+        import json
+        from wixal.context_policy import token_estimate
+        await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
+        agent = self.service.agent
+        agent.model_info = dict(name='fixture', capabilities=['tools', 'thinking'])
+        agent.effective_context = lambda: 8192
+        session = self.service.store.session()
+        prompt = 'Discover selected TCP ports and then inspect using the source session.'
+        session['messages'] = [dict(role='user', content=prompt)]
+        self.service.store.data['tasks'].append(dict(
+            id='inspection-continuation', sessionId=session['id'], status='running', prompt=prompt,
+            checkpoints=[dict(name='network_read', status='finished', result=json.dumps(dict(
+                session_id='fresh-source', state='completed', structuredResult=dict(handoffEligible=True))))]))
+        # A discovery argument error loaded only the schemas in that request.
+        agent.selected_tools = {'workspace_info', 'network_discover', 'network_read', 'network_stop'}
+        for context in (8192, 4096):
+            agent.effective_context = lambda: context
+            body = agent.request_body(session, supports_tools=True)
+            self.assertIn('network_scan', [t['function']['name'] for t in body['tools']])
+            self.assertLessEqual(token_estimate(body['messages'], body['tools'])[0]+body['options']['num_predict'], context)
+        # Loading a continuation schema cannot override a stop/decline.
+        self.assertNotIn('tools', agent.request_body(session, supports_tools=True, tools_stopped=True))
+        # A tool unavailable in the current mode cannot be restored either.
+        await self.service.dispatch('settings', dict(mode='agent', enabledTools=['workspace_info','network_read']))
+        self.assertNotIn('network_scan', [t['function']['name'] for t in agent.request_body(session, supports_tools=True)['tools']])
+        await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
+        # Discovery-only tasks must keep their existing selection.
+        self.service.store.data['tasks'][-1]['prompt'] = 'Discover selected ports. Do not inspect services.'
+        self.assertNotIn('network_scan', [t['function']['name'] for t in agent.request_body(session, supports_tools=True)['tools']])
+
     async def test_chat_stop_during_review_keeps_files_untouched(self):
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
         reviewing = asyncio.Event()

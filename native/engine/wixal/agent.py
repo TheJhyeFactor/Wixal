@@ -205,6 +205,15 @@ class Agent:
         available=eligible(self.tools.catalog(),available_names(self.tools,self.store),self.store.project())
         prompt=next((m.get('displayContent',m.get('content','')) for m in reversed(session['messages']) if m['role']=='user'),'')
         chosen=select_tools(available,prompt,requested) if self.selected_tools is None else [t for t in available if t['function']['name'] in self.selected_tools]
+        from .outcomes import discovery_follow_up
+        task=next((t for t in reversed(self.store.data['tasks']) if t.get('sessionId')==session['id'] and t.get('status')=='running'),{})
+        pending=discovery_follow_up(task)
+        continuation={'network_scan','network_read','network_stop'} if pending and pending['status']=='failed' else set()
+        # Error recovery may have narrowed selected_tools before discovery
+        # completed. Restore the requested continuation from eligible schemas,
+        # rather than intersecting it with an already incomplete selection.
+        chosen_names={t['function']['name'] for t in chosen}|continuation
+        chosen=[t for t in available if t['function']['name'] in chosen_names]
         definitions = [{"type":"function", "function":{k:v for k,v in t["function"].items() if k != "original"}}
                        for t in chosen if supports_tools and not tools_stopped]
         messages = self.context(session, skill, resolve_images, trim_history, len(json.dumps(definitions)) if definitions else 0)
@@ -236,10 +245,7 @@ class Agent:
                         # substitute for preserving the live continuation.
                         if required & {'network_discover','network_scan','network_read'}:
                             required.update({'network_read','network_stop'})
-                        from .outcomes import discovery_follow_up
-                        task=next((t for t in reversed(self.store.data['tasks']) if t.get('sessionId')==session['id'] and t.get('status')=='running'),{})
-                        pending=discovery_follow_up(task)
-                        if pending and pending['status']=='failed':required.update({'network_scan','network_read','network_stop'})
+                        required.update(continuation)
                         definitions=[d for d in definitions if d['function']['name'] in required]
                         messages=self.context(session,skill,resolve_images,trim_history,len(json.dumps(definitions)))
                         messages[0]['content']+='\nTool schemas are loaded progressively to fit this local model. Use workspace_info with tool or category to discover a missing schema.'

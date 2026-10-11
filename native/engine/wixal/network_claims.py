@@ -232,7 +232,8 @@ def check(task):
         if re.search(r"\b(?:not necessarily|cannot|can't|could|may|might|outside|other|unscanned|elsewhere)\b",sentence,re.I):continue
         if ports and re.search(r'\b(?:no|zero)\s+open\s+(?:tcp\s+)?ports\b|\ball\s+(?:(?:selected|tested|scanned|specified|requested|tcp)\s+)*(?:ports\s+)?(?:are\s+|were\s+)?(?:closed|filtered)\b',sentence,re.I):errors.append('The answer denies the observed open ports')
         if re.search(r'\b(?:open|closed)\s*\|\s*filtered\b',sentence,re.I):continue
-        denies=bool(re.search(r'\bneither\b.*\bopen\b|\bnot\s+open\b',sentence,re.I))
+        reported_denial=re.search(r'\bnot\s+reported\s+(?:as\s+)?open\b',sentence,re.I) and not re.search(r'\b(?:if|whether|example|historical|previous)\b',sentence,re.I)
+        denies=bool(re.search(r'\bneither\b.*\bopen\b|\bnot\s+open\b',sentence,re.I) or reported_denial)
         for port in ports:
             if not re.search(r'(?<!\d)'+str(port)+r'(?!\d)',sentence):continue
             if denies or re.search(r'\b(?:closed|filtered)\b',sentence,re.I) and not re.search(r'\bnot\b',sentence,re.I):errors.append(f'The answer contradicts observed open TCP port {port}')

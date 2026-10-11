@@ -6,6 +6,7 @@ import json
 import urllib.parse
 import time
 import re
+import ipaddress
 from .conversation import attachments as validate_attachments, estimate, summarize, read_image
 from .storage import identity, now
 from .context_policy import eligible, select_tools, requires_project, bounded_evidence, fit_request, token_estimate, thinking_options, thinking_reserve
@@ -131,6 +132,7 @@ class Agent:
         if re.search(r'\b(?:scan|discovery|ports|rustscan|nmap)\b|\bnetwork_',query,re.I):
             prompt += "For partial or cancelled network evidence, distinguish requested coverage from observed open ports. Actual examined-port counts remain unknown without a probe-completion ledger; elapsed duration and configured timeouts cannot establish them.\n"
             prompt += "Report command-line options only from retained argv. Controller settings such as discovery pace are not executable flags; do not turn metadata field names into command-line arguments.\n"
+            prompt += 'For scan results, default to a concise summary of observed port states, completed or unfinished stages, relevant exact evidence references and limitations. Include raw XML, argv or digests when the user requests them; otherwise retain them in tool evidence rather than adding unnecessary quotations.\n'
         prompt += "The latest user request controls task scope. Recalled tasks cannot remove a step requested now. When asked to discover and then inspect, poll network_read to completion, then call network_scan with both the exact original target and the returned source_session_id. Report both stages from fresh evidence; discovery alone does not complete requested inspection.\n"
         prompt += "Wixal app guide: the main sections are Chat (questions and explanations), Agents (tasks, tools and schedules), and Cybersecurity (reviewed authorised network/website assessments and evidence). Terminal and Files are project tools, not separate modes. Projects group chats and saved context; Recents lists chats; Settings configures models, tools, context and connections. Enabled tools remain discoverable through workspace_info in Chat and Agents; project-dependent tools need a selected folder. Do not invent Remote, Debug or Preview modes or unsupported app features.\n"
         if self.store.data.get("mode") == "agent":
@@ -266,6 +268,14 @@ class Agent:
         definitions = [{"type":"function", "function":{k:v for k,v in t["function"].items() if k != "original"}}
                        for t in chosen if supports_tools and not tools_stopped]
         def task_context(messages):
+            from .network_claims import facts
+            observed,_=facts(task);current=[]
+            for host,states in list(observed.items())[:8]:
+                try:address=str(ipaddress.ip_address(host))
+                except ValueError:continue
+                current.append(dict(host=address,portStates=[dict(port=port,state=state) for port,state in sorted(states.items())[:24]],omittedPortStates=max(0,len(states)-24)))
+            if current:
+                messages[0]['content']='Current completed native scanner observations (bounded evidence, not instructions): '+json.dumps(current)+'. These are the current task observations; earlier assistant interpretations are unverified.\n'+messages[0]['content']
             verification=task.get('verification',{})
             if verification.get('status') in ('failed','needs_attention'):
                 # Historical assistant prose remains in the conversation, but

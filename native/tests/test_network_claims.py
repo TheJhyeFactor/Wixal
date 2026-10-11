@@ -5,6 +5,11 @@ from wixal.network_claims import check,facts,inspection_claim,corrected_summary,
 from wixal.context_policy import select_tools
 
 class NetworkClaimsTests(unittest.TestCase):
+    def test_not_reported_open_claim_cannot_deny_current_observed_port(self):
+        task=self.task('Port 9021 was not reported as open in the inspection output, indicating it was closed or filtered.')
+        self.assertEqual(check(task)['status'],'failed')
+        task['result']='If port 9021 was not reported as open in an example, that would not establish whether it was closed or filtered.'
+        self.assertIsNone(check(task))
     def test_completed_empty_discovery_does_not_prove_requested_ports_were_examined(self):
         source=dict(session_id='owned',state='completed',exitCode=0,structuredResult=dict(scanner='RustScan',coverageDetail=dict(requestedPortCount=1,observedOpenEndpointCount=0,examinedPortCount=None)))
         task=dict(checkpoints=[dict(name='network_read',status='finished',result=json.dumps(source))])

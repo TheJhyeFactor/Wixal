@@ -7,7 +7,7 @@ from .memory import owner
 
 def procedure_digest(skill):
     """Bind evaluation to the procedure bytes, including a missing baseline."""
-    value=None if skill is None else {key:skill.get(key,'') for key in ('name','description','content')}
+    value=None if skill is None else {key:skill.get(key,'') for key in ('name','description','content','resources')}
     return hashlib.sha256(json.dumps(value,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
 def manage(agents,method,params):
@@ -21,8 +21,8 @@ def manage(agents,method,params):
         if not skill or skill.get('owner','guest')!=owner(store):raise ValueError('Skill is unavailable for this owner')
         versions=skill.get('versions',[]);index=params.get('version',len(versions)-1)
         if type(index)!=int or not 0<=index<len(versions):raise ValueError('Choose an available version')
-        previous=copy.deepcopy(versions[index]);versions.append(dict(content=skill['content'],description=skill.get('description',''),created=now(),reason='Before rollback'))
-        skill.update(content=previous['content'],description=previous.get('description',''),versions=versions[-10:],updated=now());store.save();agents.service.emit('state',store.data);return skill
+        previous=copy.deepcopy(versions[index]);versions.append(dict(content=skill['content'],description=skill.get('description',''),resources=copy.deepcopy(skill.get('resources',{})),created=now(),reason='Before rollback'))
+        skill.update(content=previous['content'],description=previous.get('description',''),resources=copy.deepcopy(previous.get('resources',{})),versions=versions[-10:],updated=now());store.save();agents.service.emit('state',store.data);return skill
     candidate=agents.find('skillCandidates',params['id'])
     evidence=candidate.get('evaluations',[])
     if len(evidence)<2 or any(e.get('status')!='passed' for e in evidence[-2:]):raise ValueError('A candidate requires two passing evaluations before promotion')
@@ -32,7 +32,7 @@ def manage(agents,method,params):
     if any(e.get('candidateSha256')!=procedure_digest(candidate) or e.get('baselineSha256')!=procedure_digest(existing) for e in evidence[-2:]):
         raise ValueError('The candidate or baseline changed; run two fresh evaluations before promotion')
     versions=copy.deepcopy((existing or {}).get('versions',[]))
-    if existing:versions.append(dict(content=existing['content'],description=existing.get('description',''),created=now(),reason='Before evaluated promotion'))
+    if existing:versions.append(dict(content=existing['content'],description=existing.get('description',''),resources=copy.deepcopy(existing.get('resources',{})),created=now(),reason='Before evaluated promotion'))
     value=dict(id=(existing or {}).get('id',identity()),owner=owner(store),name=candidate['name'],description=candidate['description'],content=candidate['content'],versions=versions[-10:],created=(existing or {}).get('created',now()),updated=now(),source='Evaluated agent procedure',evaluationIds=[e['id'] for e in evidence[-2:]])
     if existing:existing.clear();existing.update(value)
     else:store.data['skills'].append(value)

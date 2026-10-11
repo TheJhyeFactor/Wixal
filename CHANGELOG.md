@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.10 Alpha 5 — 2026-10-12
+
+- Add durable task checklists and full saved-checkpoint retrieval without replay.
+- Preserve complete tool rounds, controller feedback and prior decisions through context compaction and summaries.
+- Snapshot skill references, examples, templates and scripts with paged loading and resource-aware version checks.
+- Bound child-agent handoffs, authority, tool calls and execution time; add keyword tool discovery.
+- Reject malformed call batches before execution and validate nested arguments.
+- Keep edit/command tools available for named-file repair requests and recover failed exact-tool discovery after successful use.
+- Verify numeric sums independently from JSON arrays and CSV columns; reject invalid sources before registering checks.
+- Publish updated agent documentation and release-specific package evidence. See [release notes](docs/release-0.7.10-alpha.5.md).
+
 ## 0.7.10 Alpha 4 — 2026-10-11
 
 - Preserve accepted guidance through final-answer streaming and keep runs controllable until verification settles.

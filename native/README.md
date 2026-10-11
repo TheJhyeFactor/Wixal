@@ -1,16 +1,14 @@
 # Wixal native alpha
 
-**0.7.10 Alpha 4** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.4); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
+**0.7.10 Alpha 5** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.5); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 
-The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. Alpha 4 brings these changes into the public download; the dated reports retain their earlier build identities.
+The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. Alpha 4 brought these earlier changes into the public download; the dated reports retain their earlier build identities.
 
-## Alpha 4 changes
+## Alpha 5 changes
 
-Alpha 4 includes the merged control, long-chat recovery, scheduler fairness and evidence/context fixes completed after Alpha 3. See the [release notes](../docs/release-0.7.10-alpha.4.md) for what changed and the exact release validation. Dated development reports retain their original helper hashes and are not transferred to this release. Cybersecurity model qualification remains open.
-
-Public managed downloads remain gated; no production catalogue or tool payload is bundled. Contributor GitHub OAuth also requires a registered client ID. See [the current alpha guide](../docs/native-alpha.md#tool-library-and-reporting) for usable paths and boundaries.
+Alpha 5 adds durable checklists, whole-tool-round context compaction, paged checkpoint retrieval, skill resource snapshots, isolated child handoffs and keyword tool discovery. It also rejects malformed call batches before execution and independently verifies numeric sums from JSON arrays or CSV columns. See the [release notes](../docs/release-0.7.10-alpha.5.md), [implementation comparison](../docs/hermes-agent-improvements-2026-10-12.md) and [agent tools guide](../docs/agent-tools.md). Dated development reports retain their original helper hashes; release assets carry separate provenance. Cybersecurity model qualification remains open.
 
 ## Build and run
 

@@ -389,7 +389,9 @@ class Agents:
             row['enabled']=args['action']=='resume'
             if row['enabled']:row['nextRun']=next_calendar(row,now()) if row.get('timing') in TIMINGS else now()+row['intervalSeconds']*1000
             self.store.save();return row
-        if args['action']=='list':return [dict(name=s['name'],description=s.get('description','')) for s in self.store.data['skills']]
+        if args['action']=='list':
+            from .skill_resources import visible
+            return [dict(name=s['name'],description=s.get('description','')) for s in visible(self.store)]
         if args['action']=='versions':
             skill=next((s for s in self.store.data['skills'] if s['name']==args.get('name') and s.get('owner','guest')==owner(self.store)),None)
             if not skill:raise ValueError('Skill is unavailable')

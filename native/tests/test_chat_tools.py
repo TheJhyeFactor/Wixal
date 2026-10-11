@@ -27,6 +27,15 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('network_discover',available_names(self.service.tools,self.service.store))
         self.assertIn('network_scan',available_names(self.service.tools,self.service.store))
 
+    async def test_security_inventory_reports_current_adapter_scope(self):
+        await self.service.dispatch('settings',dict(mode='chat',enabledTools=[]))
+        result=await self.service.tools.execute('security_tools',{},self.service.store.session()['id'])
+        self.assertEqual(result['nativeAdapters'],{'network_discover':{'available':False},'network_scan':{'available':False}})
+        await self.service.dispatch('settings',dict(enabledTools=['network_scan']))
+        result=await self.service.tools.execute('security_tools',{},self.service.store.session()['id'])
+        self.assertTrue(result['nativeAdapters']['network_scan']['available'])
+        self.assertFalse(result['nativeAdapters']['network_discover']['available'])
+
     async def chat(self, text, calls, final='Observed the actual result'):
         await self.service.dispatch('settings', dict(mode='chat', enabledTools=[]))
         context, seen = self.scripted(calls, final)
@@ -65,6 +74,8 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
             calls += 1
             if calls == 1:
                 return dict(role='assistant', content='', tool_calls=[dict(function=dict(name='write_file', arguments=dict(path=path, content='NO'))) for path in ('report.txt', 'alternate.txt')])
+            self.assertNotIn('tools',args[1])
+            self.assertIn('Tool execution has stopped',args[1]['messages'][0]['content'])
             return dict(role='assistant', content='The action was declined.')
         with patch('wixal.agent.stream_chat', stream):
             task = await self.service.dispatch('chat', dict(text='Write files report.txt'))
@@ -164,6 +175,8 @@ class ChatToolsTests(unittest.IsolatedAsyncioTestCase):
             agent.effective_context = lambda: context
             body = agent.request_body(session, supports_tools=True)
             self.assertIn('network_scan', [t['function']['name'] for t in body['tools']])
+            self.assertIn('Current task state: discovery has completed',body['messages'][0]['content'])
+            self.assertIn('fresh-source',body['messages'][0]['content'])
             self.assertLessEqual(token_estimate(body['messages'], body['tools'])[0]+body['options']['num_predict'], context)
         # Loading a continuation schema cannot override a stop/decline.
         self.assertNotIn('tools', agent.request_body(session, supports_tools=True, tools_stopped=True))

@@ -219,9 +219,15 @@ class Agent:
         chosen=[t for t in available if t['function']['name'] in chosen_names]
         definitions = [{"type":"function", "function":{k:v for k,v in t["function"].items() if k != "original"}}
                        for t in chosen if supports_tools and not tools_stopped]
-        messages = self.context(session, skill, resolve_images, trim_history, len(json.dumps(definitions)) if definitions else 0)
-        if requested and supports_tools:
+        def continuation_context(messages):
+            if continuation and supports_tools and not tools_stopped:
+                messages[0]['content'] += '\nCurrent task state: discovery has completed, but the inspection requested by the user remains unfinished. Use network_scan with source_session_id from these current-task sources: '+json.dumps(pending['sourceSessions'])+'. Preserve the requested inspection profile. Poll network_read for the inspection result before concluding. Tool calls still require normal authority and review.'
+            return messages
+        messages = continuation_context(self.context(session, skill, resolve_images, trim_history, len(json.dumps(definitions)) if definitions else 0))
+        if requested and supports_tools and not tools_stopped:
             messages[0]["content"] += "\nThe user explicitly requested these enabled tools: " + ", ".join(requested) + ". Use them when their required inputs are available; otherwise ask for the missing inputs. Use workspace_info to load another enabled tool or category when follow-up work requires it."
+        if tools_stopped:
+            messages[0]["content"] += "\nTool execution has stopped after a declined action or repeated failures. No new tool actions are available in this turn. Conclude from the retained evidence, explain the unfinished work, and do not retry, discover another tool, or use a command workaround."
         if not supports_tools:
             messages[0]["content"] += "\nAnswer from the supplied conversation, images and user-confirmed notes. No new tool actions are available; explain that limitation only when the request needs a new action. Answer factual questions directly from supplied notes when they support the answer."
             messages = [dict(role="assistant" if m["role"] == "tool" else m["role"], content=("Tool result from previous work: " if m["role"] == "tool" else "") + m.get("content", ""), **{k:m[k] for k in ("images", "imageIds") if m.get(k)}) for m in messages]
@@ -250,7 +256,7 @@ class Agent:
                             required.update({'network_read','network_stop'})
                         required.update(continuation)
                         definitions=[d for d in definitions if d['function']['name'] in required]
-                        messages=self.context(session,skill,resolve_images,trim_history,len(json.dumps(definitions)))
+                        messages=continuation_context(self.context(session,skill,resolve_images,trim_history,len(json.dumps(definitions))))
                         messages[0]['content']+='\nTool schemas are loaded progressively to fit this local model. Use workspace_info with tool or category to discover a missing schema.'
                         messages,reserve,_=fit_request(messages,definitions,context,reserve_limit)
         else:reserve=output_reserve or min(2048,max(256,context//5))

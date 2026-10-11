@@ -488,7 +488,9 @@ class Tools:
         if name == 'security_tools':
             manager=getattr(self.store,'addons',None)
             rustscan=manager.snapshot('rustscan')['packages'] if manager else []
-            return dict(installed=bool(shutil.which('nmap') or Path('/opt/homebrew/bin/nmap').is_file()),profiles=list(PROFILES),rustscan=rustscan,interpretation='Installation, capability readiness and model evaluation are separate states')
+            scope=set(available_names(self,self.store))
+            adapters={tool:dict(available=tool in scope) for tool in ('network_discover','network_scan')}
+            return dict(installed=bool(shutil.which('nmap') or Path('/opt/homebrew/bin/nmap').is_file()),profiles=list(PROFILES),rustscan=rustscan,nativeAdapters=adapters,interpretation='Installation, capability readiness, current adapter availability and model evaluation are separate states. Installed binaries and ready packages do not grant task permission. Respect disabled adapters and user restrictions; do not use commands or installation as a workaround when the user forbids it.')
         if name == 'network_discover':
             from .network_discovery import start
             return await start(self,args,session_id)

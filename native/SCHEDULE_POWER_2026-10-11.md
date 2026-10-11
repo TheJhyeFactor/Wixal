@@ -18,6 +18,12 @@ A separate replacement app was built from the corrected source. Its installed he
 
 Local evidence is retained under `artifacts/native/priority-20261011`: `schedule-fairness-before-final.log`, `schedule-fairness-after.log`, `power-qualification/`, and the separate `power-fairness/` protocol. Raw local macOS logs and workspace data are not published.
 
+## Subsequent validation and owner test window
+
+The full Python suite passed: **381 tests in 143.771 seconds**. The first invocation omitted the engine import path and failed to load four modules; the corrected run supplied `PYTHONPATH=native/engine` and passed all tests. The installed schedule API also prepared Sydney and UTC calendar routines, independently checking their different wall times against the same UTC instant. Those disabled routines have not executed through a power transition.
+
+The owner subsequently asked to defer sleep/wake/reboot focus while using the laptop. No second power transition was started. Both replacement LaunchAgents were unregistered and all replacement schedules disabled; preparation and retained evidence remain available for the later window.
+
 ## Remaining acceptance
 
 A sleep lasting across due times, foreground and closed-app catch-up, configured timezone and missed-run policy, competing workspace claims, review and desktop-only pause/resume, notification/history persistence, and actual reboot/sign-in still require their recorded real-device observations. The owner authorised this Mac for these tests and will handle reboot/sign-in. Keyboard Navigation and VoiceOver are authorised temporarily for issue #11 and have not yet been changed.

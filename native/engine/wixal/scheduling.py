@@ -28,7 +28,9 @@ def due(schedule, stamp):
 async def run_due(service, background=False):
     if getattr(service,'security_workspace',None) and service.security_workspace.busy:return False
     if service.active and not service.active.done() or service.manual_tools or service.model_manager.busy or getattr(service,"sync",None) and service.sync.lock.locked():return False
-    for schedule in service.store.data['schedules']:
+    # Background invocations execute one claim. Prefer the oldest due time so
+    # a short interval cannot consume every launch while older work waits.
+    for schedule in sorted(service.store.data['schedules'],key=lambda row:row.get('nextRun',float('inf'))):
         item=due(schedule,now())
         if not item or schedule.get('owner','guest')!=owner(service.store):continue
         previous=dict(project=service.store.data['activeProject'],session=service.store.data['activeSession'],model=service.store.data['model'],mode=service.store.data['mode'])

@@ -9,6 +9,7 @@ from .website import website_plan
 
 COLLECTIONS = ('securityDiscoveries', 'securityFindings', 'securityResearch', 'securityPlans', 'securityTemplates', 'securityEvents', 'securityContracts')
 BUILTINS = {
+    'api_observe':dict(title='Scoped read-only API observations',types=['Website / API'],tools=[],inputs=['paths','credentialId']),
     'network_discover': dict(title='Discover TCP ports', types=['Website / API','Server','Network device'], tools=['network_discover'], inputs=['coverage','ports','pace','timeout_seconds']),
     'linux_network_scan':dict(title='Isolated Linux network assessment',types=['Website / API','Server','Network device'],tools=[],inputs=['profile','ports','timeout_seconds']),
     'network_scan': dict(title='Network assessment', types=['Website / API','Network','Server','Network device'], tools=['network_scan'], inputs=['profile','ports','timeout_seconds']),
@@ -140,6 +141,17 @@ class SecurityRecords:
     def evidence_context(self, run):
         allowed=run.get('evidenceIds',[])
         rows=[r for r in self.runs if r['targetId']==run['targetId'] and r['status']=='completed' and (run['capability']!='planner' or r['capability'] not in ('analysis','research','planner')) and (not allowed or r['id'] in allowed)]
+        if run.get('assignmentId'):
+            from .engagement_evidence import read
+            engagement=self.engagements.get(run['engagementId'])
+            assignment=self.engagements.record('securityAssignments',run['assignmentId'],engagement)
+            rows=[]
+            for reference in assignment['evidenceIds']:
+                record,value=read(self.engagements,engagement,reference)
+                source=self.engagements.record('securityRuns',record['source'],engagement)
+                if source['targetId']!=run['targetId'] or source['id'] not in allowed:raise ValueError('Assignment evidence identity changed')
+                rows.append(dict(source,result=value['result']))
+
         # Prefer compact structured evidence, no recursive sources or repeated raw XML.
         context=[]
         remaining=30000
@@ -154,7 +166,8 @@ class SecurityRecords:
             if size>remaining:break
             context.insert(0,item);remaining-=size
             if len(context)>=12:break
-        inventory=[dict(id=d['id'],kind=d['kind'],values=d['values'],sourceRuns=[o['runId'] for o in d['observations']]) for d in self.store.data['securityDiscoveries'] if d['targetId']==run['targetId'] and not d.get('simulation') and (not allowed or any(o['runId'] in allowed for o in d['observations']))]
+        if run.get('assignmentId'):return context
+        inventory=[dict(id=d['id'],kind=d['kind'],values=next(o['values'] for o in reversed(d['observations']) if not allowed or o['runId'] in allowed),sourceRuns=[o['runId'] for o in d['observations'] if not allowed or o['runId'] in allowed]) for d in self.store.data['securityDiscoveries'] if d['targetId']==run['targetId'] and not d.get('simulation') and (not allowed or any(o['runId'] in allowed for o in d['observations']))]
         context.append(dict(discoveries=inventory[:60],inventoryTruncated=len(inventory)>60))
         sources=[r for r in self.store.data['securityResearch'] if r['targetId']==run['targetId'] and (not allowed or r['runId'] in allowed)]
         context.append(dict(retrievedSources=[dict(id=r['id'],url=r['url'],status=r.get('status'),content=r.get('content','')[:4000],applicability=r['applicability'],rationale=r.get('rationale',''),error=r.get('error'),excerpt=True) for r in sources[-6:]]))

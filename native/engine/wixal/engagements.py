@@ -15,6 +15,8 @@ class Engagements:
         self.workspace=workspace;self.store=workspace.store
         from .security_worker import LinuxWorker
         self.worker=LinuxWorker(self)
+        from .security_assurance import Assurance
+        self.assurance=Assurance(self)
         for key in evidence.COLLECTIONS:self.store.data.setdefault(key,[])
         # Historical targets remain unapproved. No fabricated engagement migration.
         for item in self.store.data['securityAssignments']:
@@ -119,6 +121,8 @@ class Engagements:
         self.event(engagement,'engagement_'+status,dict(scopeRevision=engagement['scopeRevision']))
 
     async def dispatch(self,method,params):
+        assured=await self.assurance.dispatch(method,params)
+        if assured is not NotImplemented:return assured
         if method=='security-engagement-worker-configure':return await self.worker.configure(params.get('socket'))
         if method=='security-engagement-worker-inspect':return await self.worker.inspect()
         if method=='security-specialist-catalog':return dict(roles=evidence.ROLES,capabilities=list(policy.CAPABILITIES))
@@ -205,7 +209,7 @@ class Engagements:
             if row['status']=='superseded':raise ValueError('A superseded objective cannot be completed again')
             verification=self.record('securityVerifications',params.get('verificationId'),engagement)
             if row['scopeRevision']!=engagement['scopeRevision'] or verification['scopeRevision']!=engagement['scopeRevision']:raise ValueError('Objective or verification belongs to an older scope; create a current objective')
-            if verification['objectiveId']!=row['id'] or verification['status']!='discriminated':raise ValueError('Objective needs its own discriminating observation check')
+            if verification['objectiveId']!=row['id'] or verification['status'] not in ('discriminated','validated'):raise ValueError('Objective needs its own discriminating observation check')
             if any(self.record('securityObjectives',p,engagement)['status']!='completed' for p in row['dependsOn']):raise ValueError('Objective prerequisites are unfinished')
             # Re-read immutable inputs at completion, do not trust stale validation.
             for key in ('positiveId','baselineId'):evidence.read(self,engagement,verification[key])

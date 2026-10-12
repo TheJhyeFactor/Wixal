@@ -158,7 +158,7 @@ struct EngagementRecordsView:View {
                     Text("Scope \(engagementText(row["scopeRevision"])) · effect \(engagementText(row["effectState"])) · \(engagementText(row["environment"]))").foregroundStyle(theme.muted)
                     if !engagementText(row["error"]).isEmpty {Text(engagementText(row["error"])).foregroundStyle(.orange)}
                     if !engagementText(row["output"]).isEmpty {DisclosureGroup("Retained output excerpt"){Text(String(engagementText(row["output"]).suffix(12000))).wixalFont(size:10,design:.monospaced).textSelection(.enabled)}}
-                    if row["workerContainer"] != nil {Button("Review worker cleanup"){perform("security-engagement-worker-cleanup",["runId":row["id"] ?? ""])}}
+                    if row["workerContainer"] != nil {Button("Inspect owned environment"){perform("security-engagement-worker-reconcile",["runId":row["id"] ?? ""])};Button("Review worker cleanup"){perform("security-engagement-worker-cleanup",["runId":row["id"] ?? ""])}}
                     if ["queued","blocked","running","waiting_review","waiting_model"].contains(engagementText(row["status"])) {Button("Stop operation"){perform("security-run-stop",["id":row["id"] ?? ""])}}
                 }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:7))
             }

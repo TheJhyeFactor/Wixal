@@ -6,7 +6,7 @@ from collections import deque
 from .storage import identity, now
 from .tools import safe_path
 
-COLLECTIONS=('securityEngagements','securityObjectives','securityRelations','securityVerifications','securityCleanup','securityAssignments','securityEvidence','securityEngagementEvents')
+COLLECTIONS=('securityEngagements','securityObjectives','securityRelations','securityVerifications','securityCleanup','securityAssignments','securityEvidence','securityEngagementEvents','securityCredentials','securityValidationContracts','securityTelemetry')
 ROLES={'planner':'Develop prerequisite-based hypotheses and candidate checks from retained evidence.',
        'recon_analyst':'Interpret observed assets and services; distinguish historical identities and incomplete coverage.',
        'researcher':'Evaluate the supplied advisory evidence and its applicability. Do not invent sources or retrieve external data.',
@@ -81,7 +81,9 @@ def discriminate(manager,engagement,params):
 
 def paths(manager,engagement,start,end):
     manager.entity(engagement,start);manager.entity(engagement,end)
-    edges=[e for e in manager.rows('securityRelations',engagement) if e['state']!='disproved']
+    edges=[e for e in manager.rows('securityRelations',engagement) if e['state']!='disproved' and e.get('scopeRevision')==engagement['scopeRevision']]
+    for edge in edges:
+        for ref in edge['evidenceIds']:read(manager,engagement,ref)
     adjacency={}
     for edge in edges:adjacency.setdefault(edge['fromId'],[]).append(edge)
     queue=deque([(start,[],{start})]);result=[];visited=0

@@ -15,6 +15,8 @@ struct ModelsView:View {
     @ViewState<String> private var size="all"
     @ViewState<String> private var sort="name"
     @ViewState<String> private var download=""
+    @ViewState<[[String:Any]]> private var hubFiles=[]
+    @ViewState<String> private var hubRevision=""
     @ViewState<String> private var deleting=""
     @ViewState<Bool> private var operation=false
     @ViewState<Bool> private var loading=true
@@ -158,9 +160,23 @@ struct ModelsView:View {
     }
     private var downloads:some View {
         VStack(alignment:.leading,spacing:16){
-            VStack(alignment:.leading,spacing:12){Text("Download a model").wixalFont(size:14,weight:.medium);Text("Downloads use the Ollama registry and run one at a time. Paused transfers can resume.").wixalFont(size:11).foregroundStyle(theme.muted);HStack{TextField("For example, qwen3:4b",text:$download).wixalField();Button(hasDownload ? "Queue download" : "Download"){let tag=download.trimmingCharacters(in:.whitespacesAndNewlines);download="";run("model-pull",["name":tag],success:"Queued \(tag).")}.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:11).disabled(locked || download.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)}}.wixalCard()
+            VStack(alignment:.leading,spacing:12){
+                Text("Download from Hugging Face").wixalFont(size:14,weight:.medium)
+                Text("Choose a public GGUF repository and file. Downloads are pinned to a revision, checked against its SHA-256, and imported for local inference. Paused transfers can resume.").wixalFont(size:11).foregroundStyle(theme.muted)
+                HStack {
+                    TextField("For example, Qwen/Qwen3-0.6B-GGUF",text:$download).wixalField()
+                    Button("Browse files") {
+                        operation=true;feedback="";hubFiles=[]
+                        Task {do {if let result=try await engine.call("model-hf-repository",["repo":download.trimmingCharacters(in:.whitespacesAndNewlines)]) as? [String:Any] {hubFiles=records(result["files"]);hubRevision=textValue(result["revision"]);if hubFiles.isEmpty{feedback="No supported single-file GGUF models with published hashes in this repository."}}}catch{feedback=error.localizedDescription};operation=false}
+                    }.disabled(locked || download.isEmpty)
+                }
+                if !hubRevision.isEmpty {Text("Repository revision: "+hubRevision).wixalFont(size:10).foregroundStyle(theme.muted).textSelection(.enabled)}
+                ForEach(Array(hubFiles.enumerated()),id:\.offset){_,file in
+                    HStack {VStack(alignment:.leading){Text(textValue(file["file"]));Text("Licence: "+textValue(file["license"])).foregroundStyle(theme.muted)};Spacer();Text(modelBytes(file["size"]));Button("Download"){run("model-pull",["repo":textValue(file["repo"]),"file":textValue(file["file"]),"revision":textValue(file["revision"])])}.disabled(locked)}.wixalFont(size:11)
+                }
+            }.wixalCard()
             if !jobs.isEmpty{WixalSection(title:"Download queue",detail:"\(jobs.filter{["queued","downloading"].contains(textValue($0["state"]))}.count) pending"){ForEach(Array(jobs.reversed().enumerated()),id:\.offset){_,job in downloadCard(job)}}}
-            WixalSection(title:"Models for this Mac",detail:"Local catalog · checked \(textValue(manager["catalogChecked"])) · sizes and memory fit are estimates."){
+            WixalSection(title:"Models for this Mac",detail:"Hugging Face catalog · checked \(textValue(manager["catalogChecked"])) · sizes and memory fit are estimates."){
                 let rows=filtered(records(manager["catalog"]),catalog:true)
                 if rows.isEmpty{empty("No matching downloads",detail:"Try another search or reset the filters.")}
                 ForEach(Array(rows.enumerated()),id:\.offset){_,model in catalogCard(model)}
@@ -170,7 +186,7 @@ struct ModelsView:View {
     private func catalogCard(_ model:[String:Any])->some View {
         let name=textValue(model["name"]),present=installed.contains{textValue($0["name"])==name},fitInfo=model["fit"] as? [String:Any] ?? [:]
         let queued=jobs.last{ textValue($0["name"])==name && ["queued","downloading","paused"].contains(textValue($0["state"])) }
-        return HStack(spacing:14){VStack(alignment:.leading,spacing:6){Button(name){download=name}.buttonStyle(.plain).wixalFont(size:12,weight:.medium).accessibilityLabel("Choose download tag \(name)");Text((model["capabilities"] as? [String] ?? []).map{$0=="vision" ? "Images" : $0.capitalized}.joined(separator:" · ")).wixalFont(size:10).foregroundStyle(theme.muted);Text((fitInfo["fits"] as? Bool ?? false) ? "Estimated fit" : "May exceed RAM").wixalFont(size:10).foregroundStyle(theme.muted)};Spacer();Text(modelBytes(model["size"])).wixalFont(size:11).foregroundStyle(theme.muted);Button(present ? "Use model" : queued != nil ? textValue(queued?["state"]).capitalized : "Download"){run(present ? "model-use" : "model-pull",["name":name])}.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:10).disabled(locked || (!present && queued != nil))}.wixalCard()
+        return HStack(spacing:14){VStack(alignment:.leading,spacing:6){Button(textValue(model["file"])){download=textValue(model["repo"])}.buttonStyle(.plain).wixalFont(size:12,weight:.medium).accessibilityLabel("Choose Hugging Face model \(name)");Text((model["capabilities"] as? [String] ?? []).map{$0=="vision" ? "Images" : $0.capitalized}.joined(separator:" · ")).wixalFont(size:10).foregroundStyle(theme.muted);Text(textValue(model["repo"]) + " · " + ((fitInfo["fits"] as? Bool ?? false) ? "Estimated fit" : "May exceed RAM")).wixalFont(size:10).foregroundStyle(theme.muted)};Spacer();Text(modelBytes(model["size"])).wixalFont(size:11).foregroundStyle(theme.muted);Button(present ? "Use model" : queued != nil ? textValue(queued?["state"]).capitalized : "Download"){run(present ? "model-use" : "model-pull",["name":name])}.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:10).disabled(locked || (!present && queued != nil))}.wixalCard()
     }
     private func embeddingOnly(_ name:String)->Bool {let caps=installed.first{textValue($0["name"])==name}?["capabilities"] as? [String] ?? [];return caps.contains("embedding") && !caps.contains("completion")}
     private func downloadCard(_ job:[String:Any])->some View {
@@ -182,7 +198,14 @@ struct ModelsView:View {
             HStack(spacing:14){
                 if ["queued","downloading"].contains(state){downloadAction("Pause",id:id,action:"pause");downloadAction("Cancel",id:id,action:"cancel")}
                 else if ["paused","failed","cancelled"].contains(state){downloadAction(state=="paused" ? "Resume" : "Retry",id:id,action:state=="paused" ? "resume" : "retry");downloadAction("Remove",id:id,action:"remove")}
-                else{Button(embeddingOnly(textValue(job["name"])) ? "Use for memory" : "Use model →"){run(embeddingOnly(textValue(job["name"])) ? "memory-semantic" : "model-use",["name":textValue(job["name"]),"model":textValue(job["name"])])}.disabled(locked);downloadAction("Dismiss",id:id,action:"remove")}
+                else {
+                    if installed.contains(where:{textValue($0["name"]) == textValue(job["name"])}) {
+                        Button(embeddingOnly(textValue(job["name"])) ? "Use for memory" : "Use model →"){run(embeddingOnly(textValue(job["name"])) ? "memory-semantic" : "model-use",["name":textValue(job["name"]),"model":textValue(job["name"])])}.disabled(locked)
+                    }else if textValue(job["provider"]) == "huggingface" {
+                        Button("Download again"){run("model-pull",["repo":textValue(job["repo"]),"file":textValue(job["file"]),"revision":textValue(job["revision"])])}.disabled(locked)
+                    }
+                    downloadAction("Dismiss",id:id,action:"remove")
+                }
                 Spacer()
             }.buttonStyle(.plain).wixalFont(size:11).foregroundStyle(theme.accent)
         }.wixalCard()

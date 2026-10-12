@@ -91,6 +91,18 @@ class LinuxWorker:
                 results.append(dict(kind=kind,name=name,absent=True))
         return results
 
+    async def reconcile(self,run):
+        receipts=[]
+        for kind,key in (('container','workerContainer'),('network','workerNetwork')):
+            name=run.get(key)
+            if not name:continue
+            listing=(await self.command(kind,'ls',*(['--all'] if kind=='container' else []),'--filter','name='+name,'--format','{{.Names}}' if kind=='container' else '{{.Name}}')).splitlines()
+            if name not in listing:receipts.append(dict(kind=kind,name=name,state='absent'));continue
+            value=await self.owned(kind,name,run)
+            receipts.append(dict(kind=kind,name=name,state='running' if kind=='container' and value.get('State',{}).get('Running') else 'present',identity=value['Id']))
+        result=dict(receipts=receipts,environmentClean=bool(receipts) and all(r['state']=='absent' for r in receipts),effectState=run.get('effectState','unknown'),limitation='Environment inspection does not reconcile target-side effects or replay an interrupted operation')
+        return result
+
     async def execute(self,run,approve):
         live();ready=await self.inspect()
         if not ready['available']:raise ValueError(ready['error'])

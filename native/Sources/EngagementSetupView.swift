@@ -18,7 +18,7 @@ struct EngagementSetupView: View {
     @ViewState private var contacts:String
     @ViewState private var dataHandling:String
     @ViewState private var abort:String
-    private let supported=["analysis","planner","software_inventory","website_assess","website_simulate","network_scan","network_discover","linux_network_scan"]
+    private let supported=["analysis","planner","software_inventory","website_assess","website_simulate","network_scan","network_discover","linux_network_scan","api_observe"]
     init(engine:EngineClient,engagement:[String:Any]?,save:@escaping ([String:Any])->Void) {
         self.engine=engine;self.engagement=engagement;self.save=save
         let scope=records(engagement?["scopes"]).last?["policy"] as? [String:Any] ?? [:]

@@ -55,6 +55,19 @@ class WorkerLifecycleTests(unittest.IsolatedAsyncioTestCase):
         result=await worker.cleanup(run)
         self.assertTrue(result[0]['absent']);self.assertFalse(any('rm' in call.args for call in worker.command.call_args_list))
 
+    async def test_reconcile_absence_preserves_unknown_target_effects(self):
+        worker=LinuxWorker(None);run=dict(id='run',engagementId='engagement',workerContainer='missing',effectState='unknown')
+        worker.command=AsyncMock(return_value='')
+        result=await worker.reconcile(run)
+        self.assertTrue(result['environmentClean']);self.assertEqual(result['effectState'],'unknown')
+        self.assertFalse(any('rm' in call.args for call in worker.command.call_args_list))
+
+    async def test_reconcile_checks_ownership_before_exposing_liveness(self):
+        import json
+        worker=LinuxWorker(None);run=dict(id='run',engagementId='engagement',workerContainer='existing')
+        worker.command=AsyncMock(side_effect=['existing',json.dumps([dict(Config=dict(Labels={'wixal.run':'another','wixal.engagement':'another'}))])])
+        with self.assertRaisesRegex(ValueError,'ownership mismatch'):await worker.reconcile(run)
+
     async def test_runtime_configuration_requires_owned_unix_socket_and_review(self):
         import socket,tempfile
         with tempfile.TemporaryDirectory() as temp:

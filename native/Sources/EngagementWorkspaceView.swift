@@ -7,7 +7,7 @@ func engagementText(_ value:Any?) -> String {
 }
 
 func engagementCapabilityName(_ value:String) -> String {
-    ["analysis":"Evidence analysis","planner":"AI plan builder","software_inventory":"Software inventory","website_assess":"Website assessment","website_simulate":"Local simulations","network_scan":"Network assessment","network_discover":"TCP port discovery","linux_network_scan":"Isolated Linux network assessment"][value] ?? value
+    ["analysis":"Evidence analysis","planner":"AI plan builder","software_inventory":"Software inventory","website_assess":"Website assessment","website_simulate":"Local simulations","network_scan":"Network assessment","network_discover":"TCP port discovery","linux_network_scan":"Isolated Linux network assessment","api_observe":"Read-only API observations"][value] ?? value
 }
 
 struct EngagementWorkspaceView: View {
@@ -24,7 +24,7 @@ struct EngagementWorkspaceView: View {
     @Environment(\.wixalTheme) private var theme
     private var engagements: [[String:Any]] { records(engine.state["securityEngagements"]).filter { engagementText($0["projectId"]) == engagementText(engine.state["activeProject"]) } }
     private var selected: [String:Any]? { engagements.first { engagementText($0["id"]) == selection } }
-    private let pages = ["Brief & scope", "Objectives", "Attack paths", "Specialists", "Operations", "Evidence & verification", "Report & cleanup"]
+    private let pages = ["Brief & scope", "Objectives", "Attack paths", "Specialists", "Operations", "Evidence & verification", "Report & cleanup","Validation & identities"]
     var body: some View {
         VStack(alignment:.leading, spacing:14) {
             HStack {
@@ -57,6 +57,7 @@ struct EngagementWorkspaceView: View {
                     }.buttonStyle(WixalButtonStyle(outlined:true))
                     ScrollView {
                         if page == "Brief & scope" { brief(selected) }
+                        else if page == "Validation & identities" { EngagementAssuranceView(engine:engine,engagement:selected,perform:perform) }
                         else { EngagementRecordsView(engine:engine,engagement:selected,page:page,perform:perform) }
                     }
                 }

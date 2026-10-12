@@ -59,7 +59,7 @@ async def main(args):
         async with asyncio.timeout(120):out,err=await child.communicate()
         if child.returncode:raise RuntimeError(err.decode()[:3000])
         return out.decode()
-    report=dict(status='running',implementation='source' if args.source else 'packaged',cases={},socket=args.socket)
+    report=dict(status='running',implementation='source' if args.source else 'packaged',profile=args.profile,cases={},socket=args.socket)
     def save():(output/'results.json').write_text(json.dumps(report,indent=2))
     app=Path(args.app).resolve() if args.app else None
     c=real.Client(args.source,helper=app/'Contents/Resources/engine/wixal-engine' if app else None,payload=ROOT/'runtime/ollama',endpoint='http://127.0.0.1:11434')
@@ -73,7 +73,7 @@ async def main(args):
         else:raise AssertionError('Owned target did not start')
         bridge=json.loads(await docker('network','inspect','bridge'))[0]['IPAM']['Config'][0]['Gateway'];ipaddress.ip_address(bridge)
         await docker('network','create','--label','wixal.validation='+suffix,'--subnet','172.28.91.0/24',network)
-        config=dict(addresses=[bridge],ports=[18080],profile='ports',seconds=30,engagementId=suffix,runId=suffix,scopeRevision=1)
+        config=dict(addresses=[bridge],ports=[18080],profile=args.profile,seconds=30,engagementId=suffix,runId=suffix,scopeRevision=1)
         policy_result=json.loads(await docker('run','--rm','--network',network,'--cap-drop','ALL','--cap-add','NET_ADMIN','--cap-add','SETUID','--cap-add','SETGID','--cap-add','SETPCAP','--security-opt','no-new-privileges','--entrypoint','python3','wixal-security-worker:v1','-I','-c',POLICY_SCRIPT,json.dumps(config),'172.28.91.1'))
         report['cases']['actualEgressPolicy']=policy_result;save()
         await c.start();started=True
@@ -84,7 +84,7 @@ async def main(args):
         silent=await c.call('security-target-add',dict(type='Server',address='172.28.91.99',objective='Owned unused lab address for cancellation'))
         engagement=await c.call('security-engagement-create',dict(name='Actual Linux worker validation',objective='Observe owned lab service and prove bounded egress/cancellation',targetIds=[target['id'],silent['id']],scope=dict(capabilities=['linux_network_scan'],maxSeconds=30,maxRuns=8)))
         await c.call('security-engagement-approve',dict(engagementId=engagement['id'],baseRevision=1))
-        scan=await c.call('security-run-add',dict(targetId=target['id'],stage='Recon',capability='linux_network_scan',arguments=dict(profile='ports',ports='18080',timeout_seconds=30),name='Actual isolated port observation'))
+        scan=await c.call('security-run-add',dict(targetId=target['id'],stage='Recon',capability='linux_network_scan',arguments=dict(profile=args.profile,ports='18080',timeout_seconds=30),name='Actual isolated port observation'))
         async def get(run_id):return next(r for r in (await c.state())['securityRuns'] if r['id']==run_id)
         for _ in range(600):
             scan=await get(scan['id'])
@@ -95,7 +95,7 @@ async def main(args):
         assert scan['result']['enforcementReceipt']['configSha256']==scan['workerApproval']['configSha256']
         assert scan['workerCleanup'] and all(r.get('removed') or r.get('absent') for r in scan['workerCleanup'])
         report['cases']['productionWorker']=scan;save()
-        pending=await c.call('security-run-add',dict(targetId=silent['id'],stage='Recon',capability='linux_network_scan',arguments=dict(profile='ports',ports='18080',timeout_seconds=30),name='Owned cancellation probe'))
+        pending=await c.call('security-run-add',dict(targetId=silent['id'],stage='Recon',capability='linux_network_scan',arguments=dict(profile=args.profile,ports='18080',timeout_seconds=30),name='Owned cancellation probe'))
         observed_container=False
         for _ in range(100):
             pending=await get(pending['id'])
@@ -111,6 +111,9 @@ async def main(args):
         assert not (await docker('container','ls','--all','--filter','label=wixal.run='+pending['id'],'--format','{{.Names}}')).strip()
         assert not (await docker('network','ls','--filter','label=wixal.run='+pending['id'],'--format','{{.Name}}')).strip()
         report['cases']['actualCancellation']=pending
+        reconciliation=await c.call('security-engagement-worker-reconcile',dict(engagementId=engagement['id'],runId=pending['id']))
+        assert reconciliation['environmentClean'] and reconciliation['effectState']=='unknown',reconciliation
+        report['cases']['actualReconciliation']=reconciliation
         report.update(status='passed',reviews=c.reviews);save()
     except BaseException as error:report.update(status='failed',error=str(error));save();raise
     finally:
@@ -126,5 +129,5 @@ async def main(args):
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--source',action='store_true');parser.add_argument('--app');parser.add_argument('--socket',required=True);parser.add_argument('--output',required=True)
+    parser=argparse.ArgumentParser();parser.add_argument('--source',action='store_true');parser.add_argument('--profile',choices=['ports','services'],default='ports');parser.add_argument('--app');parser.add_argument('--socket',required=True);parser.add_argument('--output',required=True)
     asyncio.run(main(parser.parse_args()))

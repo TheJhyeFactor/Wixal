@@ -14,10 +14,11 @@ from pathlib import Path
 from .runtime import request_json, stream_json
 from .storage import identity, now
 from . import huggingface_models as hub
+from .model_browser import Browser, metadata
 
 GIB = 1024**3
 METHODS = frozenset(('models','model-status','model-imports','model-import','model-pull','model-download-action',
-    'model-hf-repository','model-delete','model-unload','model-use','model-context','runtime-start','runtime-stop','benchmark-start','benchmark-cancel'))
+    'model-hf-search','model-hf-repository','model-delete','model-unload','model-use','model-context','runtime-start','runtime-stop','benchmark-start','benchmark-cancel'))
 
 
 def validate_name(name):
@@ -42,7 +43,11 @@ def estimate(model,device,context,cache_bytes=1):
     context=min(context,model.get('contextLength') or context)
     per_token=(model.get('kvBytesPerToken') or 0)*cache_bytes or 128*1024
     required=math.ceil((model.get('size') or 0)*1.15+context*per_token+GIB)
-    return dict(required=required,context=context,fits=bool(model.get('size')) and required<=device['memoryBudget'],estimated=True)
+    recommended=next((v*GIB for v in (8,16,24,32,48,64,96,128,192,256,384,512) if v*GIB>=required/.75),math.ceil(required/.75))
+    return dict(required=required if model.get('size') else None,recommended=recommended if model.get('size') else None,
+                context=context,fits=bool(model.get('size')) and required<=device['memoryBudget'],estimated=True,
+                basis='Weights + context cache + overhead; reserves 25% of total RAM for macOS',
+                cacheEstimated=not bool(model.get('kvBytesPerToken')))
 
 
 def safe_context(model,device,requested=8192,cache_bytes=1):
@@ -61,6 +66,7 @@ class ModelManager:
         self.importing=''
         self.library=dict(loaded=[],loadedAvailable=False,diskFree=shutil.disk_usage(runtime.models).free)
         self.catalog=json.loads((Path(__file__).parent/'resources/model-catalog.json').read_text())
+        self.browser=Browser()
         self.download_task,self.benchmark_task=None,None
         self.active_download,self.benchmark_progress=None,None
         self.closed=False
@@ -94,9 +100,9 @@ class ModelManager:
             if item['name'] in self.store.data['modelSources']:item['provenance']=copy.deepcopy(self.store.data['modelSources'][item['name']])
             item['fit']=estimate(item,self.device,context,2 if self.runtime.external else 1)
             item['suggestedContext']=next((c for c in (16384,8192,4096) if c<=item.get('contextLength',8192) and estimate(item,self.device,c)['fits']),None)
-            return item
+            return metadata(item)
         return dict(installed=[enriched(m) for m in self.installed],catalog=[enriched(m) for m in self.catalog['models']],
-            catalogChecked=self.catalog.get('checked'),hardware=self.device,library=self.library,downloads=copy.deepcopy(self.downloads),
+            catalogChecked=self.catalog.get('checked'),hardware=self.device,library=self.library,downloads=[enriched(m) for m in self.downloads],
             benchmarks=copy.deepcopy(self.benchmarks),benchmark=self.benchmark_progress,importing=self.importing,
             runtime=dict(status=self.runtime.status,error=self.runtime.error,mode='external' if self.runtime.external else 'managed',
                          version=json.loads((Path(__file__).parent/'resources/runtime.json').read_text())['version'],
@@ -130,6 +136,13 @@ class ModelManager:
             return self.snapshot()
         if method=='model-imports': return await asyncio.to_thread(self.runtime.imports)
         if method=='model-hf-repository':return await asyncio.to_thread(hub.repository,p.get('repo',''),p.get('revision','main'))
+        if method=='model-hf-search':
+            result=await self.browser.search(p)
+            context=self.store.data.get('contextSize',8192)
+            for row in result['models']:
+                for file in row['files']:file['fit']=estimate(file,self.device,context,2 if self.runtime.external else 1)
+                row['fit']=estimate(row,self.device,context,2 if self.runtime.external else 1)
+            return result
         if method=='benchmark-cancel':
             if self.benchmark_task:
                 self.benchmark_task.cancel();await asyncio.gather(self.benchmark_task,return_exceptions=True)
@@ -187,6 +200,18 @@ class ModelManager:
             await asyncio.to_thread(request_json,url+'/api/delete',dict(model=name),15,'DELETE')
             self.runtime.metadata.clear();await self.refresh()
             if self.store.data.get('model')==name: self.store.data['model']='';self.changed()
+            if self.store.data.get('memoryEmbeddingModel')==name:self.store.data['memoryEmbeddingModel']=''
+            source=self.store.data['modelSources'].pop(name,{})
+            digest=source.get('sha256','')
+            # Remove only this verified cache identity, after runtime deletion succeeds.
+            # Preserve files still used by another installed model or resumable job.
+            used=any(v.get('sha256')==digest for v in self.store.data['modelSources'].values()) or any(v.get('sha256')==digest and v['state'] in ('queued','downloading','paused','failed') for v in self.downloads)
+            if re.fullmatch(r'[a-f0-9]{64}',digest) and not used:
+                cache=self.runtime.directory/'huggingface'
+                for suffix in ('.gguf','.Modelfile'):
+                    path=cache/(digest+suffix)
+                    if not path.is_symlink() and path.is_file():path.unlink()
+            self.store.save()
         elif method=='model-unload':
             url=await self.runtime.endpoint()
             names=[validate_name(p['name'])] if p.get('name') else [m.get('name',m.get('model')) for m in self.library.get('loaded',[])]

@@ -106,6 +106,24 @@ class ModelsTests(unittest.IsolatedAsyncioTestCase):
         await self.manager.dispatch('model-delete',{'name':'small:latest'})
         self.assertEqual(self.store.data['model'],'')
         self.assertEqual(self.manager.installed,[])
+    async def test_delete_reclaims_unused_hf_cache_and_clears_embedding_selection(self):
+        await self.manager.refresh()
+        digest='c'*64;cache=self.runtime.directory/'huggingface';cache.mkdir()
+        path=cache/(digest+'.gguf');path.write_bytes(b'GGUFfixture')
+        self.store.data['modelSources']['small:latest']=dict(repo='Owner/Small',sha256=digest)
+        self.store.data['memoryEmbeddingModel']='small:latest'
+        await self.manager.dispatch('model-delete',{'name':'small:latest'})
+        self.assertFalse(path.exists());self.assertEqual(self.store.data['memoryEmbeddingModel'],'')
+        self.assertNotIn('small:latest',self.store.data['modelSources'])
+
+    async def test_delete_preserves_shared_hf_cache(self):
+        await self.manager.refresh()
+        digest='d'*64;cache=self.runtime.directory/'huggingface';cache.mkdir()
+        path=cache/(digest+'.gguf');path.write_bytes(b'GGUFfixture')
+        self.store.data['modelSources'].update({'small:latest':dict(sha256=digest),'other:latest':dict(sha256=digest)})
+        await self.manager.dispatch('model-delete',{'name':'small:latest'})
+        self.assertTrue(path.exists())
+
     async def test_embedding_model_cannot_replace_chat_selection(self):
         await self.manager.refresh();previous=self.store.data['model']
         self.manager.installed.append(dict(name='embedding:latest',capabilities=['embedding']))

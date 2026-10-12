@@ -52,8 +52,8 @@ The separate development app is `artifacts/native/decepticon-engagements/Wixal E
 
 - Focused regressions: `native/tests/test_engagements.py` and `test_security_worker.py`.
 - Packaged real-model acceptance: `native/scripts/engagement-acceptance.py`.
-- Actual acceptance output: `artifacts/native/decepticon-engagements/packaged-real-model-verified/results.json`.
-- Actual Linux source and packaged acceptance: `artifacts/native/decepticon-engagements/linux-source/results.json` and `linux-packaged-verified/results.json`.
+- Actual acceptance output: `artifacts/native/decepticon-engagements/packaged-real-model-final-local/results.json`.
+- Actual Linux source and packaged acceptance: `artifacts/native/decepticon-engagements/linux-source/results.json` and `linux-packaged-final-local/results.json`.
 - Aggregate validation: `artifacts/native/decepticon-engagements/validation.json`.
 
 Acceptance uses an owned loopback HTTP service with independent server records, the packaged helper and actual installed local weights. It evaluates approval gating, positive/baseline observations, path provenance, specialist inference, skill snapshots, external-untrusted import, report export and restart recovery. Linux execution qualification is reported separately. See the final validation JSON for actual results rather than inferring success from this procedure description.

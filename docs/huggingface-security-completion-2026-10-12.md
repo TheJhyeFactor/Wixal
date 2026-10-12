@@ -36,6 +36,8 @@ The user selected **continue with the local lab; leave remote and AD/cloud quali
 
 This implementation does not add C2, phishing, persistence, arbitrary payload execution or full autonomous attack chains. GitHub/website publication and Apple notarisation are separate delivery claims.
 
+The normal `/Applications/Wixal.app` was updated as a locally signed development build. Its prior app and private SQLite workspace are retained under the ignored installation-backup artifact directory. All 19 conversation identities and message contents, draft payloads, model selection and context matched after installation; draft autosave refreshed only its timestamp. A separate `/Applications/Wixal HF Security Preview.app` uses copied synthetic acceptance records under private Application Support. An initial preview launch from the Documents artifact location timed out; relocation to Applications/Application Support resolved that preview launch. The cause was not independently established. Native inspection checks library repository browsing and labelled assurance controls; it is not a full VoiceOver/theme qualification.
+
 ## Evidence
 
 - `artifacts/native/hf-security-completion/validation.json`: consolidated identities, tests, deployment and boundaries.

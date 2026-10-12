@@ -9,7 +9,10 @@ from .website import website_plan
 
 COLLECTIONS = ('securityDiscoveries', 'securityFindings', 'securityResearch', 'securityPlans', 'securityTemplates', 'securityEvents', 'securityContracts')
 BUILTINS = {
+    'api_observe':dict(title='Scoped read-only API observations',types=['Website / API'],tools=[],inputs=['paths','credentialId']),
+    'api_mutate':dict(title='Reviewed API mutation',types=['Website / API'],tools=[],inputs=['path','method','body','credentialId']),
     'network_discover': dict(title='Discover TCP ports', types=['Website / API','Server','Network device'], tools=['network_discover'], inputs=['coverage','ports','pace','timeout_seconds']),
+    'linux_network_scan':dict(title='Isolated Linux network assessment',types=['Website / API','Server','Network device'],tools=[],inputs=['profile','ports','timeout_seconds']),
     'network_scan': dict(title='Network assessment', types=['Website / API','Network','Server','Network device'], tools=['network_scan'], inputs=['profile','ports','timeout_seconds']),
     'website_assess': dict(title='Website assessment', types=['Website / API'], tools=['website_assess'], inputs=['profile','max_pages','protected_paths']),
     'website_simulate': dict(title='Local simulations', types=['Website / API','Network','Server','Network device','Software'], tools=['website_simulate'], inputs=[]),
@@ -50,6 +53,13 @@ class SecurityRecords:
             missing=[t for t in spec['tools'] if t not in enabled]
             manager=getattr(self.store,'addons',None)
             if name=='network_discover' and (not manager or not manager.executable(manager.spec('rustscan'))):missing.append('Install compatible RustScan')
+            if name=='linux_network_scan' and not self.store.data.get('securityWorkerReadiness',{}).get('available'):missing.append('Inspect a locally built Linux worker in Engagements')
+            engagement=getattr(self,'engagements',None)
+            if target.get('engagementId') and engagement:
+                bound=engagement.for_target(target)
+                if name not in engagement.scope(bound)['capabilities']:missing.append('Not permitted by current engagement scope')
+                if bound['status']!='running':missing.append('Review and start the current engagement scope')
+            elif name in ('linux_network_scan','api_observe','api_mutate'):missing.append('Requires an approved engagement')
             rows.append(dict(id=name,**spec,available=not missing,missing=missing))
         manager=getattr(self.store,'addons',None)
         if manager:
@@ -132,6 +142,17 @@ class SecurityRecords:
     def evidence_context(self, run):
         allowed=run.get('evidenceIds',[])
         rows=[r for r in self.runs if r['targetId']==run['targetId'] and r['status']=='completed' and (run['capability']!='planner' or r['capability'] not in ('analysis','research','planner')) and (not allowed or r['id'] in allowed)]
+        if run.get('assignmentId'):
+            from .engagement_evidence import read
+            engagement=self.engagements.get(run['engagementId'])
+            assignment=self.engagements.record('securityAssignments',run['assignmentId'],engagement)
+            rows=[]
+            for reference in assignment['evidenceIds']:
+                record,value=read(self.engagements,engagement,reference)
+                source=self.engagements.record('securityRuns',record['source'],engagement)
+                if source['targetId']!=run['targetId'] or source['id'] not in allowed:raise ValueError('Assignment evidence identity changed')
+                rows.append(dict(source,result=value['result']))
+
         # Prefer compact structured evidence, no recursive sources or repeated raw XML.
         context=[]
         remaining=30000
@@ -146,7 +167,8 @@ class SecurityRecords:
             if size>remaining:break
             context.insert(0,item);remaining-=size
             if len(context)>=12:break
-        inventory=[dict(id=d['id'],kind=d['kind'],values=d['values'],sourceRuns=[o['runId'] for o in d['observations']]) for d in self.store.data['securityDiscoveries'] if d['targetId']==run['targetId'] and not d.get('simulation') and (not allowed or any(o['runId'] in allowed for o in d['observations']))]
+        if run.get('assignmentId'):return context
+        inventory=[dict(id=d['id'],kind=d['kind'],values=next(o['values'] for o in reversed(d['observations']) if not allowed or o['runId'] in allowed),sourceRuns=[o['runId'] for o in d['observations'] if not allowed or o['runId'] in allowed]) for d in self.store.data['securityDiscoveries'] if d['targetId']==run['targetId'] and not d.get('simulation') and (not allowed or any(o['runId'] in allowed for o in d['observations']))]
         context.append(dict(discoveries=inventory[:60],inventoryTruncated=len(inventory)>60))
         sources=[r for r in self.store.data['securityResearch'] if r['targetId']==run['targetId'] and (not allowed or r['runId'] in allowed)]
         context.append(dict(retrievedSources=[dict(id=r['id'],url=r['url'],status=r.get('status'),content=r.get('content','')[:4000],applicability=r['applicability'],rationale=r.get('rationale',''),error=r.get('error'),excerpt=True) for r in sources[-6:]]))
@@ -277,6 +299,9 @@ class SecurityRecords:
                 payload=dict(node,targetId=target['id'],model=node.get('model') or target.get('models',{}).get(node['stage']) or params.get('model') or target.get('models',{}).get('default',''))
                 payload.pop('id',None);payload.pop('reason',None);payload.pop('source_node_id',None);payload['dependencies']=[]
                 prepared.append(await self.prepare_run(payload))
+            engagement=self.engagements.for_target(target)
+            if engagement and len([r for r in self.runs if r.get('engagementId')==engagement['id']])+len(prepared)>self.engagements.scope(engagement)['maxRuns']:
+                raise ValueError('Complete plan exceeds engagement run budget; nothing queued')
             mapping={n['id']:r['id'] for n,r in zip(nodes,prepared)}
             for node,run in zip(nodes,prepared):
                 run.update(dependencies=[mapping[d] for d in node.get('dependencies',[])],planId=plan['id'],nodeId=node['id'],reason=node.get('reason',''))
@@ -326,8 +351,10 @@ class SecurityRecords:
             target=self.target(params.get('targetId'));model=params.get('model') or target.get('models',{}).get('default','')
             kind=target['type'];recon='software_inventory' if kind=='Software' else 'website_assess' if kind=='Website / API' else 'network_scan'
             arguments=dict(profile='discovery' if kind=='Network' else 'services') if recon=='network_scan' else dict(profile='baseline',max_pages=4) if recon=='website_assess' else {}
+            scoped_engagement=self.engagements.for_target(target)
+            research_capability='analysis' if scoped_engagement else 'research'
             nodes=[dict(id='recon',name='Initial recon',stage='Recon',capability=recon,arguments=arguments,dependencies=[],reason='Gather actual target evidence before planning'),
-                dict(id='review',name='Research discoveries',stage='Research',capability='research',arguments={'automatic':True},prompt='Research the observed products and versions. Verify source content and explain applicability.',dependencies=['recon'],reason='Research actual recon observations'),
+                dict(id='review',name='Review discoveries',stage='Research',capability=research_capability,arguments={} if scoped_engagement else {'automatic':True},prompt='Research the observed products and versions. Verify source content and explain applicability.',dependencies=['recon'],reason='Research actual recon observations'),
                 dict(id='plan',name='Build next test plan',stage='Research',capability='planner',arguments={},prompt=target.get('objective') or 'Propose evidence-based next checks',dependencies=['review'],reason='Produce editable steps using connected capabilities')]
             plan=await self.dispatch('security-plan-save',dict(targetId=target['id'],name='AI investigation',nodes=nodes))
             return True,await self.dispatch('security-plan-run',dict(id=plan['id'],model=model))

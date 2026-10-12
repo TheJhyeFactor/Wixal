@@ -51,21 +51,25 @@ def cookie_evidence(values):
     return result
 
 
-async def bounded_request(url,method='GET',headers=None,limit=512*1024):
+async def bounded_request(url,method='GET',headers=None,limit=512*1024,body=None):
     """No redirects/cookies. Cancellation closes the active connection; body is bounded."""
     parsed=urllib.parse.urlsplit(url)
     if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or any(c in url for c in '\r\n'):
         raise ValueError('Invalid HTTP(S) URL')
+    if method not in ('GET','HEAD','OPTIONS','POST','PUT','PATCH','DELETE'):raise ValueError('Unsupported HTTP method')
+    if body is not None and (not isinstance(body,bytes) or len(body)>16384 or method in ('GET','HEAD')):raise ValueError('Invalid bounded request body')
     writer=None
     async with asyncio.timeout(10):
         try:
             context=ssl.create_default_context() if parsed.scheme=='https' else None
-            reader,writer=await asyncio.open_connection(parsed.hostname,parsed.port or (443 if context else 80),ssl=context,limit=1024*1024)
+            from .engagement_policy import connection
+            pinned=await connection(url)
+            reader,writer=await asyncio.open_connection(pinned or parsed.hostname,parsed.port or (443 if context else 80),ssl=context,server_hostname=parsed.hostname if context else None,limit=1024*1024)
             path=urllib.parse.urlunsplit(('','',parsed.path or '/',parsed.query,''))
             request_headers={'Host':parsed.netloc,'User-Agent':'Wixal-Website-Assessment/0.7','Connection':'close',**(headers or {})}
-            if method=='POST': request_headers['Content-Length']='0'
+            if body is not None or method in ('POST','PUT','PATCH'):request_headers['Content-Length']=str(len(body or b''))
             if any('\r' in str(k)+str(v) or '\n' in str(k)+str(v) for k,v in request_headers.items()): raise ValueError('Invalid HTTP header')
-            writer.write((f'{method} {path} HTTP/1.1\r\n'+''.join(f'{k}: {v}\r\n' for k,v in request_headers.items())+'\r\n').encode())
+            writer.write((f'{method} {path} HTTP/1.1\r\n'+''.join(f'{k}: {v}\r\n' for k,v in request_headers.items())+'\r\n').encode()+(body or b''))
             await writer.drain()
             raw_headers=await reader.readuntil(b'\r\n\r\n')
             if len(raw_headers)>65536: raise ValueError('Response headers exceed their bound')

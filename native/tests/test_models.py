@@ -7,6 +7,8 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
+import time
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'engine'))
 from wixal.model_manager import ModelManager,estimate,safe_context,validate_name
@@ -72,8 +74,21 @@ class ModelsTests(unittest.IsolatedAsyncioTestCase):
         self.events=[]
         self.runtime=Runtime(Path(self.tmp.name)/'models','unused',lambda k,v:self.events.append((k,v)),self.fixture.url)
         self.manager=ModelManager(self.runtime,self.store,lambda k,v:self.events.append((k,v)))
+        def resolve(params,catalog):
+            return dict(provider='huggingface',repo='Fixture/Model',file='model.gguf',revision='a'*40,sha256='b'*64,size=100,name=params['name'])
+        def download(item,directory,cancelled,progress):
+            progress(10,100)
+            if item['name']=='slow:latest':
+                while not self.fixture.slow.is_set():
+                    if cancelled.wait(.01):raise InterruptedError('Paused fixture transfer')
+            progress(100,100);return Path(directory)/'fixture.gguf'
+        async def install(runtime,path,name):self.fixture.models[name]=dict(name=name,size=100,digest='downloaded')
+        self.hubPatches=[patch('wixal.model_manager.hub.resolve',resolve),patch('wixal.model_manager.hub.download',download),patch('wixal.model_manager.hub.import_local',install)]
+        for patched in self.hubPatches:patched.start()
     async def asyncTearDown(self):
-        await self.manager.close();self.store.close();await asyncio.to_thread(self.fixture.__exit__);self.tmp.cleanup()
+        await self.manager.close()
+        for patched in self.hubPatches:patched.stop()
+        self.store.close();await asyncio.to_thread(self.fixture.__exit__);self.tmp.cleanup()
     async def until(self,test):
         for _ in range(100):
             if test(): return
@@ -83,7 +98,8 @@ class ModelsTests(unittest.IsolatedAsyncioTestCase):
         models=await self.manager.dispatch('models')
         self.assertEqual(models[0]['kvBytesPerToken'],3072)
         self.assertTrue(models[0]['fit']['estimated'])
-        self.assertGreater(len(self.manager.snapshot()['catalog']),10)
+        self.assertTrue(self.manager.snapshot()['catalog'])
+        self.assertTrue(all(m.get('repo') and m.get('revision') and m.get('sha256') for m in self.manager.snapshot()['catalog']))
         await self.manager.dispatch('model-use',{'name':'small:latest'})
         self.assertEqual(self.store.data['model'],'small:latest')
         await self.manager.dispatch('model-unload',{'name':'small:latest'})
@@ -91,6 +107,24 @@ class ModelsTests(unittest.IsolatedAsyncioTestCase):
         await self.manager.dispatch('model-delete',{'name':'small:latest'})
         self.assertEqual(self.store.data['model'],'')
         self.assertEqual(self.manager.installed,[])
+    async def test_delete_reclaims_unused_hf_cache_and_clears_embedding_selection(self):
+        await self.manager.refresh()
+        digest='c'*64;cache=self.runtime.directory/'huggingface';cache.mkdir()
+        path=cache/(digest+'.gguf');path.write_bytes(b'GGUFfixture')
+        self.store.data['modelSources']['small:latest']=dict(repo='Owner/Small',sha256=digest)
+        self.store.data['memoryEmbeddingModel']='small:latest'
+        await self.manager.dispatch('model-delete',{'name':'small:latest'})
+        self.assertFalse(path.exists());self.assertEqual(self.store.data['memoryEmbeddingModel'],'')
+        self.assertNotIn('small:latest',self.store.data['modelSources'])
+
+    async def test_delete_preserves_shared_hf_cache(self):
+        await self.manager.refresh()
+        digest='d'*64;cache=self.runtime.directory/'huggingface';cache.mkdir()
+        path=cache/(digest+'.gguf');path.write_bytes(b'GGUFfixture')
+        self.store.data['modelSources'].update({'small:latest':dict(sha256=digest),'other:latest':dict(sha256=digest)})
+        await self.manager.dispatch('model-delete',{'name':'small:latest'})
+        self.assertTrue(path.exists())
+
     async def test_embedding_model_cannot_replace_chat_selection(self):
         await self.manager.refresh();previous=self.store.data['model']
         self.manager.installed.append(dict(name='embedding:latest',capabilities=['embedding']))
@@ -116,6 +150,7 @@ class ModelsTests(unittest.IsolatedAsyncioTestCase):
         await self.until(lambda:job['state']=='completed')
         await self.manager.dispatch('model-download-action',{'id':job['id'],'action':'remove'})
         self.assertEqual(self.manager.downloads,[])
+        self.assertEqual(self.manager.snapshot()['installed'][-1]['provenance']['provider'],'huggingface')
     async def test_duplicate_tag_cloud_validation(self):
         for name in ('','qwen;rm','gpt-cloud','../bad','x'*201):
             with self.assertRaises(ValueError): validate_name(name)

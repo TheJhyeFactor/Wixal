@@ -43,6 +43,8 @@ class SecurityWorkspace(SecurityRecords):
             if run['status'] in ('running', 'queued', 'waiting_review', 'waiting_model', 'blocked'):
                 run.update(status='interrupted', finished=now(), error='Engine restarted; review and queue a new run explicitly.')
         self.initialize_records()
+        from .engagements import Engagements
+        self.engagements = Engagements(self)
         self.store.save()
 
     @property
@@ -64,6 +66,8 @@ class SecurityWorkspace(SecurityRecords):
         return target
 
     async def dispatch(self, method, params):
+        engagement_result = await self.engagements.dispatch(method, params)
+        if engagement_result is not NotImplemented:return engagement_result
         handled,value=await self.records_dispatch(method,params)
         if handled:return value
         if method == 'security-target-add':
@@ -104,7 +108,12 @@ class SecurityWorkspace(SecurityRecords):
                 self.tasks[run['id']].cancel()
                 await asyncio.gather(self.tasks[run['id']], return_exceptions=True)
             elif run['status'] in ('queued', 'blocked'):
-                run.update(status='cancelled', finished=now()); self.publish(); self.pump()
+                run.update(status='cancelled', finished=now())
+                if run.get('engagementId'):
+                    run['effectState']='not_dispatched'
+                    for assignment in self.engagements.rows('securityAssignments',self.engagements.get(run['engagementId'])):
+                        if assignment.get('runId')==run['id']:assignment.update(status='cancelled',finished=now())
+                self.publish(); self.pump()
             return True
         if method=='security-discover-inspect':
             target=self.target(params.get('targetId'))
@@ -123,6 +132,10 @@ class SecurityWorkspace(SecurityRecords):
         return run
 
     def commit_run(self,run):
+        if run.get('engagementId'):
+            self.engagements.authorize_run(run)
+            engagement=self.engagements.get(run['engagementId'])
+            if len([r for r in self.runs if r.get('engagementId')==engagement['id']])>=self.engagements.scope(engagement)['maxRuns']:raise ValueError('Engagement run budget exhausted before commit')
         self.store.data['sessions'].append(run.pop('_session'))
         self.runs.append(run)
 
@@ -136,6 +149,8 @@ class SecurityWorkspace(SecurityRecords):
             raise ValueError('Choose an available capability and stage')
         args = copy.deepcopy(params.get('arguments', {}))
         if not isinstance(args, dict): raise ValueError('Arguments must be an object')
+        engagement_binding = dict(targetId=target['id'],address=target['address'],capability=capability,arguments=args)
+        self.engagements.bind_run(engagement_binding, params)
         binding_provenance=self.resolve_bindings(target,args,params.get('bindings',{}))
         model = params.get('model', '')
         if not isinstance(model, str) or len(model) > 200: raise ValueError('Choose a model name below 200 characters')
@@ -144,6 +159,18 @@ class SecurityWorkspace(SecurityRecords):
         if capability == 'network_discover':
             from .network_discovery import plan
             args['target']=target['address'];await plan(args)
+        elif capability == 'linux_network_scan':
+            if not engagement_binding.get('engagementId'):raise ValueError('Linux worker execution requires an approved engagement')
+            from .network_discovery import ports
+            if set(args)-{'profile','ports','timeout_seconds'} or args.get('profile','ports') not in ('ports','services') or len(ports(args.get('ports','22,80,443,8080,8443')))>1024:raise ValueError('Linux worker accepts bounded ports/services profiles only')
+            seconds=args.get('timeout_seconds',180)
+            if type(seconds) is not int or not 10<=seconds<=600:raise ValueError('Worker deadline must be 10–600 seconds')
+            args['timeout_seconds']=min(seconds,self.engagements.scope(self.engagements.get(engagement_binding['engagementId']))['maxSeconds'])
+        elif capability in ('api_observe','api_mutate'):
+            if not engagement_binding.get('engagementId'):raise ValueError('API identity observations require an approved engagement')
+            from .security_assurance import api_plan, mutation_plan
+            args=(mutation_plan if capability=='api_mutate' else api_plan)(args);engagement_binding['arguments']=args
+            if args['credentialId']:self.engagements.assurance.credential(self.engagements.get(engagement_binding['engagementId']),args['credentialId'],target['id'])
         elif capability == 'network_scan':
             if target['type'] == 'Software': raise ValueError('Software targets need project analysis')
             args['target'] = target['address']; scan_plan(args)
@@ -196,6 +223,8 @@ class SecurityWorkspace(SecurityRecords):
                    arguments=args, model=model, prompt=prompt, dependency=dependency,
                    dependencies=list(dict.fromkeys(dependencies+([dependency] if dependency else []))),condition=condition,evidenceIds=evidence,bindings=binding_provenance,
                    status='blocked' if dependency or dependencies else 'queued', created=now(), sessionId=session['id'], output='', cases=[])
+        for key in ('engagementId','scopeRevision','effectState','environment','objectiveId'):
+            if key in engagement_binding:run[key]=engagement_binding[key]
         run['_session']=session
         return run
 
@@ -210,25 +239,48 @@ class SecurityWorkspace(SecurityRecords):
                 if status=='skipped':run['finished']=now()
                 continue
             if slots <= 0: break
+            try:self.engagements.started(run)
+            except ValueError as error:
+                run.update(status='blocked',error=str(error));continue
             run.pop('error',None)
             run.update(status='running', started=now())
-            self.tasks[run['id']] = asyncio.create_task(self.execute(run))
+            self.tasks[run['id']] = asyncio.create_task(self.execute_bounded(run))
             slots -= 1
         self.publish()
+
+    async def execute_bounded(self, run):
+        if not run.get('engagementId'):return await self.execute(run)
+        seconds=self.engagements.scope(self.engagements.get(run['engagementId']))['maxSeconds']
+        try:
+            async with asyncio.timeout(seconds):await self.execute(run)
+            if now()>=run.get('deadline',now()+1):
+                run.update(status='interrupted',effectState='unknown',error='Engagement deadline expired; reconcile retained effects before a new run')
+                self.publish()
+        except TimeoutError:
+            run.update(status='interrupted',effectState='unknown',error='Engagement deadline expired; reconcile retained effects before a new run')
+            self.publish()
 
     async def execute(self, run):
         from .agent_context import profile as agent_profile, automatic
         profile_token=agent_profile.set(None);automatic_token=automatic.set(False)
         project = next((p for p in self.store.data['projects'] if p['id'] == run['projectId']), None)
         tools = None
+        from .engagement_policy import current as engagement_context
+        engagement_token=engagement_context.set(dict(manager=self.engagements,engagement=self.engagements.get(run['engagementId']),run=run) if run.get('engagementId') else None)
         try:
+            self.engagements.authorize_run(run)
             if not project: raise ValueError('Originating project is unavailable')
             scoped = ScopedStore(self.store, project)
             async def approve(details):
+                self.engagements.authorize_run(run)
                 run['status'] = 'waiting_review'; self.publish()
                 try:
-                    if scoped.approval_mode() == 'bypass': return True
-                    return bool(await self.service.ask('review', dict(**details, securityRunId=run['id'], project=project['name'])))
+                    accepted=True if scoped.approval_mode() == 'bypass' else bool(await self.service.ask('review', dict(**details, securityRunId=run['id'], project=project['name'])))
+                    self.engagements.authorize_run(run)
+                    if accepted and run.get('engagementId'):
+                        run['effectState']='running'
+                        self.engagements.event(self.engagements.get(run['engagementId']),'action_approved',dict(runId=run['id'],details=details,scopeRevision=run['scopeRevision']))
+                    return accepted
                 finally:
                     run['status'] = 'running'; self.publish()
             def emit(kind, value):
@@ -245,7 +297,7 @@ class SecurityWorkspace(SecurityRecords):
             if capability in ('research', 'analysis','planner'):
                 context = self.evidence_context(run)
                 target = next(t for t in self.store.data['securityTargets'] if t['id'] == run['targetId'])
-                if target['type'] == 'Software':
+                if target['type'] == 'Software' and not run.get('assignmentId'):
                     path = Path(project['root']) / target['address']
                     if path.is_file():
                         source = await tools.execute('read_file', dict(path=target['address']), run['sessionId'])
@@ -266,6 +318,12 @@ class SecurityWorkspace(SecurityRecords):
                     for name in allowed:
                         if name in ('analysis','software_inventory'):
                             schema=dict(type='object',properties={},additionalProperties=False)
+                        elif name=='api_observe':
+                            schema=dict(type='object',properties=dict(paths=dict(type='array',maxItems=6,items=dict(type='string')),credentialId=dict(type='string')),additionalProperties=False)
+                        elif name=='api_mutate':
+                            schema=dict(type='object',properties=dict(path=dict(type='string'),method=dict(type='string',enum=['POST','PUT','PATCH','DELETE']),body=dict(type='object'),credentialId=dict(type='string')),required=['path','method'],additionalProperties=False)
+                        elif name=='linux_network_scan':
+                            schema=dict(type='object',properties=dict(profile=dict(type='string',enum=['ports','services']),ports=dict(type='string'),timeout_seconds=dict(type='integer',minimum=10,maximum=600)),additionalProperties=False)
                         elif name=='research':
                             schema=dict(type='object',properties=dict(urls=dict(type='array',maxItems=3,items=dict(type='string')),automatic=dict(type='boolean')),additionalProperties=False)
                         elif name in ('network_scan','network_discover','website_assess','website_simulate'):
@@ -322,6 +380,10 @@ class SecurityWorkspace(SecurityRecords):
                 if capability=='software_inventory':
                     target=next(t for t in self.store.data['securityTargets'] if t['id']==run['targetId'])
                     result=await self.software_inventory(target,tools,run['sessionId'])
+                elif capability in ('api_observe','api_mutate'):
+                    result=await self.engagements.assurance.observe_api(run,approve)
+                elif capability=='linux_network_scan':
+                    result=await self.engagements.worker.execute(run,approve)
                 else:
                     if run['arguments'].get('source_run_id') not in (None,*run.get('dependencies',[])):raise ValueError('Inspection source must remain an explicit dependency')
                     tool=capability if capability in CAPABILITIES else self.contract(capability,next(t for t in self.store.data['securityTargets'] if t['id']==run['targetId']))['tool']
@@ -391,6 +453,10 @@ class SecurityWorkspace(SecurityRecords):
                 if run.get('result',{}).get('coverage') in ('partial','indeterminate'):self.ingest(run)
             agent_profile.reset(profile_token);automatic.reset(automatic_token)
             run['finished'] = now()
+            try:self.engagements.finished(run)
+            except (ValueError,OSError) as error:
+                run.update(status='failed',error='Evidence retention failed: '+str(error))
+            engagement_context.reset(engagement_token)
             self.tasks.pop(run['id'], None)
             self.publish(); self.pump()
             for plan in self.store.data['securityPlans']:
@@ -443,6 +509,7 @@ class SecurityWorkspace(SecurityRecords):
 
     async def close(self):
         self.closing = True
+        await self.engagements.assurance.oauth.close()
         pending = list(self.tasks.values())
         for task in pending: task.cancel()
         await asyncio.gather(*pending, return_exceptions=True)

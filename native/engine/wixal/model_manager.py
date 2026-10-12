@@ -13,10 +13,12 @@ import time
 from pathlib import Path
 from .runtime import request_json, stream_json
 from .storage import identity, now
+from . import huggingface_models as hub
+from .model_browser import Browser, metadata
 
 GIB = 1024**3
 METHODS = frozenset(('models','model-status','model-imports','model-import','model-pull','model-download-action',
-    'model-delete','model-unload','model-use','model-context','runtime-start','runtime-stop','benchmark-start','benchmark-cancel'))
+    'model-hf-filters','model-hf-search','model-hf-repository','model-delete','model-unload','model-use','model-context','runtime-start','runtime-stop','benchmark-start','benchmark-cancel'))
 
 
 def validate_name(name):
@@ -41,7 +43,11 @@ def estimate(model,device,context,cache_bytes=1):
     context=min(context,model.get('contextLength') or context)
     per_token=(model.get('kvBytesPerToken') or 0)*cache_bytes or 128*1024
     required=math.ceil((model.get('size') or 0)*1.15+context*per_token+GIB)
-    return dict(required=required,context=context,fits=bool(model.get('size')) and required<=device['memoryBudget'],estimated=True)
+    recommended=next((v*GIB for v in (8,16,24,32,48,64,96,128,192,256,384,512) if v*GIB>=required/.75),math.ceil(required/.75))
+    return dict(required=required if model.get('size') else None,recommended=recommended if model.get('size') else None,
+                context=context,fits=bool(model.get('size')) and required<=device['memoryBudget'],estimated=True,
+                basis='Weights + context cache + overhead; reserves 25% of total RAM for macOS',
+                cacheEstimated=not bool(model.get('kvBytesPerToken')))
 
 
 def safe_context(model,device,requested=8192,cache_bytes=1):
@@ -60,14 +66,16 @@ class ModelManager:
         self.importing=''
         self.library=dict(loaded=[],loadedAvailable=False,diskFree=shutil.disk_usage(runtime.models).free)
         self.catalog=json.loads((Path(__file__).parent/'resources/model-catalog.json').read_text())
+        self.browser=Browser(store.data.get('modelBrowserFilters'))
         self.download_task,self.benchmark_task=None,None
         self.active_download,self.benchmark_progress=None,None
         self.closed=False
         self.store.data.setdefault('modelDownloads',[])
         self.store.data.setdefault('modelBenchmarks',[])
+        self.store.data.setdefault('modelSources',{})
         for item in self.downloads:
             if item['state'] in ('queued','downloading'):
-                item.update(state='paused',status='Interrupted by restart. Resume when ready.',rate=0,eta=None)
+                item.update(state='paused',status='Interrupted by restart. Resume the pinned Hugging Face transfer when ready.',rate=0,eta=None)
         self.store.data['modelDownloads']=self.downloads[-30:]
         self.store.save()
 
@@ -89,11 +97,12 @@ class ModelManager:
         context=self.store.data.get('contextSize',8192)
         def enriched(item):
             item=copy.deepcopy(item)
+            if item['name'] in self.store.data['modelSources']:item['provenance']=copy.deepcopy(self.store.data['modelSources'][item['name']])
             item['fit']=estimate(item,self.device,context,2 if self.runtime.external else 1)
             item['suggestedContext']=next((c for c in (16384,8192,4096) if c<=item.get('contextLength',8192) and estimate(item,self.device,c)['fits']),None)
-            return item
+            return metadata(item)
         return dict(installed=[enriched(m) for m in self.installed],catalog=[enriched(m) for m in self.catalog['models']],
-            catalogChecked=self.catalog.get('checked'),hardware=self.device,library=self.library,downloads=copy.deepcopy(self.downloads),
+            catalogChecked=self.catalog.get('checked'),hardware=self.device,library=self.library,downloads=[enriched(m) for m in self.downloads],
             benchmarks=copy.deepcopy(self.benchmarks),benchmark=self.benchmark_progress,importing=self.importing,
             runtime=dict(status=self.runtime.status,error=self.runtime.error,mode='external' if self.runtime.external else 'managed',
                          version=json.loads((Path(__file__).parent/'resources/runtime.json').read_text())['version'],
@@ -126,6 +135,18 @@ class ModelManager:
             if p.get('refresh'): await self.refresh()
             return self.snapshot()
         if method=='model-imports': return await asyncio.to_thread(self.runtime.imports)
+        if method=='model-hf-repository':return await asyncio.to_thread(hub.repository,p.get('repo',''),p.get('revision','main'))
+        if method=='model-hf-filters':
+            result=await self.browser.filters(p)
+            if p.get('kind','all')=='all':self.store.data['modelBrowserFilters']=self.browser.filter_cache;self.store.save()
+            return result
+        if method=='model-hf-search':
+            result=await self.browser.search(p)
+            context=self.store.data.get('contextSize',8192)
+            for row in result['models']:
+                for file in row['files']:file['fit']=estimate(file,self.device,context,2 if self.runtime.external else 1)
+                row['fit']=estimate(row,self.device,context,2 if self.runtime.external else 1)
+            return result
         if method=='benchmark-cancel':
             if self.benchmark_task:
                 self.benchmark_task.cancel();await asyncio.gather(self.benchmark_task,return_exceptions=True)
@@ -135,13 +156,15 @@ class ModelManager:
             return self.snapshot()
         self.require_idle()
         if method=='model-pull':
-            name=validate_name(p.get('name','').strip())
+            selection=await asyncio.to_thread(hub.resolve,p,self.catalog['models'])
+            self.require_idle()
+            name=validate_name(selection['name'])
             if any(v['name']==name and v['state'] in ('queued','downloading') for v in self.downloads):
                 raise ValueError('This model is already in the download queue')
             if len([v for v in self.downloads if v['state'] in ('queued','downloading','paused','failed')])>=12:
                 raise ValueError('Finish or remove a download before adding more')
             self.store.data['modelDownloads']=[v for v in self.downloads if v['state'] not in ('completed','cancelled')]+[v for v in self.downloads if v['state'] in ('completed','cancelled')][-17:]
-            self.downloads.append(dict(id=identity(),name=name,state='queued',status='Queued',created=now(),completed=0,total=0,rate=0,eta=None))
+            self.downloads.append(dict(selection,id=identity(),state='queued',status='Queued',created=now(),completed=0,total=selection['size'],rate=0,eta=None))
             self.publish(True);self.pump();return self.snapshot()
         if method=='runtime-start': await self.runtime.endpoint();await self.refresh()
         elif method=='runtime-stop':
@@ -181,6 +204,18 @@ class ModelManager:
             await asyncio.to_thread(request_json,url+'/api/delete',dict(model=name),15,'DELETE')
             self.runtime.metadata.clear();await self.refresh()
             if self.store.data.get('model')==name: self.store.data['model']='';self.changed()
+            if self.store.data.get('memoryEmbeddingModel')==name:self.store.data['memoryEmbeddingModel']=''
+            source=self.store.data['modelSources'].pop(name,{})
+            digest=source.get('sha256','')
+            # Remove only this verified cache identity, after runtime deletion succeeds.
+            # Preserve files still used by another installed model or resumable job.
+            used=any(v.get('sha256')==digest for v in self.store.data['modelSources'].values()) or any(v.get('sha256')==digest and v['state'] in ('queued','downloading','paused','failed') for v in self.downloads)
+            if re.fullmatch(r'[a-f0-9]{64}',digest) and not used:
+                cache=self.runtime.directory/'huggingface'
+                for suffix in ('.gguf','.Modelfile'):
+                    path=cache/(digest+suffix)
+                    if not path.is_symlink() and path.is_file():path.unlink()
+            self.store.save()
         elif method=='model-unload':
             url=await self.runtime.endpoint()
             names=[validate_name(p['name'])] if p.get('name') else [m.get('name',m.get('model')) for m in self.library.get('loaded',[])]
@@ -222,6 +257,7 @@ class ModelManager:
         if not item: raise ValueError('Unknown download')
         state=item['state']
         if action in ('resume','retry'):
+            if item.get('provider')!='huggingface':raise ValueError('This saved job used the previous Ollama registry. Remove it and select a Hugging Face file.')
             self.require_idle()
             if state not in ('paused','failed','cancelled'): raise ValueError('This download cannot be resumed')
             if any(v is not item and v['name']==item['name'] and v['state'] in ('queued','downloading') for v in self.downloads): raise ValueError('This model is already in the queue')
@@ -241,32 +277,35 @@ class ModelManager:
         self.active_download=item
         item.update(state='downloading',status='Starting download',rate=0,eta=None)
         self.publish(True)
-        layers,last_bytes,last_rate,last_publish={},None,time.monotonic(),0
-        previous_status=''
+        import threading
+        cancelled=threading.Event();worker=None
+        last_bytes,last_rate,last_publish=0,time.monotonic(),0
+        loop=asyncio.get_running_loop()
+        def update(completed,total):
+            nonlocal last_bytes,last_rate,last_publish
+            if item['state']!='downloading':return
+            timestamp=time.monotonic();item.update(completed=completed,total=total,status='Downloading from Hugging Face')
+            if timestamp-last_rate>=.5:
+                item['rate']=max(0,(completed-last_bytes)/(timestamp-last_rate));last_bytes=completed;last_rate=timestamp
+            item['eta']=math.ceil((total-completed)/item['rate']) if item['rate']>0 else None
+            if timestamp-last_publish>=.2:self.publish();last_publish=timestamp
         try:
-            endpoint=await self.runtime.endpoint()
-            success=False
-            async for progress in stream_json(endpoint,'/api/pull',dict(model=item['name'],stream=True)):
-                timestamp=time.monotonic()
-                if progress.get('digest') and progress.get('total'):
-                    layers[progress['digest']]=dict(total=progress['total'],completed=min(progress['total'],progress.get('completed',0)))
-                item['total']=sum(v['total'] for v in layers.values()) if layers else progress.get('total') or item['total']
-                item['completed']=sum(v['completed'] for v in layers.values()) if layers else progress.get('completed') or item['completed']
-                item['status']=progress.get('status','Downloading')
-                if last_bytes is None: last_bytes=item['completed'];last_rate=timestamp
-                if timestamp-last_rate>=.5:
-                    item['rate']=max(0,(item['completed']-last_bytes)/(timestamp-last_rate));last_bytes=item['completed'];last_rate=timestamp
-                item['eta']=math.ceil((item['total']-item['completed'])/item['rate']) if item['rate']>0 and item['total']>item['completed'] else None
-                if timestamp-last_publish>=.2 or item['status']!=previous_status:
-                    self.publish();last_publish=timestamp;previous_status=item['status']
-                if progress.get('status')=='success': success=True
-            if not success: raise RuntimeError('Download ended before completion. Retry to resume')
-            item['status']='Verifying installation';self.publish()
+            if item.get('provider')!='huggingface':raise ValueError('Select this model from Hugging Face to replace the saved registry transfer')
+            def fetch():
+                try:return hub.download(item,self.runtime.directory/'huggingface',cancelled,lambda a,b:loop.call_soon_threadsafe(update,a,b))
+                except InterruptedError:return None
+            worker=asyncio.create_task(asyncio.to_thread(fetch))
+            path=await asyncio.shield(worker)
+            if path is None:raise ValueError('Transfer was interrupted before installation')
+            item['status']='Verified file · importing into local engine';self.publish()
+            await hub.import_local(self.runtime,path,item['name'])
             self.runtime.metadata.clear();await self.refresh()
-            if not any(m['name']==item['name'] or m['name']==item['name']+':latest' for m in self.installed):
-                raise RuntimeError('The engine did not report the downloaded model in its library')
+            if not any(m['name']==item['name'] for m in self.installed):raise RuntimeError('The local engine did not report the imported model')
+            self.store.data['modelSources'][item['name']]={k:item[k] for k in ('provider','repo','revision','file','sha256','size','source','license','pipelineTag') if k in item}
             item.update(state='completed',status='Installed',completed=item['total'],finished=now())
         except asyncio.CancelledError:
+            cancelled.set()
+            if worker:await asyncio.gather(worker,return_exceptions=True)
             if item['state']=='downloading': item.update(state='paused',status='Paused when Wixal closed')
             raise
         except Exception as error: item.update(state='failed',status='Download failed',error=str(error)[:800])

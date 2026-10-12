@@ -1,14 +1,14 @@
 # Wixal native alpha
 
-**0.7.10 Alpha 5** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.5); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
+**0.7.10 Alpha 6** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.6); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 
 The current source includes the [prioritized application gap audit and fixes](APPLICATION_GAP_AUDIT_2026-10-10.md), covering chat scanner evidence, command cleanup, agent outcome checks and queue controls, resume safety, editor acknowledgements and activity history. Its validation record distinguishes source tests, packaged/model evidence, installed checks and remaining external prerequisites. The [controls, editor and activity completion record](AGENT_CONTROLS_COMPLETION_2026-10-10.md) adds explicit execution identity checks, context restoration, acknowledged queue drafts and production submission/guidance acceptance. Alpha 4 brought these earlier changes into the public download; the dated reports retain their earlier build identities.
 
-## Alpha 5 changes
+## Alpha 6 changes
 
-Alpha 5 adds durable checklists, whole-tool-round context compaction, paged checkpoint retrieval, skill resource snapshots, isolated child handoffs and keyword tool discovery. It also rejects malformed call batches before execution and independently verifies numeric sums from JSON arrays or CSV columns. See the [release notes](../docs/release-0.7.10-alpha.5.md), [implementation comparison](../docs/hermes-agent-improvements-2026-10-12.md) and [agent tools guide](../docs/agent-tools.md). Dated development reports retain their original helper hashes; release assets carry separate provenance. Cybersecurity model qualification remains open.
+Alpha 6 combines Hugging Face downloads and compact model browsing, dedicated engine controls, stronger agent run budgets and reviewed security extensions. Cookie/API mutations, same-origin OAuth PKCE, independent mutation-state validation, external proposal imports, telemetry imports and interactive PTY jobs are documented in the [release notes](../docs/release-0.7.10-alpha.6.md) and [security guide](../docs/security-workflows-alpha6.md). The combined engine suite passed 513 tests. Six-model capability qualification and fresh installed security end-to-end checks remain pending. Dated reports retain their recorded build identity.
 
 ## Build and run
 
@@ -92,3 +92,13 @@ native/.venv/bin/python native/scripts/cleanup-installs.py --apply
 The cleanup script verifies the canonical app, refuses to move running obsolete bundles, unregisters obsolete LaunchServices entries and moves only recognised Wixal app bundles to Trash. It preserves workspace databases, models, credentials, preferences and retained acceptance reports. Review the cleanup report and confirm only the canonical app remains in application folders before calling a release complete. Never empty Trash as part of release automation.
 
 Create future isolated builds under a temporary validation directory rather than accumulating named copies in `/Applications`. If an installed copy is needed for a specific acceptance case, remove it after the case settles. The installer updates only scheduler commands already belonging to the canonical app; it must not activate schedules from test installations. Retain exact bundle/helper/source hashes and reports; archive a binary only when a future reproduction requires its exact bytes. Keep one compressed rollback bundle outside application folders and review older build archives separately. Do not delete user data or edit historical evidence to imply an old build was tested on the new release.
+
+### Red-team engagements
+
+Cybersecurity → Engagements connects existing investigation targets with versioned authorised scope, objectives, evidence-linked paths, restricted specialist analysis, retained evidence checks, operation recovery and cleanup/reporting. Scope review is explicit; execution, verification and human finding review remain separate. See [implementation and validation](../docs/decepticon-native-engagements-2026-10-12.md) and [optional Linux worker](worker/README.md).
+
+Run focused regressions with `PYTHONPATH=native/engine:native/tests native/.venv/bin/python -m unittest discover -s native/tests -p 'test_engagements.py'`, and run worker contract checks with `-p 'test_security_worker.py'`. The packaged acceptance entry point is `native/scripts/engagement-acceptance.py --app <development-app> --output <isolated-evidence-directory> --model gpt-oss:20b`. It uses a disposable loopback server and an already installed local model; it does not download weights or establish general exploit/model qualification.
+
+## Hugging Face library and local assurance
+
+The current development source downloads public single-file GGUF models from Hugging Face, pins repository/file identity, verifies resumable transfers and imports them into the existing local engine. Existing installed models remain usable. Cybersecurity adds scoped Keychain identity leases, bounded API observations, deterministic validation contracts, typed operational assignments, immutable specialist evidence, environment reconciliation and imported defensive correlation. See [implementation and qualification](../docs/huggingface-security-completion-2026-10-12.md) for supported formats, actual acceptance and pending remote/AD/cloud qualification. These changes are a local development update, not a claim that the previous published alpha contains them.

@@ -1,116 +1,106 @@
 {
-  "checked": "2026-10-06",
+  "checked": "2026-10-12",
+  "provider": "huggingface",
   "models": [
     {
-      "name": "qwen3:0.6b",
-      "size": 523000000,
-      "contextLength": 40960,
-      "capabilities": [
-        "tools",
-        "thinking"
-      ],
-      "source": "https://ollama.com/library/qwen3"
-    },
-    {
-      "name": "qwen3:1.7b",
-      "size": 1400000000,
-      "contextLength": 40960,
-      "capabilities": [
-        "tools",
-        "thinking"
-      ],
-      "source": "https://ollama.com/library/qwen3"
-    },
-    {
-      "name": "qwen3:4b",
-      "size": 2500000000,
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "size": 5680522464,
+      "name": "hf/unsloth/qwen3.5-9b-q4_k_m:03b74727a860",
+      "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/blob/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
+      "license": "apache-2.0",
+      "pipelineTag": "image-text-to-text",
+      "provider": "huggingface",
       "contextLength": 262144,
-      "capabilities": [
-        "tools",
-        "thinking"
-      ],
-      "source": "https://ollama.com/library/qwen3"
+      "parameters": 8953803264,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "name": "qwen3:8b",
-      "size": 5200000000,
-      "contextLength": 40960,
-      "capabilities": [
-        "tools",
-        "thinking"
-      ],
-      "source": "https://ollama.com/library/qwen3"
+      "repo": "unsloth/gemma-4-E4B-it-GGUF",
+      "revision": "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+      "file": "gemma-4-E4B-it-Q4_K_M.gguf",
+      "sha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87",
+      "size": 4977171584,
+      "name": "hf/unsloth/gemma-4-e4b-it-q4_k_m:85a896a04755",
+      "source": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/blob/bfc15c382204943c3a8fff0c750b94ae2364d7a3/gemma-4-E4B-it-Q4_K_M.gguf",
+      "license": "apache-2.0",
+      "pipelineTag": "image-text-to-text",
+      "contextLength": 8192,
+      "parameters": 7518069290,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned instruction-tuned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "name": "qwen3:14b",
-      "size": 9300000000,
-      "contextLength": 40960,
-      "capabilities": [
-        "tools",
-        "thinking"
-      ],
-      "source": "https://ollama.com/library/qwen3"
+      "repo": "bartowski/gemma-4-12B-it-GGUF",
+      "revision": "2ae7d41be21ca62de00a2d320ee9cec50daa3aa6",
+      "file": "gemma-4-12B-it-Q4_K_M.gguf",
+      "sha256": "3962624dcd25b947d889dc9ae1bf275b61db6cd4dbe694057f34fffef1671509",
+      "size": 7662533088,
+      "name": "hf/bartowski/gemma-4-12b-it-q4_k_m:3962624dcd25",
+      "source": "https://huggingface.co/bartowski/gemma-4-12B-it-GGUF/blob/2ae7d41be21ca62de00a2d320ee9cec50daa3aa6/gemma-4-12B-it-Q4_K_M.gguf",
+      "license": "apache-2.0",
+      "pipelineTag": "image-text-to-text",
+      "contextLength": 8192,
+      "parameters": 11907350576,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned instruction-tuned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "name": "qwen3:30b",
-      "size": 19000000000,
+      "repo": "prithivMLmods/Qwen3.8-27B-GGUF",
+      "revision": "3ccdd49b1030d9ce891e42e817ece300ae278562",
+      "file": "Qwen3.8-27B.Q4_K_S.gguf",
+      "sha256": "94a7e12d60cf22b6b13739a34fa93264a7dca369f76e49923021d6725a5d7758",
+      "size": 15825298752,
+      "name": "hf/prithivmlmods/qwen3.8-27b.q4_k_s:94a7e12d60cf",
+      "source": "https://huggingface.co/prithivMLmods/Qwen3.8-27B-GGUF/blob/3ccdd49b1030d9ce891e42e817ece300ae278562/Qwen3.8-27B.Q4_K_S.gguf",
+      "license": "apache-2.0",
+      "pipelineTag": "image-text-to-text",
+      "provider": "huggingface",
       "contextLength": 262144,
-      "capabilities": [
-        "tools",
-        "thinking"
-      ],
-      "source": "https://ollama.com/library/qwen3"
-    },
-    {
-      "name": "qwen3:32b",
-      "size": 20000000000,
-      "contextLength": 40960,
-      "capabilities": [
-        "tools",
-        "thinking"
-      ],
-      "source": "https://ollama.com/library/qwen3"
-    },
-    {
-      "name": "gemma3:270m",
-      "size": 292000000,
-      "contextLength": 32768,
+      "parameters": 27320697856,
+      "parameterSource": "Hub GGUF metadata",
       "capabilities": [],
-      "source": "https://ollama.com/library/gemma3"
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "name": "gemma3:1b",
-      "size": 815000000,
-      "contextLength": 32768,
+      "repo": "RemySkye/KAT-Coder-V2.5-Dev-GGUF",
+      "revision": "75d453ccf7aa238e5f0333f4f974dac95e194b78",
+      "file": "KAT-Coder-V2.5-Dev-Q3_K_S.gguf",
+      "sha256": "5842118485db74051bcfd845789b223a2f7cefea686e42fca3b16b4780f9fcbc",
+      "size": 15182184576,
+      "name": "hf/remyskye/kat-coder-v2.5-dev-q3_k_s:5842118485db",
+      "source": "https://huggingface.co/RemySkye/KAT-Coder-V2.5-Dev-GGUF/blob/75d453ccf7aa238e5f0333f4f974dac95e194b78/KAT-Coder-V2.5-Dev-Q3_K_S.gguf",
+      "license": "apache-2.0",
+      "pipelineTag": "text-generation",
+      "provider": "huggingface",
+      "contextLength": 262144,
+      "parameters": 34660610688,
+      "parameterSource": "Hub GGUF metadata",
       "capabilities": [],
-      "source": "https://ollama.com/library/gemma3"
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "name": "gemma3:4b",
-      "size": 3300000000,
-      "contextLength": 131072,
-      "capabilities": [
-        "vision"
-      ],
-      "source": "https://ollama.com/library/gemma3"
-    },
-    {
-      "name": "gemma3:12b",
-      "size": 8100000000,
-      "contextLength": 131072,
-      "capabilities": [
-        "vision"
-      ],
-      "source": "https://ollama.com/library/gemma3"
-    },
-    {
-      "name": "gemma3:27b",
-      "size": 17000000000,
-      "contextLength": 131072,
-      "capabilities": [
-        "vision"
-      ],
-      "source": "https://ollama.com/library/gemma3"
+      "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+      "revision": "a483e9e6cbd595906af30beda3187c2663a1118c",
+      "file": "Qwen3.6-35B-A3B-UD-Q3_K_S.gguf",
+      "sha256": "212ccdf37d416167ce8dcd7e3a59bcd45b30ac7531822a1e7bb79bfbacb2d1aa",
+      "size": 15359196128,
+      "name": "hf/unsloth/qwen3.6-35b-a3b-ud-q3_k_s:212ccdf37d41",
+      "source": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/blob/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q3_K_S.gguf",
+      "license": "apache-2.0",
+      "pipelineTag": "image-text-to-text",
+      "provider": "huggingface",
+      "contextLength": 262144,
+      "parameters": 34660610688,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     }
   ]
 }

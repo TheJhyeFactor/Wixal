@@ -75,6 +75,10 @@ async def plan(args,active=None):
     batch=min(32 if pace=='careful' else 128,max(0,int(soft)-64))
     if batch<8:raise ValueError('Insufficient file descriptor headroom for discovery')
     result=dict(target=args['target'],addresses=addresses,ports=requested,coverage=coverage,pace=pace,paceMeaning='Wixal controller preset, not a RustScan command-line option.',batchSize=batch,attemptTimeoutMS=2000 if pace=='careful' else 1500,tries=2,timeoutSeconds=seconds,connectionPairs=pairs,retryAllowance=pairs*2,resolvedAt=time.time())
+    from .engagement_policy import addresses as engagement_addresses
+    pinned=await engagement_addresses(args['target'])
+    if pinned:
+        result['addresses']=pinned
     authorize(result,active);return result
 
 

@@ -36,9 +36,9 @@ struct CybersecurityAgentsView:View {
 struct CybersecurityAgentWorkspace:View {
     @ObservedObject var engine:EngineClient
     @ObservedObject var design:AgentDesignStore
-    @ViewState private var section="Investigations"
+    @ViewState private var section="Engagements"
     var body:some View{VStack(spacing:0){
-        Picker("Security workspace",selection:$section){Text("Agents").tag("Agents");Text("Investigations").tag("Investigations")}.pickerStyle(.segmented).padding(.horizontal,24).padding(.top,12)
-        if section=="Agents"{CybersecurityAgentsView(engine:engine,design:design,openInvestigations:{section="Investigations"})}else{SecurityWorkspaceView(engine:engine)}
+        Picker("Security workspace",selection:$section){Text("Engagements").tag("Engagements");Text("Agents").tag("Agents");Text("Investigations").tag("Investigations")}.pickerStyle(.segmented).padding(.horizontal,24).padding(.top,12)
+        if section=="Engagements"{EngagementWorkspaceView(engine:engine,openInvestigations:{section="Investigations"})}else if section=="Agents"{CybersecurityAgentsView(engine:engine,design:design,openInvestigations:{section="Investigations"})}else{SecurityWorkspaceView(engine:engine)}
     }}
 }

@@ -328,14 +328,6 @@ class Service:
             self.idle()
             await asyncio.to_thread(self.runtime.import_model, params)
             return await self.runtime.catalog()
-        if method == "model-pull":
-            self.idle()
-            name = params["name"].strip()
-            if not name or len(name)>200:
-                raise ValueError("Enter a model name")
-            endpoint = await self.runtime.endpoint()
-            # Nonstream pull still runs outside event loop; IPC and cancellation stay responsive.
-            return await asyncio.to_thread(request_json, endpoint+"/api/pull", dict(model=name, stream=False), 3600)
         if method == "tool":
             self.idle()
             self.manual_tools += 1
@@ -576,7 +568,11 @@ async def serve(args):
         finally:
             await requests.close(writer)
             clients.discard(writer); writer.close()
-            await writer.wait_closed()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                # A disconnected IPC peer may reset while broadcasts are buffered.
+                pass
     socket_path = ipc_socket_path(service.store.directory)
     compatibility_path = service.store.directory / "engine.sock"
     if compatibility_path.exists() or compatibility_path.is_symlink(): compatibility_path.unlink()

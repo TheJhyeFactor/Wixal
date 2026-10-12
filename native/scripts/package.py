@@ -112,9 +112,9 @@ if options.preview_data or options.preview_endpoint:
 changed=[str(path.relative_to(root)) for path in source_paths if hashlib.sha256(path.read_bytes()).hexdigest()!=source_hashes[str(path.relative_to(root))]]
 if changed:raise RuntimeError("Source changed during packaging; rerun after edits finish: "+", ".join(changed))
 (resources/"SOURCE_MANIFEST.json").write_text(json.dumps(source_hashes,indent=2))
-notices = "Wixal Native uses SwiftTerm (MIT), Swift Markdown (Apache 2.0 with Swift runtime exception), swift-cmark (CommonMark/GFM parser licenses), Ollama (MIT) and a bundled Python runtime (PSF).\nIncludes an adapted Hermes duration parser (MIT, Nous Research). See Hermes-NOTICE.md and Hermes-LICENSE.\n"
+notices = "Wixal Native uses SwiftTerm (MIT), Swift Markdown (Apache 2.0 with Swift runtime exception), swift-cmark (CommonMark/GFM parser licenses), Ollama (MIT) and a bundled Python runtime (PSF).\nIncludes an adapted Hermes duration parser (MIT, Nous Research). See Hermes-NOTICE.md and Hermes-LICENSE.\nIncludes adapted Decepticon CVSS arithmetic (Apache-2.0, BitterSecurity). See Decepticon-NOTICE.md and Decepticon-LICENSE. CVSS is owned by FIRST.Org, Inc. and used by permission.\n"
 (resources/"THIRD_PARTY_NOTICES.txt").write_text(notices)
-for name, source in (("Hermes-LICENSE",native/"third_party/hermes/LICENSE"),("Hermes-NOTICE.md",native/"third_party/hermes/NOTICE.md"),("SwiftTerm-LICENSE",native/".build/checkouts/SwiftTerm/LICENSE"),("Wixal-LICENSE",root/"LICENSE")):
+for name, source in (("Decepticon-LICENSE",native/"third_party/decepticon/LICENSE"),("Decepticon-NOTICE.md",native/"third_party/decepticon/NOTICE.md"),("Hermes-LICENSE",native/"third_party/hermes/LICENSE"),("Hermes-NOTICE.md",native/"third_party/hermes/NOTICE.md"),("SwiftTerm-LICENSE",native/".build/checkouts/SwiftTerm/LICENSE"),("Wixal-LICENSE",root/"LICENSE")):
     if source.exists():shutil.copy2(source,resources/name)
 for dependency in ("swift-markdown", "swift-cmark"):
     checkout=native/".build/checkouts"/dependency

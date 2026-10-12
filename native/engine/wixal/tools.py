@@ -226,13 +226,14 @@ class Tools:
                     return result
         return result
 
-    async def start_command(self, command, seconds, session_id, argv=None, assessment=None, environment=None, on_finished=None, retain_evidence=False):
+    async def start_command(self, command, seconds, session_id, argv=None, assessment=None, environment=None, on_finished=None, retain_evidence=False, interactive=False):
+        if type(interactive) is not bool or interactive and (argv or assessment or retain_evidence):raise ValueError('Interactive terminals are for explicitly reviewed project commands only')
         if sum(j["state"]=="running" for j in self.jobs.values()) >= 8:
             raise ValueError("Eight commands are already running")
         project = dict(self.store.project() or {})
         if not project or not command.strip() or len(command)>8000:
             raise ValueError("A project and valid command are required")
-        if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds,**({"assessment":assessment} if assessment else {}))):
+        if not await self.approve(dict(name="command_start", command=command, root=project["root"], timeout_seconds=seconds,**({'interactive':True} if interactive else {}),**({"assessment":assessment} if assessment else {}))):
             return "User declined this command."
         if self.store.project()!=project or sum(j["state"]=="running" for j in self.jobs.values())>=8:
             raise ValueError("Project or command capacity changed during review; review the action again")
@@ -240,17 +241,36 @@ class Tools:
         branch=(profile.get() or {}).get("_branchRoot")
         invocation=argv or ["/bin/zsh", "-l", "-c", command]
         if branch:
+            if interactive:raise ValueError('Interactive terminals are unavailable in isolated workflow branches')
             if not Path("/usr/bin/sandbox-exec").is_file():raise ValueError("Isolated commands require the macOS sandbox backend")
             policy="(version 1) (allow default) (deny file-write*) (deny network*) (allow file-write* (subpath "+json.dumps(str(Path(branch).resolve()))+")) (allow file-write* (literal \"/dev/null\"))"
             invocation=["/usr/bin/sandbox-exec","-p",policy,*invocation]
             temporary=Path(branch)/".wixal-tmp";temporary.mkdir(exist_ok=True)
             environment={**os.environ,"TMPDIR":str(temporary),"PYTHONDONTWRITEBYTECODE":"1"}
-        child = await asyncio.create_subprocess_exec(*invocation, cwd=project["root"],env=environment,
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE if retain_evidence else asyncio.subprocess.STDOUT, start_new_session=True)
+        master=None;transport=None
+        if interactive:
+            import pty,fcntl,termios,struct
+            master,slave=pty.openpty()
+            try:
+                fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',24,100,0,0))
+                child=await asyncio.create_subprocess_exec(*invocation,cwd=project['root'],env=environment,stdin=slave,stdout=slave,stderr=slave,start_new_session=True)
+                stream=asyncio.StreamReader();protocol=asyncio.StreamReaderProtocol(stream)
+                transport,_=await asyncio.get_running_loop().connect_read_pipe(lambda:protocol,os.fdopen(os.dup(master),'rb',buffering=0))
+                os.set_blocking(master,False)
+            except BaseException:
+                if master is not None:os.close(master)
+                if 'child' in locals() and child.returncode is None:child.kill();await child.wait()
+                raise
+            finally:os.close(slave)
+        else:
+            child = await asyncio.create_subprocess_exec(*invocation, cwd=project["root"],env=environment,
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE if retain_evidence else asyncio.subprocess.STDOUT, start_new_session=True)
+            stream=child.stdout
         job_id = identity()
         job = dict(id=job_id, owner=session_id, projectId=project["id"], command=command, started=now(), state="running",
                    output="", base=0, exitCode=None, child=child, reason=None)
         self.jobs[job_id] = job
+        if interactive:job.update(interactive=True,pty=master)
         if assessment: job['assessment']=assessment
         if retain_evidence:
             directory=self.store.directory/'tool-evidence'/project['id']/job_id
@@ -262,7 +282,12 @@ class Tools:
                 captured=0
                 output=Path(job['evidence'][label+'Path']).open('wb') if retain_evidence else None
                 try:
-                    while chunk:=await stream.read(8192):
+                    while True:
+                        try:chunk=await stream.read(8192)
+                        except OSError as error:
+                            if interactive and error.errno==5:break
+                            raise
+                        if not chunk:break
                         if output:
                             captured+=len(chunk)
                             if captured>job['evidence']['limitBytes']:
@@ -283,7 +308,7 @@ class Tools:
                         job['evidence'][label+'Sha256']=digest(job['evidence'][label+'Path'])
             try:
                 async with asyncio.timeout(seconds):
-                    await asyncio.gather(drain(child.stdout,'stdout'),*([drain(child.stderr,'stderr')] if retain_evidence else []))
+                    await asyncio.gather(drain(stream,'stdout'),*([drain(child.stderr,'stderr')] if retain_evidence else []))
                     job['exitCode']=await child.wait()
                     job['state']='stopped' if job['reason'] else 'completed'
             except TimeoutError:
@@ -296,6 +321,8 @@ class Tools:
                 # The session leader may have exited while a descendant still
                 # owns a pipe or keeps running after redirecting its output.
                 self.terminate_group(job)
+                if interactive:
+                    transport.close();os.close(master);job.pop('pty',None)
                 job['finished']=now()
                 try:
                     if on_finished:await on_finished(job)
@@ -354,6 +381,8 @@ class Tools:
             raise ValueError(f"{name} is switched off or outside this agent task boundary")
         if name in ("network_scan","network_discover") and name not in self.store.data.get("enabledTools",[]):raise ValueError(name+" is switched off")
         validate(args, definition["function"]["parameters"])
+        from .engagement_policy import tool_gate
+        tool_gate(name,args)
         from .agent_context import profile
         from .agent_authority import enforce_target
         enforce_target(profile.get(),name,args)
@@ -479,7 +508,7 @@ class Tools:
                 raise ValueError("Project recall is disabled")
             return self.store.memory.recall(args['query'],scope='project',limit=8,exclude_session=session_id)
         if name in ("command_start", "run_command"):
-            result = await self.start_command(args["command"], args.get("timeout_seconds", 60 if name=="run_command" else 600), session_id)
+            result = await self.start_command(args["command"], args.get("timeout_seconds", 60 if name=="run_command" else 600), session_id,interactive=args.get('interactive',False))
             if name=="run_command" and isinstance(result, dict):
                 await self.jobs[result["session_id"]]["collector"]
                 return await self.read_job(dict(session_id=result["session_id"], wait_ms=0), session_id)
@@ -495,12 +524,20 @@ class Tools:
             if name=="command_save_output":
                 result["output"] = job["output"]
                 return await self.execute("write_file", dict(path=args["path"], content=json.dumps(result, indent=2)), session_id)
+            if len(args['input'].encode())>4096:raise ValueError('Command input must be at most 4,096 bytes per reviewed write')
             if not await self.approve(dict(name=name, command=args["input"])):
                 return "User declined command input."
-            job["child"].stdin.write(args["input"].encode())
-            await job["child"].stdin.drain()
-            if args.get("close_stdin"):
-                job["child"].stdin.close()
+            await self.read_job(dict(session_id=args['session_id'],wait_ms=0),session_id)
+            if job.get('interactive'):
+                if 'pty' not in job or job['state']!='running':raise ValueError('Interactive terminal is no longer running')
+                content=args['input'].encode()+(b'\x04' if args.get('close_stdin') else b'')
+                while content:
+                    try:written=os.write(job['pty'],content);content=content[written:]
+                    except BlockingIOError:await asyncio.sleep(.01)
+            else:
+                job["child"].stdin.write(args["input"].encode())
+                await job["child"].stdin.drain()
+                if args.get("close_stdin"):job["child"].stdin.close()
             return dict(inputSent=True)
         if name == 'security_tools':
             manager=getattr(self.store,'addons',None)
@@ -522,7 +559,11 @@ class Tools:
             if active.get('restrictTargets'):
                 from .network_discovery import plan
                 await plan(dict(target=args['target'],ports=args.get('ports','22,53,80,443,445,3389,8080,8443')),active)
-            argv=[executable,*scan_plan(args)]
+            from .engagement_policy import addresses as engagement_addresses
+            pinned=await engagement_addresses(args['target'])
+            if pinned:
+                argv=[executable,*scan_plan(dict(args,target=pinned[0])),*pinned[1:]]
+            else:argv=[executable,*scan_plan(args)]
             from .network_discovery import ports
             from .managed_tools import controlled_environment,digest
             assessment=dict(capability='network_scan',profile=args.get('profile','services'),target=args['target'],ports=ports(args.get('ports','22,53,80,443,445,3389,8080,8443')),executableSha256=await asyncio.to_thread(digest,executable))

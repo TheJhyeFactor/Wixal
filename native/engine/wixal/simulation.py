@@ -89,28 +89,32 @@ async def simulate_website(browser_probe=None,on_case=lambda *_:None):
                 row=dict(id=case_id,fixture=mode,status='expected-result' if expected else 'unexpected-result',defenseHeld=bool(defended),evidence=evidence)
                 cases.append(row);on_case(row)
             async with WebsiteFixture(hardened) as fixture:
-                report=await assess_website(dict(url=fixture.origin,profile='probes',max_pages=1,protected_paths=['/api/admin']),delay=0)
-                for case_id in ('frame-protection','reflection-canary','sensitive-file-exposure','open-redirect','unauthenticated-access'):
-                    observed=any(f['id']==case_id for f in report['findings'])
-                    record(case_id,not observed,dict(findingObserved=observed))
-                cookie={'Cookie':'lab_session='+fixture.token}
-                csrf=await bounded_request(fixture.origin+'/write',method='POST',headers={**cookie,'Origin':'https://wixal-attacker.invalid'})
-                record('cross-origin-write',csrf['status']==403,dict(status=csrf['status'],writes=fixture.writes))
-                statuses=[]
-                for _ in range(9):
-                    response=await bounded_request(fixture.origin+'/login',method='POST',headers={'X-Forwarded-For':'198.51.100.9'})
-                    statuses.append(response['status'])
-                spoof=await bounded_request(fixture.origin+'/login',method='POST',headers={'X-Forwarded-For':'198.51.100.10'})
-                record('forwarded-header-throttle',spoof['status']==429,dict(statuses=statuses,spoofedHeaderStatus=spoof['status']))
-                await bounded_request(fixture.origin+'/logout',method='POST',headers=cookie)
-                replay=await bounded_request(fixture.origin+'/api/admin',headers=cookie)
-                record('logout-replay',replay['status']==401,dict(status=replay['status']))
-                if browser_probe:
-                    payload='<script>document.body.append("WIXAL_XSS_EXECUTED")</script>'
-                    target=fixture.origin+'/?'+urllib.parse.urlencode({'wixal_probe':payload})
-                    result=await browser_probe(target)
-                    text=result.get('text','')
-                    record('browser-script-execution','WIXAL_XSS_EXECUTED' not in text or '<script>' in text,dict(visibleText=text[:300],scriptExecuted=text.strip()=='WIXAL_XSS_EXECUTED'))
+                from .engagement_policy import simulation_origin
+                fixture_token=simulation_origin.set(fixture.origin)
+                try:
+                    report=await assess_website(dict(url=fixture.origin,profile='probes',max_pages=1,protected_paths=['/api/admin']),delay=0)
+                    for case_id in ('frame-protection','reflection-canary','sensitive-file-exposure','open-redirect','unauthenticated-access'):
+                        observed=any(f['id']==case_id for f in report['findings'])
+                        record(case_id,not observed,dict(findingObserved=observed))
+                    cookie={'Cookie':'lab_session='+fixture.token}
+                    csrf=await bounded_request(fixture.origin+'/write',method='POST',headers={**cookie,'Origin':'https://wixal-attacker.invalid'})
+                    record('cross-origin-write',csrf['status']==403,dict(status=csrf['status'],writes=fixture.writes))
+                    statuses=[]
+                    for _ in range(9):
+                        response=await bounded_request(fixture.origin+'/login',method='POST',headers={'X-Forwarded-For':'198.51.100.9'})
+                        statuses.append(response['status'])
+                    spoof=await bounded_request(fixture.origin+'/login',method='POST',headers={'X-Forwarded-For':'198.51.100.10'})
+                    record('forwarded-header-throttle',spoof['status']==429,dict(statuses=statuses,spoofedHeaderStatus=spoof['status']))
+                    await bounded_request(fixture.origin+'/logout',method='POST',headers=cookie)
+                    replay=await bounded_request(fixture.origin+'/api/admin',headers=cookie)
+                    record('logout-replay',replay['status']==401,dict(status=replay['status']))
+                    if browser_probe:
+                        payload='<script>document.body.append("WIXAL_XSS_EXECUTED")</script>'
+                        target=fixture.origin+'/?'+urllib.parse.urlencode({'wixal_probe':payload})
+                        result=await browser_probe(target)
+                        text=result.get('text','')
+                        record('browser-script-execution','WIXAL_XSS_EXECUTED' not in text or '<script>' in text,dict(visibleText=text[:300],scriptExecuted=text.strip()=='WIXAL_XSS_EXECUTED'))
+                finally:simulation_origin.reset(fixture_token)
     return dict(schema=1,target='disposable loopback fixtures',profile='attack-simulation',started=started,finished=timestamp(),cases=cases,findings=[],references={},
                 summary=dict(cases=len(cases),expected=sum(c['status']=='expected-result' for c in cases),unexpected=sum(c['status']=='unexpected-result' for c in cases)),
                 limitations=['These are deliberately vulnerable and hardened local fixtures, not findings about a production website.','Synthetic session tokens and canary secrets only. No external target or credentials are used.'])

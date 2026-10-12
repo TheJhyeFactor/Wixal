@@ -60,7 +60,9 @@ async def bounded_request(url,method='GET',headers=None,limit=512*1024):
     async with asyncio.timeout(10):
         try:
             context=ssl.create_default_context() if parsed.scheme=='https' else None
-            reader,writer=await asyncio.open_connection(parsed.hostname,parsed.port or (443 if context else 80),ssl=context,limit=1024*1024)
+            from .engagement_policy import connection
+            pinned=await connection(url)
+            reader,writer=await asyncio.open_connection(pinned or parsed.hostname,parsed.port or (443 if context else 80),ssl=context,server_hostname=parsed.hostname if context else None,limit=1024*1024)
             path=urllib.parse.urlunsplit(('','',parsed.path or '/',parsed.query,''))
             request_headers={'Host':parsed.netloc,'User-Agent':'Wixal-Website-Assessment/0.7','Connection':'close',**(headers or {})}
             if method=='POST': request_headers['Content-Length']='0'

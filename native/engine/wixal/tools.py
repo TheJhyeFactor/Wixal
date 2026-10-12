@@ -354,6 +354,8 @@ class Tools:
             raise ValueError(f"{name} is switched off or outside this agent task boundary")
         if name in ("network_scan","network_discover") and name not in self.store.data.get("enabledTools",[]):raise ValueError(name+" is switched off")
         validate(args, definition["function"]["parameters"])
+        from .engagement_policy import tool_gate
+        tool_gate(name,args)
         from .agent_context import profile
         from .agent_authority import enforce_target
         enforce_target(profile.get(),name,args)
@@ -522,7 +524,11 @@ class Tools:
             if active.get('restrictTargets'):
                 from .network_discovery import plan
                 await plan(dict(target=args['target'],ports=args.get('ports','22,53,80,443,445,3389,8080,8443')),active)
-            argv=[executable,*scan_plan(args)]
+            from .engagement_policy import addresses as engagement_addresses
+            pinned=await engagement_addresses(args['target'])
+            if pinned:
+                argv=[executable,*scan_plan(dict(args,target=pinned[0])),*pinned[1:]]
+            else:argv=[executable,*scan_plan(args)]
             from .network_discovery import ports
             from .managed_tools import controlled_environment,digest
             assessment=dict(capability='network_scan',profile=args.get('profile','services'),target=args['target'],ports=ports(args.get('ports','22,53,80,443,445,3389,8080,8443')),executableSha256=await asyncio.to_thread(digest,executable))

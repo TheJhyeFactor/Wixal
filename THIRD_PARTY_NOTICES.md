@@ -13,3 +13,7 @@ An adapted Hermes `parse_duration` function is included under the Nous Research 
 Earlier Electron releases include Electron, node-pty, xterm and npm dependencies with their distributed notices. Their versions remain recorded in package-lock.json.
 
 Supplemental JSON and Metal C++ notices from the Ollama 0.35.1 macOS application are retained in `resources/notices` and copied into each staged payload. They accompany the corresponding upstream components; the verified CLI archive already includes the aggregate llama.cpp vendor notices.
+
+## Decepticon CVSS utility
+
+The native CVSS 3.1 arithmetic is adapted from BitterSecurity/Decepticon under Apache-2.0. See `native/third_party/decepticon/NOTICE.md` and its accompanying licence. The licence and attribution are also embedded in the native engine resources.

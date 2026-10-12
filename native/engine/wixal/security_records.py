@@ -10,6 +10,7 @@ from .website import website_plan
 COLLECTIONS = ('securityDiscoveries', 'securityFindings', 'securityResearch', 'securityPlans', 'securityTemplates', 'securityEvents', 'securityContracts')
 BUILTINS = {
     'api_observe':dict(title='Scoped read-only API observations',types=['Website / API'],tools=[],inputs=['paths','credentialId']),
+    'api_mutate':dict(title='Reviewed API mutation',types=['Website / API'],tools=[],inputs=['path','method','body','credentialId']),
     'network_discover': dict(title='Discover TCP ports', types=['Website / API','Server','Network device'], tools=['network_discover'], inputs=['coverage','ports','pace','timeout_seconds']),
     'linux_network_scan':dict(title='Isolated Linux network assessment',types=['Website / API','Server','Network device'],tools=[],inputs=['profile','ports','timeout_seconds']),
     'network_scan': dict(title='Network assessment', types=['Website / API','Network','Server','Network device'], tools=['network_scan'], inputs=['profile','ports','timeout_seconds']),
@@ -58,7 +59,7 @@ class SecurityRecords:
                 bound=engagement.for_target(target)
                 if name not in engagement.scope(bound)['capabilities']:missing.append('Not permitted by current engagement scope')
                 if bound['status']!='running':missing.append('Review and start the current engagement scope')
-            elif name=='linux_network_scan':missing.append('Requires an approved engagement')
+            elif name in ('linux_network_scan','api_observe','api_mutate'):missing.append('Requires an approved engagement')
             rows.append(dict(id=name,**spec,available=not missing,missing=missing))
         manager=getattr(self.store,'addons',None)
         if manager:

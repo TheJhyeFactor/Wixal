@@ -201,7 +201,7 @@
     "type": "function",
     "function": {
       "name": "command_start",
-      "description": "Start an AI-selected shell command on the Mac after review. Supports website, server and network tools installed on the host. Returns a session ID; read output before deciding next steps. Piped stdin, not a PTY.",
+      "description": "Start a reviewed local shell command. Returns an owned session ID; read output before deciding next steps. Set interactive true for a real PTY with state retained until stop or timeout.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -213,6 +213,10 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 3600
+          },
+          "interactive": {
+            "type": "boolean",
+            "description": "Allocate a real local PTY for an interactive CLI session. State survives calls until timeout or stop, never an engine restart. Each input requires review."
           }
         },
         "required": [

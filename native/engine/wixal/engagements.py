@@ -97,6 +97,10 @@ class Engagements:
         if not run.get('engagementId'):return
         engagement=next(e for e in self.store.data['securityEngagements'] if e['id']==run['engagementId'])
         run['effectState']='succeeded' if run['status']=='completed' else 'unknown' if run['status'] in ('cancelled','interrupted') else 'failed'
+        if run['capability']=='api_mutate':
+            if run['status']!='completed':run['effectState']='unknown'
+            if not any(c.get('runId')==run['id'] for c in self.rows('securityCleanup',engagement)):
+                self.add('securityCleanup',engagement,runId=run['id'],title='Inspect API mutation effects',description='Inspect target state and any required rollback independently. The request may have changed state even if its response failed.',status='pending',evidenceIds=[],scopeRevision=run['scopeRevision'])
         if run['status']=='completed' and not run.get('retainedEvidenceId'):
             row=evidence.retain(self,engagement,dict(runId=run['id'],targetId=run['targetId'],capability=run['capability'],arguments=run['arguments'],result=run.get('result',{}),model=run.get('model'),finished=run.get('finished')), 'run',run['id'])
             run['retainedEvidenceId']=row['id']

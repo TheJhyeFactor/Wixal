@@ -10,8 +10,8 @@ from .storage import identity, now
 from . import engagement_evidence as evidence
 from . import engagement_policy as policy
 
-COLLECTIONS=('securityCredentials','securityValidationContracts','securityTelemetry')
-VALIDATORS=('api_access_boundary','network_port_state','website_header_value')
+COLLECTIONS=('securityCredentials','securityValidationContracts','securityTelemetry','securityOAuthFlows')
+VALIDATORS=('api_access_boundary','network_port_state','website_header_value','api_mutation_state')
 
 
 def api_plan(args):
@@ -23,10 +23,32 @@ def api_plan(args):
     return dict(paths=list(dict.fromkeys(paths)),credentialId=ref)
 
 
+def mutation_plan(args):
+    if not isinstance(args,dict) or set(args)-{'path','method','body','credentialId'}:raise ValueError('Mutation requires an exact path, method, JSON body and identity reference')
+    path=api_plan(dict(paths=[args.get('path')],credentialId=args.get('credentialId','')))
+    method=args.get('method')
+    if method not in ('POST','PUT','PATCH','DELETE'):raise ValueError('Choose POST, PUT, PATCH or DELETE')
+    body=args.get('body',{})
+    if not isinstance(body,dict) or len(json.dumps(body,allow_nan=False).encode())>16384:raise ValueError('Provide a JSON object below 16 KB')
+    def check(value):
+        if isinstance(value,dict):
+            for key,item in value.items():
+                if str(key).lower() in ('password','secret','token','access_token','refresh_token','authorization','cookie'):raise ValueError('Use a Keychain identity reference; credentials cannot be inline mutation data')
+                check(item)
+        elif isinstance(value,list):
+            for item in value:check(item)
+    check(body)
+    return dict(path=path['paths'][0],method=method,body=copy.deepcopy(body),credentialId=path['credentialId'])
+
+
 class Assurance:
     def __init__(self,manager):
         self.manager=manager;self.store=manager.store
         for key in COLLECTIONS:self.store.data.setdefault(key,[])
+        from .security_oauth import OAuth
+        self.oauth=OAuth(self)
+        for flow in self.store.data['securityOAuthFlows']:
+            if flow['status']=='waiting_callback':flow['status']='interrupted'
 
     def vault(self,identifier):
         value=Keychain(self.store.directory/'security-credentials'/identifier);value.account=b'engagement-token';return value
@@ -37,16 +59,18 @@ class Assurance:
         return row
 
     async def observe_api(self,run,approve):
-        manager=self.manager;engagement=manager.get(run['engagementId']);plan=api_plan(run['arguments'])
+        manager=self.manager;engagement=manager.get(run['engagementId']);mutation=run['capability']=='api_mutate'
+        plan=(mutation_plan if mutation else api_plan)(run['arguments'])
+        paths=[plan['path']] if mutation else plan['paths'];method=plan['method'] if mutation else 'GET'
         row=self.credential(engagement,plan['credentialId'],run['targetId']) if plan['credentialId'] else None
         if row and urlsplit(run['address']).scheme!='https':
             import ipaddress
             try:loopback=ipaddress.ip_address(urlsplit(run['address']).hostname).is_loopback
             except ValueError:loopback=False
-            if not loopback:raise ValueError('Bearer-token observations require HTTPS, except for an explicit loopback lab')
-        intent=dict(name='security_api_observe',target=run['address'],paths=plan['paths'],method='GET',identity=dict(id=row['id'],label=row['label'],expires=row['expires']) if row else 'anonymous',scopeRevision=run['scopeRevision'])
+            if not loopback:raise ValueError('Bearer-token and cookie observations require HTTPS, except for an explicit loopback lab')
+        intent=dict(name='security_api_mutate' if mutation else 'security_api_observe',target=run['address'],paths=paths,method=method,**({'body':plan['body'],'effect':'Changes target state; cleanup requires separate inspection'} if mutation else {}),identity=dict(id=row['id'],label=row['label'],expires=row['expires']) if row else 'anonymous',scopeRevision=run['scopeRevision'])
         # Credential use is always reviewed, including in project bypass mode.
-        allowed=await manager.workspace.service.ask('review',intent) if row else await approve(intent)
+        allowed=await manager.workspace.service.ask('review',intent) if row or mutation else await approve(intent)
         if not allowed:raise ValueError('API observations were not approved')
         manager.authorize_run(run)
         secret=''
@@ -58,12 +82,15 @@ class Assurance:
         from .website import bounded_request,origin
         results=[]
         try:
-            for path in plan['paths']:
+            for path in paths:
                 manager.authorize_run(run)
                 if row:self.credential(engagement,row['id'],run['targetId'])
                 url=urljoin(run['address'],path)
                 if origin(url)!=origin(run['address']):raise ValueError('API path is outside the approved origin')
-                response=await bounded_request(url,headers={'Authorization':'Bearer '+secret} if secret else {},limit=64*1024)
+                headers=({'Cookie':secret} if row and row.get('kind')=='cookie' else {'Authorization':'Bearer '+secret}) if secret else {}
+                body=json.dumps(plan['body'],allow_nan=False).encode() if mutation else None
+                if mutation:headers['Content-Type']='application/json'
+                response=await bounded_request(url,method=method,headers=headers,limit=64*1024,body=body)
                 manager.authorize_run(run)
                 if row:self.credential(engagement,row['id'],run['targetId'])
                 # Keep the transport digest. Retain structured values, not a raw
@@ -73,15 +100,18 @@ class Assurance:
                 def scrub(value):
                     if isinstance(value,str):
                         from urllib.parse import quote
-                        return value.replace(secret,'[REDACTED]').replace(quote(secret,safe=''),'[REDACTED]') if secret else value
-                    if isinstance(value,dict):return {scrub(k):scrub(v) for k,v in value.items()}
+                        secrets=[secret]+([part.split('=',1)[1].strip() for part in secret.split(';') if '=' in part] if row and row.get('kind')=='cookie' else [])
+                        for item in secrets:
+                            if item:value=value.replace(item,'[REDACTED]').replace(quote(item,safe=''),'[REDACTED]')
+                        return value
+                    if isinstance(value,dict):return {scrub(k):'[REDACTED]' if str(k).lower() in ('token','access_token','refresh_token','authorization','cookie','password','secret') else scrub(v) for k,v in value.items()}
                     if isinstance(value,list):return [scrub(v) for v in value]
                     return value
                 response=scrub(response);response['json']=scrub(body)
                 response['path']=path;results.append(response)
                 await asyncio.sleep(.1)
         finally:secret=''
-        return dict(profile='readonly_get',requests=results,identityId=row['id'] if row else 'anonymous',identityLabel=row['label'] if row else 'Anonymous',credentialLeaseRevision=row['scopeRevision'] if row else None,limitations=['GET observations only; no redirects, cookie sessions or mutations. HTTP success alone does not establish authorization correctness.'])
+        return dict(profile='reviewed_mutation' if mutation else 'readonly_get',requests=results,identityId=row['id'] if row else 'anonymous',identityLabel=row['label'] if row else 'Anonymous',credentialLeaseRevision=row['scopeRevision'] if row else None,limitations=['No redirects or automatic cookie updates. HTTP success alone does not establish authorization correctness or cleanup.'])
 
     def validate(self,engagement,params):
         contract=self.manager.record('securityValidationContracts',params.get('contractId'),engagement)
@@ -108,6 +138,16 @@ class Assurance:
             except (KeyError,TypeError,IndexError,ValueError):control=None
             passed=observations[0]['status']==200 and observations[1]['status'] in (401,403) and type(signal)==type(config['expected']) and signal==config['expected'] and not (type(control)==type(signal) and control==signal)
             details=dict(allowedStatus=observations[0]['status'],deniedStatus=observations[1]['status'],signal=signal,control=control)
+        elif validator=='api_mutation_state':
+            mutation=self.manager.record('securityRuns',config['mutationRunId'],engagement)
+            if runs[0]['capability']!='api_observe' or runs[0]['arguments']!=runs[1]['arguments'] or mutation['capability']!='api_mutate' or mutation['status']!='completed' or mutation.get('scopeRevision')!=engagement['scopeRevision'] or mutation['targetId']!=contract['targetId']:raise ValueError('State validation requires comparable reads and a completed current-scope mutation')
+            evidence.read(self.manager,engagement,mutation.get('retainedEvidenceId'))
+            if not runs[1]['finished']<=mutation['started']<=mutation['finished']<=runs[0]['started']:raise ValueError('Collect baseline before mutation and positive evidence afterwards')
+            observations=[next((r for r in v['requests'] if r['path']==config['path']),None) for v in values]
+            if not all(observations) or any(o['truncated'] for o in observations):raise ValueError('State verification requires complete bounded response bodies')
+            signals=[evidence.value_at(o['json'],config['pointer']) for o in observations]
+            passed=all(o['status']==200 for o in observations) and all(type(a)==type(b) and a==b for a,b in zip(signals,[config['after'],config['before']])) and all(200<=r['status']<300 for r in mutation['result']['requests'])
+            details=dict(before=signals[1],after=signals[0],mutationRunId=mutation['id'])
         elif validator=='network_port_state':
             if runs[0]['capability'] not in ('network_scan','linux_network_scan') or runs[0]['arguments'].get('profile')!=runs[1]['arguments'].get('profile'):raise ValueError('Port validation requires comparable network profiles')
             observations=[[s for s in v.get('services',[]) if str(s.get('port'))==str(config['port']) and s.get('host')==config['host']] for v in values]
@@ -122,22 +162,33 @@ class Assurance:
         return self.manager.add('securityVerifications',engagement,objectiveId=contract['objectiveId'],contractId=contract['id'],validator=validator,status='validated' if passed else 'inconclusive',scopeRevision=engagement['scopeRevision'],positiveId=refs[0],baselineId=refs[1],positiveSha256=rows[0]['sha256'],baselineSha256=rows[1]['sha256'],details=details,limitation='Validates only the declared access boundary, port state or response-header observation; no broader compromise claim.')
 
     async def dispatch(self,method,params):
+        if method=='security-oauth-start':return await self.oauth.start(params)
+        from .security_external import dispatch
+        external=await dispatch(self,method,params)
+        if external is not NotImplemented:return external
         if method not in ('security-credential-save','security-credential-revoke','security-contract-validator-save','security-contract-validator-run','security-engagement-worker-reconcile','security-telemetry-import','security-telemetry-correlate','security-specialist-operate','security-engagement-structured-import'):return NotImplemented
         manager=self.manager;engagement=manager.get(params.get('engagementId'))
         if engagement['status'] in ('completed','closed_incomplete','cancelled'):raise ValueError('Closed engagements are immutable')
         revision=engagement['scopeRevision']
         if method=='security-credential-save':
             manager.record('securityTargets',params.get('targetId'),engagement)
-            label=policy.text(params.get('label'),'Identity label',100);secret=params.get('secret');duration=params.get('seconds',3600)
-            if not isinstance(secret,str) or not 8<=len(secret)<=4096 or not re.fullmatch(r'[A-Za-z0-9._~+/-]+=*',secret) or type(duration) is not int or not 60<=duration<=86400:raise ValueError('Provide a bounded bearer token and a 60–86,400 second lease')
+            label=policy.text(params.get('label'),'Identity label',100);secret=params.get('secret');duration=params.get('seconds',3600);kind=params.get('kind','bearer')
+            pattern=r'[A-Za-z0-9._~+/-]+=*' if kind in ('bearer','oauth_access_token') else r'[A-Za-z0-9_-]+=[A-Za-z0-9._~+/%=-]+(?:; ?[A-Za-z0-9_-]+=[A-Za-z0-9._~+/%=-]+)*'
+            if kind not in ('bearer','cookie','oauth_access_token') or not isinstance(secret,str) or not 8<=len(secret)<=4096 or not re.fullmatch(pattern,secret) or type(duration) is not int or not 60<=duration<=86400:raise ValueError('Provide a bounded bearer/OAuth token or explicit cookie header and a 60–86,400 second lease')
             identifier=identity();intent=dict(name='security_credential_lease',label=label,targetId=params['targetId'],scopeRevision=revision,seconds=duration,storage='macOS Keychain; reference only in engagement records')
             if not await manager.workspace.service.ask('review',intent):raise ValueError('Identity lease was not approved')
             if revision!=engagement['scopeRevision'] or engagement['status'] in ('completed','closed_incomplete','cancelled'):raise ValueError('Scope changed during identity review')
-            await asyncio.to_thread(self.vault(identifier).set,dict(token=secret));secret=''
+            saving=asyncio.create_task(asyncio.to_thread(self.vault(identifier).set,dict(token=secret)))
+            try:await asyncio.shield(saving)
+            except BaseException:
+                try:await saving
+                finally:await asyncio.shield(asyncio.to_thread(self.vault(identifier).set,None))
+                raise
+            secret=''
             if revision!=engagement['scopeRevision'] or engagement['status'] in ('completed','closed_incomplete','cancelled') or self.store.data.get('activeProject')!=engagement['projectId']:
                 await asyncio.to_thread(self.vault(identifier).set,None)
                 raise ValueError('Scope or project changed while saving the identity lease')
-            result=manager.add('securityCredentials',engagement,targetId=params['targetId'],label=label,expires=min(now()+duration*1000,manager.scope(engagement)['ends']),scopeRevision=revision,revoked=False)
+            result=manager.add('securityCredentials',engagement,targetId=params['targetId'],label=label,kind=kind,expires=min(now()+duration*1000,manager.scope(engagement)['ends']),scopeRevision=revision,revoked=False)
             # The vault key is the record identity, never the label or user input.
             result['vaultId']=identifier
         elif method=='security-credential-revoke':
@@ -156,6 +207,12 @@ class Assurance:
                 for key in ('allowedIdentityId','deniedIdentityId'):
                     if config[key]!='anonymous':self.credential(engagement,config[key],objective['targetId'])
                 if not isinstance(config['pointer'],str) or not config['pointer'].startswith('/') or len(config['pointer'])>1000 or type(config['expected']) not in (str,int,bool) or len(str(config['expected']))>1000:raise ValueError('Choose a bounded explicit JSON signal')
+            elif validator=='api_mutation_state':
+                if set(config)!={'path','pointer','before','after','mutationRunId'}:raise ValueError('State contract requires path, pointer, distinct before/after values and a mutation run')
+                api_plan(dict(paths=[config['path']]))
+                if not isinstance(config['pointer'],str) or not config['pointer'].startswith('/') or len(config['pointer'])>1000 or any(type(config[k]) not in (str,int,bool) or len(str(config[k]))>1000 for k in ('before','after')) or type(config['before'])==type(config['after']) and config['before']==config['after']:raise ValueError('Choose a bounded JSON pointer and distinct scalar states')
+                mutation=manager.record('securityRuns',config['mutationRunId'],engagement)
+                if mutation['targetId']!=objective['targetId'] or mutation['capability']!='api_mutate' or mutation['status']!='completed' or mutation.get('scopeRevision')!=revision:raise ValueError('Choose a completed current-scope mutation for this target')
             elif validator=='network_port_state':
                 if set(config)!={'host','port','positiveState','baselineState'} or type(config['port']) is not int or not 1<=config['port']<=65535 or config['positiveState'] not in ('open','closed','filtered') or config['baselineState'] not in ('open','closed','filtered') or config['positiveState']==config['baselineState']:raise ValueError('Choose a host, port and distinct observed states')
                 policy.text(config['host'],'Observed host',250)
@@ -172,7 +229,7 @@ class Assurance:
             run['workerReconciliation']=result
         elif method=='security-specialist-operate':
             role=params.get('role');capability=params.get('capability')
-            allowed={'recon_operator':('api_observe','website_assess','network_scan','linux_network_scan'),'inventory_operator':('software_inventory',)}
+            allowed={'recon_operator':('api_observe','website_assess','network_scan','linux_network_scan'),'api_operator':('api_mutate',),'inventory_operator':('software_inventory',)}
             if capability not in allowed.get(role,()):raise ValueError('Choose an operator role and its bounded supported capability')
             target=manager.record('securityTargets',params.get('targetId'),engagement)
             question=policy.text(params.get('question'),'Operation purpose',1000)

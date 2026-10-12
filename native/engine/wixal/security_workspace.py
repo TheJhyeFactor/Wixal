@@ -166,10 +166,10 @@ class SecurityWorkspace(SecurityRecords):
             seconds=args.get('timeout_seconds',180)
             if type(seconds) is not int or not 10<=seconds<=600:raise ValueError('Worker deadline must be 10–600 seconds')
             args['timeout_seconds']=min(seconds,self.engagements.scope(self.engagements.get(engagement_binding['engagementId']))['maxSeconds'])
-        elif capability == 'api_observe':
+        elif capability in ('api_observe','api_mutate'):
             if not engagement_binding.get('engagementId'):raise ValueError('API identity observations require an approved engagement')
-            from .security_assurance import api_plan
-            args=api_plan(args);engagement_binding['arguments']=args
+            from .security_assurance import api_plan, mutation_plan
+            args=(mutation_plan if capability=='api_mutate' else api_plan)(args);engagement_binding['arguments']=args
             if args['credentialId']:self.engagements.assurance.credential(self.engagements.get(engagement_binding['engagementId']),args['credentialId'],target['id'])
         elif capability == 'network_scan':
             if target['type'] == 'Software': raise ValueError('Software targets need project analysis')
@@ -320,6 +320,8 @@ class SecurityWorkspace(SecurityRecords):
                             schema=dict(type='object',properties={},additionalProperties=False)
                         elif name=='api_observe':
                             schema=dict(type='object',properties=dict(paths=dict(type='array',maxItems=6,items=dict(type='string')),credentialId=dict(type='string')),additionalProperties=False)
+                        elif name=='api_mutate':
+                            schema=dict(type='object',properties=dict(path=dict(type='string'),method=dict(type='string',enum=['POST','PUT','PATCH','DELETE']),body=dict(type='object'),credentialId=dict(type='string')),required=['path','method'],additionalProperties=False)
                         elif name=='linux_network_scan':
                             schema=dict(type='object',properties=dict(profile=dict(type='string',enum=['ports','services']),ports=dict(type='string'),timeout_seconds=dict(type='integer',minimum=10,maximum=600)),additionalProperties=False)
                         elif name=='research':
@@ -378,7 +380,7 @@ class SecurityWorkspace(SecurityRecords):
                 if capability=='software_inventory':
                     target=next(t for t in self.store.data['securityTargets'] if t['id']==run['targetId'])
                     result=await self.software_inventory(target,tools,run['sessionId'])
-                elif capability=='api_observe':
+                elif capability in ('api_observe','api_mutate'):
                     result=await self.engagements.assurance.observe_api(run,approve)
                 elif capability=='linux_network_scan':
                     result=await self.engagements.worker.execute(run,approve)
@@ -507,6 +509,7 @@ class SecurityWorkspace(SecurityRecords):
 
     async def close(self):
         self.closing = True
+        await self.engagements.assurance.oauth.close()
         pending = list(self.tasks.values())
         for task in pending: task.cancel()
         await asyncio.gather(*pending, return_exceptions=True)

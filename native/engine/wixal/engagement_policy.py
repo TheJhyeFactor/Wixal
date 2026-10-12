@@ -9,7 +9,7 @@ from .storage import now
 
 current = ContextVar('wixal_engagement', default=None)
 simulation_origin = ContextVar('wixal_simulation_origin', default=None)
-CAPABILITIES = ('analysis', 'planner', 'software_inventory', 'website_assess', 'website_simulate', 'network_scan', 'network_discover', 'linux_network_scan','api_observe')
+CAPABILITIES = ('analysis', 'planner', 'software_inventory', 'website_assess', 'website_simulate', 'network_scan', 'network_discover', 'linux_network_scan','api_observe','api_mutate')
 
 
 def text(value, label, maximum=8000):
@@ -72,7 +72,7 @@ def tool_gate(name, args):
     capability=context['run']['capability']
     allowed={'analysis':set(),'planner':set(),'software_inventory':{'list_files','read_file'},
              'website_assess':{'website_assess'},'website_simulate':{'website_simulate'},
-             'network_scan':{'network_scan'},'network_discover':{'network_discover'},'linux_network_scan':set(),'api_observe':set()}[capability]
+             'network_scan':{'network_scan'},'network_discover':{'network_discover'},'linux_network_scan':set(),'api_observe':set(),'api_mutate':set()}[capability]
     if name not in allowed:raise ValueError('Tool is outside this engagement capability')
     target=args.get('url') or args.get('target')
     if target:
@@ -107,7 +107,7 @@ async def connection(url):
         origin=simulation_origin.get()
         if not origin or not target_allowed(url,[origin]) or urlsplit(url).hostname!='127.0.0.1':raise ValueError('Simulation connection is outside the owned loopback fixture')
         return '127.0.0.1'
-    if context['run']['capability'] not in ('website_assess','api_observe') or not target_allowed(url,[context['run']['address']]):
+    if context['run']['capability'] not in ('website_assess','api_observe','api_mutate') or not target_allowed(url,[context['run']['address']]):
         raise ValueError('HTTP destination is outside the engagement origin')
     parsed=urlsplit(url)
     values=await addresses(url,parsed.port or (443 if parsed.scheme=='https' else 80))

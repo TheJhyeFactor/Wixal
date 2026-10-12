@@ -28,3 +28,11 @@ Local evidence is saved in `artifacts/native/model-library-refresh-2026-10-12/`:
 The updated app was installed at `/Applications/Wixal.app`. The release Swift build, 34 model tests and full 491-test engine suite passed. All 143 installed source-manifest entries matched the working source, and strict signature verification passed. User message arrays and draft content were preserved through installation and relaunch. One null empty draft was normalized to an empty draft object.
 
 Text generation checks do not qualify tools, agents, security workflows, vision, audio, long context or model quality. The initial two Gemma selections were pretrained variants and produced incorrect or repetitive chat responses despite successful imports. They were replaced with explicitly instruction-tuned (`-it`) variants from Unsloth and bartowski through the same Wixal downloader. Initial selections and failed evidence remain saved separately; final generation results determine qualification.
+
+## Final installed result
+
+All six selected instruction/chat models downloaded, passed independent size/SHA-256 checks, and imported through the installed Wixal downloader. Each returned `42` to the bounded `17 + 25` text-generation check at 4k context on the final installed helper. Your models shows six installed models and zero download jobs. Qwen3.5 9B remains selected at 4k context. These are smoke checks, not broad model-quality or agent-tool qualification.
+
+A diagnostic IPC client disconnect exposed an uncaught `BrokenPipeError` during socket cleanup. Cleanup now treats an `OSError` from waiting for an already disconnected peer as an expected disconnect. Ten abrupt installed-client disconnects (200 ping requests) left the helper responsive without a UI warning. The final full engine suite passed all 491 tests again.
+
+One earlier update required clearing an orphaned helper while external diagnostic clients were connected. The final quit left no helper or runtime processes behind; a fresh launch recovered all six models without replaying downloads. Messages and draft content were preserved. Final evidence and executable hashes are in the local `validation.json`, `generation-checks.json`, `downloads.json`, and `restart-check.json` reports.

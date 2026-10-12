@@ -568,7 +568,11 @@ async def serve(args):
         finally:
             await requests.close(writer)
             clients.discard(writer); writer.close()
-            await writer.wait_closed()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                # A disconnected IPC peer may reset while broadcasts are buffered.
+                pass
     socket_path = ipc_socket_path(service.store.directory)
     compatibility_path = service.store.directory / "engine.sock"
     if compatibility_path.exists() or compatibility_path.is_symlink(): compatibility_path.unlink()

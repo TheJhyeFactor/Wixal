@@ -1,0 +1,30 @@
+# Model library refresh — 12 October 2026
+
+Models now has three tabs: Browse, Your models, and Models & engine. The third tab contains the current model, context window, Mac hardware and engine controls, Import models, and saved benchmarks. Browse and Your models retain their compact searchable rows and Hugging Face filters. Active and queued downloads remain inline in Your models.
+
+## Selected library
+
+The user explicitly selected these six local candidates from their supplied research. The saved catalog contains one pinned single-file GGUF for each. General Hugging Face search remains available.
+
+| Model | Hugging Face publisher | Quantization | Download GB |
+| --- | --- | --- | ---: |
+| Qwen3.5 9B | unsloth | Q4_K_M | 5.68 |
+| Gemma 4 E4B | mradermacher | Q4_K_M | 5.34 |
+| Gemma 4 12B | DhruvalLabs | Q4_K_M | 7.38 |
+| Qwen3.8 27B | prithivMLmods | Q4_K_S | 15.83 |
+| KAT-Coder 2.5 Dev | RemySkye | Q3_K_S | 15.18 |
+| Qwen3.6 35B-A3B | unsloth | UD-Q3_K_S | 15.36 |
+
+The six files total 64.76 GB. Q3 was chosen for the two roughly 35B models to reduce weight memory on the 24 GB Mac. RAM estimates remain visible and depend on context size. Qwen3.8 exceeds the estimated budget even at 4k context; a successful short generation does not establish comfortable sustained use.
+
+Every download uses the installed desktop's production `model-pull` IPC and Wixal's existing pinned-revision, size-checked, SHA-256-checked Hugging Face downloader. Imported models carry source provenance. No Ollama registry pulls or manual weight downloads are used. The bundled Ollama 0.35.1 inference runtime remains in place; direct llama.cpp migration is deferred.
+
+## Cleanup and evidence
+
+The external Ollama model directory and the legacy Wixal model directory were moved into a dated folder in the user's Trash, and empty active directories recreated. The retired stores held about 82 GB combined. This is recoverable cleanup and does not reclaim their disk space until Trash is emptied. Credentials, application configuration, unrelated Hugging Face dataset caches, and test artifacts were preserved.
+
+Local evidence is saved in `artifacts/native/model-library-refresh-2026-10-12/`: `selections.json` records exact repositories, revisions, files and hashes; `model-cleanup.json` records recoverable cleanup; `downloads.json` records production transfer/import outcomes and independent file hashes; `generation-checks.json` records bounded generation checks. These checks distinguish download/import success from usable model output. Provider and task labels are Hub metadata, not independent capability qualification.
+
+The updated app was installed at `/Applications/Wixal.app`. The release Swift build, 34 model tests and full 491-test engine suite passed. All 143 installed source-manifest entries matched the working source, and strict signature verification passed. User message arrays and draft content were preserved through installation and relaunch. One null empty draft was normalized to an empty draft object.
+
+Text generation checks do not qualify tools, agents, security workflows, vision, audio, long context or model quality. The initial two Gemma checks produced incorrect or repetitive responses despite successful imports; their output remains under investigation and must not be presented as qualified use.

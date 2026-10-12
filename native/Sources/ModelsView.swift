@@ -40,8 +40,6 @@ struct ModelsView:View {
     @ViewState<Int> private var searchRevision=0
     @ViewState<String> private var hubError=""
     @ViewState<String> private var expanded=""
-    @ViewState<Bool> private var importsOpen=false
-    @ViewState<Bool> private var controlsOpen=false
     @ViewState<Bool> private var performanceOpen=false
     private var installed:[[String:Any]]{records(manager["installed"])}
     private var jobs:[[String:Any]]{records(manager["downloads"])}
@@ -67,8 +65,6 @@ struct ModelsView:View {
         WixalPage(eyebrow:"MODEL LIBRARY",title:"Models",subtitle:"Discover models on Hugging Face and manage your local library."){
             HStack(spacing:16){Text("This Mac · \(modelRAM(hardware["totalMemory"])) RAM");Text("\(modelBytes(library["diskFree"])) disk available");Spacer()}.wixalFont(size:11).foregroundStyle(theme.muted)
             modelLibrary
-            DisclosureGroup("Model & engine settings",isExpanded:$controlsOpen){summary.padding(.top,12)}.wixalFont(size:12)
-            DisclosureGroup("Saved benchmarks",isExpanded:$performanceOpen){performance.padding(.top,12)}.wixalFont(size:12)
         }
         .task {
             await refresh()
@@ -91,12 +87,14 @@ struct ModelsView:View {
     }
     private var modelLibrary:some View {
         VStack(alignment:.leading,spacing:16){
-            HStack(spacing:16){ForEach(["Browse","Your models"],id:\.self){name in
+            HStack(spacing:16){ForEach(["Browse","Your models","Models & engine"],id:\.self){name in
                 Button{tab=name;expanded=""}label:{Text(name + (name=="Your models" ? " · \(installed.count)" : "")).wixalFont(size:13,weight:.medium).padding(.vertical,9).padding(.horizontal,12).background(tab==name ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6))}.buttonStyle(.plain).accessibilityAddTraits(tab==name ? .isSelected : [])
             };Spacer();Button("Refresh library"){Task{await refresh()}}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(operation);if loading{ProgressView().controlSize(.small)}}
+            if tab=="Models & engine"{engineTab}else{
             HStack{TextField(tab=="Browse" ? "Search models or providers…" : "Search your models…",text:$search).wixalField().onSubmit{if tab=="Browse"{searchHub()}};if tab=="Browse"{Button(searchingHub ? "Searching…" : "Search Hugging Face"){searchHub()}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(searchingHub)}}
             filters
             if tab=="Browse"{browseList}else{yourModels}
+            }
             if !feedback.isEmpty{Text(feedback).wixalFont(size:11).foregroundStyle(theme.muted).textSelection(.enabled).accessibilityAddTraits(.updatesFrequently)}
             if let benchmark{HStack{ProgressView().controlSize(.small);Text("\(textValue(benchmark["name"])) · \(textValue(benchmark["phase"]))");Spacer();Button("Stop benchmark"){run("benchmark-cancel")}}.wixalFont(size:11).wixalCard()}
         }
@@ -255,7 +253,6 @@ struct ModelsView:View {
             if models.isEmpty && downloads.isEmpty{empty("No matching models",detail:"Browse Hugging Face to download a model, import an existing model, or clear the filters.")}
             ForEach(Array(downloads.enumerated()),id:\.offset){_,job in downloadCard(job)}
             ForEach(Array(models.enumerated()),id:\.offset){_,model in modelCard(model)}
-            DisclosureGroup("Import existing models",isExpanded:$importsOpen){imports.padding(.top,10)}.wixalFont(size:12)
         }
     }
     private func modelCard(_ model:[String:Any])->some View {
@@ -279,6 +276,13 @@ struct ModelsView:View {
             let fileMatch=catalog ? (size=="all" && fit=="all" || !matchingFiles(model).isEmpty) : (size=="all" || bytes>0 && bytes<(Double(size) ?? 0)*1e9) && (fit=="all" || info["fits"] as? Bool == true)
             return (search.isEmpty || needle.localizedCaseInsensitiveContains(search)) && (providerValue.isEmpty || provider.localizedCaseInsensitiveCompare(providerValue) == .orderedSame) && (capability=="all" || task==capability) && parameterMatch && fileMatch
         }.sorted{a,b in if sort=="size"{return modelNumber(a["size"])<modelNumber(b["size"])};if sort=="parameters"{return modelNumber(a["parameters"])<modelNumber(b["parameters"])};return textValue(a["displayName"]).localizedStandardCompare(textValue(b["displayName"])) == .orderedAscending}
+    }
+    private var engineTab:some View {
+        VStack(alignment:.leading,spacing:22){
+            summary
+            WixalSection(title:"Import models",detail:"Bring an existing local model into Wixal’s managed library."){imports}
+            DisclosureGroup("Saved benchmarks",isExpanded:$performanceOpen){performance.padding(.top,12)}.wixalFont(size:12)
+        }
     }
     private var summary:some View {
         VStack(alignment:.leading,spacing:20){

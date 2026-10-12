@@ -3,242 +3,106 @@
   "provider": "huggingface",
   "models": [
     {
-      "repo": "Qwen/Qwen3-0.6B-GGUF",
-      "revision": "23749fefcc72300e3a2ad315e1317431b06b590a",
-      "file": "Qwen3-0.6B-Q8_0.gguf",
-      "sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
-      "size": 639446688,
-      "name": "hf/qwen/qwen3-0.6b-q8_0:9465e63a22ad",
-      "source": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/blob/23749fefcc72300e3a2ad315e1317431b06b590a/Qwen3-0.6B-Q8_0.gguf",
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "size": 5680522464,
+      "name": "hf/unsloth/qwen3.5-9b-q4_k_m:03b74727a860",
+      "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/blob/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
       "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
+      "pipelineTag": "image-text-to-text",
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
+      "contextLength": 262144,
+      "parameters": 8953803264,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "repo": "Qwen/Qwen3-1.7B-GGUF",
-      "revision": "90862c4b9d2787eaed51d12237eafdfe7c5f6077",
-      "file": "Qwen3-1.7B-Q8_0.gguf",
-      "sha256": "061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a",
-      "size": 1834426016,
-      "name": "hf/qwen/qwen3-1.7b-q8_0:061b54daade0",
-      "source": "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/blob/90862c4b9d2787eaed51d12237eafdfe7c5f6077/Qwen3-1.7B-Q8_0.gguf",
+      "repo": "mradermacher/gemma-4-E4B-GGUF",
+      "revision": "712b177e561b537a217d1f73799a15e7bb99eb66",
+      "file": "gemma-4-E4B.Q4_K_M.gguf",
+      "sha256": "17434a48d7b466313d2f7249500448074138856faecf1c03cd83ad13ca63aa52",
+      "size": 5335273984,
+      "name": "hf/mradermacher/gemma-4-e4b.q4_k_m:17434a48d7b4",
+      "source": "https://huggingface.co/mradermacher/gemma-4-E4B-GGUF/blob/712b177e561b537a217d1f73799a15e7bb99eb66/gemma-4-E4B.Q4_K_M.gguf",
       "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
+      "pipelineTag": "",
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
+      "contextLength": 131072,
+      "parameters": 7518069290,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "repo": "Qwen/Qwen3-4B-GGUF",
-      "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
-      "file": "Qwen3-4B-Q4_K_M.gguf",
-      "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
-      "size": 2497280256,
-      "name": "hf/qwen/qwen3-4b-q4_k_m:7485fe6f11af",
-      "source": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/blob/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf",
+      "repo": "DhruvalLabs/gemma-4-12B-GGUF",
+      "revision": "14bd113c988a1316a89075a426caaab8d06500e4",
+      "file": "gemma-4-12B-Q4_K_M.gguf",
+      "sha256": "ab4a5a2e811263f482da49a26ddc3632b7506c17ac10c65b698971b931511f90",
+      "size": 7381364416,
+      "name": "hf/dhruvallabs/gemma-4-12b-q4_k_m:ab4a5a2e8112",
+      "source": "https://huggingface.co/DhruvalLabs/gemma-4-12B-GGUF/blob/14bd113c988a1316a89075a426caaab8d06500e4/gemma-4-12B-Q4_K_M.gguf",
       "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
+      "pipelineTag": "image-text-to-text",
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
+      "contextLength": 262144,
+      "parameters": 11907350576,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "repo": "Qwen/Qwen3-4B-GGUF",
-      "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
-      "file": "Qwen3-4B-Q5_K_M.gguf",
-      "sha256": "aca596860e8cb40af6539e3f2ea40df305f42515deac56d49c08d39a02e6533f",
-      "size": 2889513184,
-      "name": "hf/qwen/qwen3-4b-q5_k_m:aca596860e8c",
-      "source": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/blob/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q5_K_M.gguf",
+      "repo": "prithivMLmods/Qwen3.8-27B-GGUF",
+      "revision": "3ccdd49b1030d9ce891e42e817ece300ae278562",
+      "file": "Qwen3.8-27B.Q4_K_S.gguf",
+      "sha256": "94a7e12d60cf22b6b13739a34fa93264a7dca369f76e49923021d6725a5d7758",
+      "size": 15825298752,
+      "name": "hf/prithivmlmods/qwen3.8-27b.q4_k_s:94a7e12d60cf",
+      "source": "https://huggingface.co/prithivMLmods/Qwen3.8-27B-GGUF/blob/3ccdd49b1030d9ce891e42e817ece300ae278562/Qwen3.8-27B.Q4_K_S.gguf",
       "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
+      "pipelineTag": "image-text-to-text",
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
+      "contextLength": 262144,
+      "parameters": 27320697856,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "repo": "Qwen/Qwen3-4B-GGUF",
-      "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
-      "file": "Qwen3-4B-Q6_K.gguf",
-      "sha256": "8a08533841623c2a689763b9318d8e27b3e052ad5b38015d4be4c04fa96f68a3",
-      "size": 3306260704,
-      "name": "hf/qwen/qwen3-4b-q6_k:8a0853384162",
-      "source": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/blob/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q6_K.gguf",
+      "repo": "RemySkye/KAT-Coder-V2.5-Dev-GGUF",
+      "revision": "75d453ccf7aa238e5f0333f4f974dac95e194b78",
+      "file": "KAT-Coder-V2.5-Dev-Q3_K_S.gguf",
+      "sha256": "5842118485db74051bcfd845789b223a2f7cefea686e42fca3b16b4780f9fcbc",
+      "size": 15182184576,
+      "name": "hf/remyskye/kat-coder-v2.5-dev-q3_k_s:5842118485db",
+      "source": "https://huggingface.co/RemySkye/KAT-Coder-V2.5-Dev-GGUF/blob/75d453ccf7aa238e5f0333f4f974dac95e194b78/KAT-Coder-V2.5-Dev-Q3_K_S.gguf",
       "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
+      "pipelineTag": "text-generation",
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
+      "contextLength": 262144,
+      "parameters": 34660610688,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     },
     {
-      "repo": "Qwen/Qwen3-4B-GGUF",
-      "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
-      "file": "Qwen3-4B-Q8_0.gguf",
-      "sha256": "8c2f07f26af9747e41988551106f149b03eb9b5cb6df636027b6bf6278473300",
-      "size": 4280404704,
-      "name": "hf/qwen/qwen3-4b-q8_0:8c2f07f26af9",
-      "source": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/blob/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q8_0.gguf",
+      "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+      "revision": "a483e9e6cbd595906af30beda3187c2663a1118c",
+      "file": "Qwen3.6-35B-A3B-UD-Q3_K_S.gguf",
+      "sha256": "212ccdf37d416167ce8dcd7e3a59bcd45b30ac7531822a1e7bb79bfbacb2d1aa",
+      "size": 15359196128,
+      "name": "hf/unsloth/qwen3.6-35b-a3b-ud-q3_k_s:212ccdf37d41",
+      "source": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/blob/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q3_K_S.gguf",
       "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
+      "pipelineTag": "image-text-to-text",
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-8B-GGUF",
-      "revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
-      "file": "Qwen3-8B-Q4_K_M.gguf",
-      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
-      "size": 5027783488,
-      "name": "hf/qwen/qwen3-8b-q4_k_m:d98cdcbd03e1",
-      "source": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/blob/7c41481f57cb95916b40956ab2f0b139b296d974/Qwen3-8B-Q4_K_M.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-8B-GGUF",
-      "revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
-      "file": "Qwen3-8B-Q5_K_M.gguf",
-      "sha256": "068bae163faa96ad48032daf4e071a6a28fe67d8dcc95367609c2ff165e52738",
-      "size": 5851112224,
-      "name": "hf/qwen/qwen3-8b-q5_k_m:068bae163faa",
-      "source": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/blob/7c41481f57cb95916b40956ab2f0b139b296d974/Qwen3-8B-Q5_K_M.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-8B-GGUF",
-      "revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
-      "file": "Qwen3-8B-Q6_K.gguf",
-      "sha256": "cb042ccd76795a8830d6be6bd4165245847cc68e41797b13bd61aed4c2cfbce6",
-      "size": 6725899040,
-      "name": "hf/qwen/qwen3-8b-q6_k:cb042ccd7679",
-      "source": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/blob/7c41481f57cb95916b40956ab2f0b139b296d974/Qwen3-8B-Q6_K.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-8B-GGUF",
-      "revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
-      "file": "Qwen3-8B-Q8_0.gguf",
-      "sha256": "408b955510e196121c1c375201744783b5c9a43c7956d73fc78df54c66e883d6",
-      "size": 8709518112,
-      "name": "hf/qwen/qwen3-8b-q8_0:408b955510e1",
-      "source": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/blob/7c41481f57cb95916b40956ab2f0b139b296d974/Qwen3-8B-Q8_0.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-14B-GGUF",
-      "revision": "530227a7d994db8eca5ab5ced2fb692b614357fd",
-      "file": "Qwen3-14B-Q4_K_M.gguf",
-      "sha256": "500a8806e85ee9c83f3ae08420295592451379b4f8cf2d0f41c15dffeb6b81f0",
-      "size": 9001752960,
-      "name": "hf/qwen/qwen3-14b-q4_k_m:500a8806e85e",
-      "source": "https://huggingface.co/Qwen/Qwen3-14B-GGUF/blob/530227a7d994db8eca5ab5ced2fb692b614357fd/Qwen3-14B-Q4_K_M.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-14B-GGUF",
-      "revision": "530227a7d994db8eca5ab5ced2fb692b614357fd",
-      "file": "Qwen3-14B-Q5_K_M.gguf",
-      "sha256": "e7c9aba1129ca2936be9eca01419d9f86af40e08caa01230d5574b34d08e3e31",
-      "size": 10514569568,
-      "name": "hf/qwen/qwen3-14b-q5_k_m:e7c9aba1129c",
-      "source": "https://huggingface.co/Qwen/Qwen3-14B-GGUF/blob/530227a7d994db8eca5ab5ced2fb692b614357fd/Qwen3-14B-Q5_K_M.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-14B-GGUF",
-      "revision": "530227a7d994db8eca5ab5ced2fb692b614357fd",
-      "file": "Qwen3-14B-Q6_K.gguf",
-      "sha256": "ec1f1d1421d7636a23e17645cac6fda39ee4b5f1f11e42eb09238089705ef699",
-      "size": 12121937248,
-      "name": "hf/qwen/qwen3-14b-q6_k:ec1f1d1421d7",
-      "source": "https://huggingface.co/Qwen/Qwen3-14B-GGUF/blob/530227a7d994db8eca5ab5ced2fb692b614357fd/Qwen3-14B-Q6_K.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
-    },
-    {
-      "repo": "Qwen/Qwen3-14B-GGUF",
-      "revision": "530227a7d994db8eca5ab5ced2fb692b614357fd",
-      "file": "Qwen3-14B-Q8_0.gguf",
-      "sha256": "a0dfe649137410b7d82f06a209240508e218f32f5b6fd81b69d6932160cfcd9d",
-      "size": 15698533728,
-      "name": "hf/qwen/qwen3-14b-q8_0:a0dfe6491374",
-      "source": "https://huggingface.co/Qwen/Qwen3-14B-GGUF/blob/530227a7d994db8eca5ab5ced2fb692b614357fd/Qwen3-14B-Q8_0.gguf",
-      "license": "apache-2.0",
-      "contextLength": 8192,
-      "capabilities": [
-        "completion"
-      ],
-      "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import",
-      "pipelineTag": "text-generation"
+      "contextLength": 262144,
+      "parameters": 34660610688,
+      "parameterSource": "Hub GGUF metadata",
+      "capabilities": [],
+      "compatibility": "Pinned text GGUF; runtime capabilities and suitability checked after import"
     }
   ]
 }

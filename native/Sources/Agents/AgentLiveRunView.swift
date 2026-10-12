@@ -26,6 +26,13 @@ struct AgentLiveRunView:View {
         if showContext{Text(pretty(run["agentSnapshot"] ?? run["definition"] ?? [:])).wixalFont(size:11,design:.monospaced).textSelection(.enabled).wixalCard()}
         if active{Label(engine.activity,systemImage:"bolt").wixalFont(size:12);if !engine.streaming.isEmpty{Text(engine.streaming).wixalFont(size:13).textSelection(.enabled)}}
         if !textValue(run["error"]).isEmpty{Text(textValue(run["error"])).wixalFont(size:12).foregroundStyle(.orange).textSelection(.enabled).wixalCard()}
+        if let budget=run["runBudget"] as? [String:Any] {
+            HStack(spacing:16) {
+                Label("Steps \(budget["turnsUsed"] as? Int ?? 0) / \(budget["turnsLimit"] as? Int ?? 0)",systemImage:"arrow.trianglehead.2.clockwise")
+                Label("Tool calls \(budget["callsUsed"] as? Int ?? 0) / \(budget["callsLimit"] as? Int ?? 0)",systemImage:"wrench.and.screwdriver")
+            }.wixalFont(size:11).foregroundStyle(theme.muted)
+                .accessibilityElement(children:.combine)
+        }
         if workflow{ForEach(Array(records(run["stages"]).enumerated()),id:\.offset){_,stage in VStack(alignment:.leading,spacing:9){HStack{Text(textValue(stage["name"])).wixalFont(size:15,weight:.medium);Spacer();Text(textValue(stage["status"]).capitalized).foregroundStyle(theme.muted)};if let changes=stage["changes"]{DisclosureGroup("Isolated changes"){Text(pretty(changes)).wixalFont(size:11,design:.monospaced).textSelection(.enabled)};if textValue(stage["mergeStatus"])=="pending_review"{Button("Review and merge branch"){engine.action("workflow-merge",["runId":textValue(run["id"]),"stageId":textValue(stage["id"])])}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy)}};Text(textValue(stage["result"])).wixalFont(size:12).textSelection(.enabled);if let task=records(engine.state["tasks"]).first(where:{textValue($0["id"])==textValue(stage["taskId"])}){DisclosureGroup("Stage tool evidence"){Text(pretty(task["checkpoints"] ?? [])).wixalFont(size:11,design:.monospaced).textSelection(.enabled)}};if !textValue(stage["error"]).isEmpty{Text(textValue(stage["error"])).foregroundStyle(.orange)}}.wixalCard()}}
         if let plan=run["plan"] as? [String:Any], !records(plan["todos"]).isEmpty {
             WixalSection(title:"Task checklist",detail:"Agent-reported progress. Verification results are shown separately.") {

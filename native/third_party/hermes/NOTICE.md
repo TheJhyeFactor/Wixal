@@ -24,3 +24,14 @@ patterns. No additional Hermes source module or dependency was imported.
 The existing adapted duration parser and its original pinned revision above
 remain unchanged. Hermes's remote environments, messaging and media providers
 are not included by these changes.
+
+## Run controls reviewed 12 October 2026
+
+Reference revision: `8a7a5a905fc66ed82b922587a8e3c011e819dbb5`.
+Reviewed `agent/iteration_budget.py`, budget wrap-up handling in
+`agent/conversation_loop.py`, and deterministic failure bounds in
+`agent/turn_loop_errors.py`. Wixal's new `run_control.py` implements native
+per-attempt accounting, warnings and a reserved conclusion turn. Exact settled
+batch repetition detection and whole-batch call-budget rejection are original
+Wixal safeguards added during this review. No additional upstream code or
+dependencies were copied. Existing attribution and licensing remain intact.

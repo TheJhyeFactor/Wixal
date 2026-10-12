@@ -481,9 +481,14 @@ class BranchAndRecoveryTests(unittest.IsolatedAsyncioTestCase):
         with patch('wixal.agent.stream_chat',unavailable):await run_next(self.service)
         self.assertEqual(job['status'],'queued');self.assertGreater(job['notBefore'],now());self.assertTrue(job['taskId'])
         self.assertFalse(await run_next(self.service))
-    async def test_tool_call_budget_pauses_without_executing_next_action(self):
+    async def test_tool_call_budget_concludes_without_executing_next_action(self):
         await self.service.dispatch('agent-save',{**self.agent,'maxCalls':1})
         (self.root/'one.txt').write_text('ONE');(self.root/'two.txt').write_text('TWO')
-        context,_=self.scripted([('read_file',dict(path='one.txt')),('read_file',dict(path='two.txt'))])
-        with context:task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Read files one.txt and two.txt'))
-        self.assertEqual(task['status'],'paused');self.assertEqual(len(task['checkpoints']),1)
+        seen=[]
+        async def stream(endpoint,body,emit):
+            seen.append(copy.deepcopy(body))
+            if len(seen)==1:return dict(role='assistant',content='',tool_calls=[dict(function=dict(name='read_file',arguments=dict(path='one.txt')))])
+            return dict(role='assistant',content='ONE was read; two.txt remains unread because the call limit was reached.')
+        with patch('wixal.agent.stream_chat',stream):task=await self.service.dispatch('agent-run',dict(id='coder',prompt='Read files one.txt and two.txt',successCriteria=[dict(kind='tool_contains',tool='read_file',value='TWO')]))
+        self.assertEqual(task['status'],'needs_attention');self.assertEqual(len(task['checkpoints']),1)
+        self.assertNotIn('tools',seen[-1]);self.assertIn('remains unread',task['result'])

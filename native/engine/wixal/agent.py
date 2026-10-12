@@ -300,6 +300,8 @@ class Agent:
         definitions = [{"type":"function", "function":{k:v for k,v in t["function"].items() if k != "original"}}
                        for t in chosen if supports_tools and not tools_stopped]
         def task_context(messages):
+            from .run_control import budget_notice
+            messages[0]['content'] += budget_notice(task)
             from .network_claims import facts
             observed,_=facts(task);current=[]
             for host,states in list(observed.items())[:8]:
@@ -351,7 +353,7 @@ class Agent:
         if requested and supports_tools and not tools_stopped:
             messages[0]["content"] += "\nThe user explicitly requested these enabled tools: " + ", ".join(requested) + ". Use them when their required inputs are available; otherwise ask for the missing inputs. Use workspace_info to load another enabled tool or category when follow-up work requires it."
         if tools_stopped:
-            messages[0]["content"] += "\nTool execution has stopped after a declined action or repeated failures. No new tool actions are available in this turn. Conclude from the retained evidence, explain the unfinished work, and do not retry, discover another tool, or use a command workaround."
+            messages[0]["content"] += "\nTool execution has stopped. No new tool actions are available in this turn. Conclude from the retained evidence, explain the unfinished work, and do not retry, discover another tool, or use a command workaround."
         if not supports_tools:
             messages[0]["content"] += "\nAnswer from the supplied conversation, images and user-confirmed notes. No new tool actions are available; explain that limitation only when the request needs a new action. Answer factual questions directly from supplied notes when they support the answer."
             messages = [dict(role="assistant" if m["role"] == "tool" else m["role"], content=("Tool result from previous work: " if m["role"] == "tool" else "") + m.get("content", ""), **{k:m[k] for k in ("images", "imageIds", "controllerFeedback") if m.get(k)}) for m in messages]
@@ -478,7 +480,6 @@ class Agent:
                             status="running", created=now(), checkpoints=[])
                 self.store.data["tasks"].append(task)
             if success_criteria is not None:task["successCriteria"]=success_criteria
-            checkpoint_base=len(task["checkpoints"])
             task.pop("error", None)
             task.pop("result", None)
             task.update(status="running", updated=now())
@@ -515,8 +516,14 @@ class Agent:
                 verification_retries=0
                 syntax_retries=0
                 empty_retries=0
-                for turn in range(min(100,(active_profile.get() or {}).get("maxTurns",self.turn_budget))):
+                from .run_control import RunControl
+                control=RunControl(min(100,(active_profile.get() or {}).get('maxTurns',self.turn_budget)),(active_profile.get() or {}).get('maxCalls',100))
+                task.pop('stopReason',None)
+                for turn in range(control.max_turns):
                     task["turns"]=turn+1
+                    closing=control.closing(turn+1)
+                    task['runBudget']={**control.snapshot(turn+1), 'closing':closing}
+                    tools_stopped=tools_stopped or closing
                     guidance=task.pop('pendingGuidance',[])
                     if guidance:
                         session['messages'].append(dict(role='user',content='Additional guidance for the current task:\n'+'\n'.join(guidance),created=now()))
@@ -576,6 +583,8 @@ class Agent:
                             continue
                         task['status']='needs_attention' if report['status'] in ('failed','needs_attention') else 'completed'
                         if task['status']=='needs_attention':task['error']=report['note']
+                        if task.get('stopReason')=='no_progress':
+                            task.update(status='paused',error='Stopped after three identical tool batches returned unchanged evidence. Inspect the checkpoints before continuing.')
                         self.emit('verification', dict(taskId=task['id'], sessionId=session['id'], turn=turn+1, status=report['status'], unresolved=report['unresolved'], retries=verification_retries))
                         unresolved=[c for c in task['checkpoints'] if c['id'] in report['unresolved']]
                         recoverable=all(c.get('status') not in ('started','interrupted') and not str(c.get('result','')).startswith(('User declined','Not executed:')) for c in unresolved)
@@ -598,8 +607,20 @@ class Agent:
                             task['result']=message['content']
                             self.store.save()
                         break
+                    if len(calls)>control.max_calls-control.calls:
+                        # Settle every call in the saved assistant batch without
+                        # executing a prefix and leaving unmatched call IDs.
+                        for call in calls:
+                            checkpoint=dict(id=identity(),name=call['function']['name'],arguments=call['function']['arguments'],status='finished',created=now(),finished=now(),sessionId=session['id'],projectId=session.get('projectId'),result='Not executed: the entire batch exceeds the remaining tool-call budget. No action in this batch executed.')
+                            call['id']=checkpoint['id'];task['checkpoints'].append(checkpoint)
+                            session['messages'].append(dict(role='tool',tool_name=checkpoint['name'],toolCallId=checkpoint['id'],content=checkpoint['result']))
+                            self.emit('tool-result',checkpoint)
+                        task['stopReason']='batch_budget'
+                        raise BudgetReached('The requested tool batch exceeds the remaining call budget. No action in that batch executed. Inspect the checkpoints before continuing.')
+                    batch=[]
                     for call in calls:
-                        if len(task["checkpoints"])-checkpoint_base >= (active_profile.get() or {}).get("maxCalls",100):raise BudgetReached("Reached the tool-call budget. Inspect evidence before continuing.")
+                        control.calls+=1
+                        task['runBudget'].update(control.snapshot(turn+1))
                         function = call["function"]
                         name, args = function["name"], function.get("arguments", {})
                         if isinstance(args, str):
@@ -658,6 +679,10 @@ class Agent:
                         session["messages"].append(dict(role="tool", tool_name=name, toolCallId=checkpoint["id"], content=output))
                         self.store.save()
                         self.emit("tool-result", checkpoint)
+                        batch.append(checkpoint)
+                    if control.observe(batch) and not tools_stopped:
+                        task['stopReason']='no_progress';tools_stopped=True
+                        self.emit('activity',dict(message='Repeated tools returned unchanged evidence; preparing a conclusion before pausing.'))
                 else:
                     task.update(status="paused", error="Reached the turn budget. Review the checkpoints before continuing.")
                 if task['status']=='completed':

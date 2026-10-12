@@ -1,18 +1,18 @@
-# Wixal 0.7.10 Alpha 5
+# Wixal 0.7.10 Alpha 6
 
 The public download is a single native **Wixal.app** for Apple Silicon Macs running macOS 14 or newer. It uses SwiftUI/AppKit, a persistent Python engine and a bundled local Ollama runner. Python and Node do not need to be installed to use the app. Model weights are separate downloads.
 
 ## Installation and updates
 
-Download `Wixal-0.7.10-alpha.5-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.5), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
+Download `Wixal-0.7.10-alpha.6-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.6), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
 
 The alpha is ad-hoc signed and **not Developer ID signed or notarised**. macOS may block the first launch. After reviewing the source and release notes, use System Settings → Privacy & Security → Open Anyway. This alpha has no automatic updater; download and install newer releases manually.
 
 Native data remains at `~/Library/Application Support/Wixal Native`. Replacing the app does not remove the workspace or model library. Back up important projects and workspace data before testing. Use Settings → Data to explicitly import earlier Electron records; credentials and account sessions are not imported.
 
-## What changed in Alpha 5
+## What changed in Alpha 6
 
-Agents now retain durable task checklists, recover full checkpoint evidence, load skill support files and use bounded child handoffs. Long tasks preserve more controller and tool context. See the [release notes](release-0.7.10-alpha.5.md), [agent tools guide](agent-tools.md) and [Hermes comparison](hermes-agent-improvements-2026-10-12.md). Cybersecurity model qualification remains incomplete; dated acceptance records belong to their recorded helpers.
+Alpha 6 adds Hugging Face model browsing, provider/type/size filters, estimated memory guidance, inline downloads, model deletion and dedicated engine controls. Agents retain durable checklists and evidence with improved run budgets. Reviewed security extensions include cookie/API mutations, same-origin OAuth PKCE, mutation-state validation, controller proposals, telemetry imports and interactive PTY jobs. See the [release notes](release-0.7.10-alpha.6.md) and [security guide](security-workflows-alpha6.md). Six-model capability qualification and fresh installed end-to-end checks of these security extensions remain pending.
 
 ## First use
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.10 Alpha 6 — 2026-10-12
+
+- Add a compact Hugging Face model browser with searchable Hub provider/type filters, size and memory guidance, inline downloads, deletion and dedicated engine settings.
+- Improve agent budgets, wrap-up and stalled-loop recovery while retaining durable checklists and independent verification.
+- Add reviewed cookie/API mutation workflows, same-origin public-client OAuth PKCE, independent API mutation-state validation, inert external controller proposals and bounded Suricata/Zeek log imports.
+- Support reviewed interactive PTY jobs for agents; live terminal state does not survive engine restart.
+- Combined engine suite: 513 tests passed. Six-model capability qualification and fresh installed end-to-end security acceptance remain pending.
+- Publish the [combined release notes](docs/release-0.7.10-alpha.6.md) and [security workflow guide](docs/security-workflows-alpha6.md). Ad-hoc signed alpha; not notarised.
+
 ## 0.7.10 Alpha 5 — 2026-10-12
 
 - Add durable task checklists and full saved-checkpoint retrieval without replay.

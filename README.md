@@ -7,11 +7,11 @@
 <p align="center">A native Mac workspace for local models, agents, workflows and project tools.</p>
 
 <p align="center">
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.5/Wixal-0.7.10-alpha.5-macOS-arm64.zip"><strong>Download native alpha ↓</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.6/Wixal-0.7.10-alpha.6-macOS-arm64.zip"><strong>Download native alpha ↓</strong></a> &nbsp;·&nbsp;
   <a href="https://thejhyefactor.github.io/Wixal/">Website</a> &nbsp;·&nbsp;
   <a href="docs/native-alpha.md">Alpha guide</a> &nbsp;·&nbsp;
-  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.5">Release notes</a>
-  <br><sub>0.7.10 Alpha 5 · Apple Silicon · macOS 14+ · Ad-hoc signed, not notarised</sub>
+  <a href="https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.6">Release notes</a>
+  <br><sub>0.7.10 Alpha 6 · Apple Silicon · macOS 14+ · Ad-hoc signed, not notarised</sub>
 </p>
 
 <p align="center">
@@ -45,7 +45,7 @@ The current download is **Wixal.app**, built with SwiftUI, AppKit and a persiste
 
 ## Install
 
-1. [Download the alpha ZIP](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.5/Wixal-0.7.10-alpha.5-macOS-arm64.zip), extract it and move **Wixal.app** to **Applications**.
+1. [Download the alpha ZIP](https://github.com/TheJhyeFactor/Wixal/releases/download/v0.7.10-alpha.6/Wixal-0.7.10-alpha.6-macOS-arm64.zip), extract it and move **Wixal.app** to **Applications**.
 2. This alpha is **not Developer ID signed or notarised**. If macOS blocks the first launch, review the source and release notes, then use **System Settings → Privacy & Security → Open Anyway**.
 3. Open **Models** and download a tool-capable model, import compatible Ollama weights or configure an external Ollama server.
 4. Open a project with **⌘O**. Start a conversation or open **Agents** to create an agent or workflow.
@@ -53,7 +53,7 @@ The current download is **Wixal.app**, built with SwiftUI, AppKit and a persiste
 Prefer the command line? Download and extract the same release:
 
 ```sh
-version=0.7.10-alpha.5
+version=0.7.10-alpha.6
 base=https://github.com/TheJhyeFactor/Wixal/releases/download
 curl -fL -o Wixal.zip \
   "$base/v$version/Wixal-$version-macOS-arm64.zip"
@@ -65,15 +65,15 @@ The macOS first-launch review above still applies. Move the extracted app to **A
 
 Updates are manual downloads from GitHub. Existing native workspaces remain at `~/Library/Application Support/Wixal Native`. Earlier Electron data can be imported explicitly; original data is retained.
 
-## What’s new in Alpha 5
+## What’s new in Alpha 6
 
-Agents keep durable task checklists, retrieve full saved tool evidence and continue longer tasks with more context preserved. Skills retain supporting resources, children receive bounded handoff context, and keyword discovery helps models find eligible tools. Checklist progress remains separate from independent verification.
+Browse Hugging Face models with compact, searchable provider/type filters, size and memory guidance, inline downloads and model deletion. Dedicated engine controls sit alongside stronger agent run budgets and reviewed security workflows: cookie/API sessions, same-origin OAuth PKCE, API state validation, external controller proposals, telemetry imports and interactive agent terminals.
 
-[Alpha 5 release notes](docs/release-0.7.10-alpha.5.md) · [Hermes comparison and implementation](docs/hermes-agent-improvements-2026-10-12.md) · [Agent tools guide](docs/agent-tools.md)
+[Alpha 6 release notes](docs/release-0.7.10-alpha.6.md) · [Hermes comparison and implementation](docs/hermes-agent-improvements-2026-10-12.md) · [Agent tools guide](docs/agent-tools.md)
 
 ## Alpha status
 
-Real local agent acceptance has passed with **gpt-oss:20b** for implemented workflows, including tools, artifact verification, schedules and reusable skills. This does not establish equal reliability across models or full Hermes parity. Fresh Alpha 5 packaged acceptance passed four of five cases; selecting the wrong saved checkpoint correctly left one task needing attention. See the release notes for exact evidence. The alpha is intended for testing and feedback.
+Alpha 6 passed 513 automated engine tests. Six downloaded models have earlier basic-generation evidence; tool use, coding, long tasks and red-team analysis across all six remain unqualified. Previous Qwen3.5 9B agent-control results apply to their recorded build. Installed end-to-end qualification of the newest security workflows is pending. See the release notes for evidence boundaries. This alpha is intended for testing and feedback.
 
 Remaining work includes remote/off-Mac execution, messaging and voice gateways, broader model/service acceptance, production security evaluation, actual sleep/wake/reboot acceptance, full accessibility coverage, Developer ID signing, notarisation and automatic updates. Encrypted sync still needs a real two-Mac acceptance run; service-specific OAuth and account lifecycle flows need broader live verification.
 
@@ -83,7 +83,7 @@ Remaining work includes remote/off-Mac execution, messaging and voice gateways, 
 
 The canonical development and release source is `native/` on `main`.
 
-The source branch also includes a native tools library and managed RustScan development pilot. Controlled forks, exact source pins and unsigned build candidates live in [wixal-tools](https://github.com/TheJhyeFactor/wixal-tools). See the [implementation and measured acceptance status](native/MANAGED_TOOLS_IMPLEMENTATION_STATUS.md) for the current limits. Alpha 5 includes the library and managed-profile implementation. Public managed downloads remain gated: no production signed catalogue is configured, and no managed tool payloads are bundled. Existing external installations remain usable through their supported adapters.
+The source branch also includes a native tools library and managed RustScan development pilot. Controlled forks, exact source pins and unsigned build candidates live in [wixal-tools](https://github.com/TheJhyeFactor/wixal-tools). See the [implementation and measured acceptance status](native/MANAGED_TOOLS_IMPLEMENTATION_STATUS.md) for the current limits. Alpha 6 includes the library and managed-profile implementation. Public managed downloads remain gated: no production signed catalogue is configured, and no managed tool payloads are bundled. Existing external installations remain usable through their supported adapters.
 
 The [10 October application gap audit](native/APPLICATION_GAP_AUDIT_2026-10-10.md) documents the current source fixes in priority order: structured chat/scanner evidence, process cleanup, agent outcome verification, queues and resume, native editor acknowledgements, and activity history. It includes reproducible tests, installed-build evidence and retained model failures. The [agent controls, editor and activity completion record](native/AGENT_CONTROLS_COMPLETION_2026-10-10.md) closes the follow-up recovery and usability checks with 300 engine tests and installed UI verification.
 

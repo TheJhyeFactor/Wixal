@@ -57,6 +57,36 @@ class BrowserTests(unittest.TestCase):
 
 
 class BrowserAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_filters_use_hub_labels_and_only_five_ranked_choices(self):
+        tasks={f'task-{n}':dict(label=f'Official type {n}') for n in range(7)}
+        models=[dict(id=f'Owner{n}/Model{j}',pipeline_tag=f'task-{n}') for n in range(7) for j in range(7-n)]
+        def read(url):return tasks if url.endswith('/api/tasks') else models
+        with patch.object(browser,'read_hub',read):result=await browser.Browser().filters({})
+        self.assertEqual(len(result['popularTypes']),5);self.assertEqual(len(result['providers']),5)
+        self.assertEqual(result['popularTypes'][0],dict(id='task-0',label='Official type 0'))
+        self.assertEqual(len(result['tasks']),7);self.assertEqual(result['providers'][0]['id'],'Owner0')
+
+    async def test_provider_search_reads_hub_orgs_and_users(self):
+        data=dict(orgs=[dict(name='Google',fullname='Google'),dict(name='../unsafe')],users=[dict(user='publisher',fullname='Person')])
+        with patch.object(browser,'read_hub',return_value=data) as read:
+            result=await browser.Browser().filters(dict(kind='provider',search='goo'))
+        self.assertEqual([p['id'] for p in result['providers']],['Google','publisher'])
+        self.assertIn('/api/quicksearch?q=goo',read.call_args.args[0])
+
+    async def test_filter_cache_survives_offline_refresh_and_results_are_isolated(self):
+        old=dict(checked=1,tasks=[dict(id='text-generation',label='Text Generation')],popularTypes=[],providers=[])
+        instance=browser.Browser(old)
+        with patch.object(browser,'read_hub',side_effect=OSError('offline')):
+            result=await instance.filters({})
+        self.assertTrue(result['stale']);result['tasks'].clear();self.assertEqual(len(instance.filter_cache['tasks']),1)
+
+    async def test_live_task_filter_passed_without_guessing_a_type(self):
+        requests=[]
+        def opened(url):requests.append(url);return Response(json.dumps([dict(id='Owner/NoHint',pipeline_tag='text-to-speech')]).encode())
+        with patch.object(browser.hub,'open_hub',opened):result=browser.search_page(dict(task='text-to-speech'))
+        self.assertIn('pipeline_tag=text-to-speech',requests[0]);self.assertEqual(result['models'][0]['pipelineTag'],'text-to-speech')
+        with self.assertRaises(ValueError):browser.search_page(dict(task='bad&filter=evil'))
+
     async def test_pinned_files_cached_without_mutable_result_aliases(self):
         instance=browser.Browser();row=browser.metadata(dict(name='Owner/Model',repo='Owner/Model',revision='a'*40))
         file=dict(repo='Owner/Model',revision='a'*40,name='hf/tag:hash',file='model.gguf',size=1000,sha256='b'*64)

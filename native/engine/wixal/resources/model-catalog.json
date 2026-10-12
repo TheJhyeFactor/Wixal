@@ -16,7 +16,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-1.7B-GGUF",
@@ -32,7 +33,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-4B-GGUF",
@@ -48,7 +50,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-4B-GGUF",
@@ -64,7 +67,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-4B-GGUF",
@@ -80,7 +84,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-4B-GGUF",
@@ -96,7 +101,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-8B-GGUF",
@@ -112,7 +118,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-8B-GGUF",
@@ -128,7 +135,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-8B-GGUF",
@@ -144,7 +152,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-8B-GGUF",
@@ -160,7 +169,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-14B-GGUF",
@@ -176,7 +186,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-14B-GGUF",
@@ -192,7 +203,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-14B-GGUF",
@@ -208,7 +220,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     },
     {
       "repo": "Qwen/Qwen3-14B-GGUF",
@@ -224,7 +237,8 @@
         "completion"
       ],
       "provider": "huggingface",
-      "compatibility": "GGUF text file; runtime and model suitability checked after import"
+      "compatibility": "GGUF text file; runtime and model suitability checked after import",
+      "pipelineTag": "text-generation"
     }
   ]
 }

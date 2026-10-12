@@ -67,7 +67,7 @@ def repository(repo,revision='main'):
         except ValueError:continue
         lfs=row.get('lfs') or {};sha=lfs.get('sha256','');size=lfs.get('size')
         if not re.fullmatch(r'[a-f0-9]{64}',sha) or type(size) is not int or not 8<=size<=100*1024**3:continue
-        files.append(dict(repo=repo,revision=commit,file=name,sha256=sha,size=size,name=local_name(repo,name,sha),source=f'{HUB}/{repo}/blob/{commit}/{urllib.parse.quote(name,safe="/")}',license=(data.get('cardData') or {}).get('license','unknown')))
+        files.append(dict(repo=repo,revision=commit,file=name,sha256=sha,size=size,name=local_name(repo,name,sha),source=f'{HUB}/{repo}/blob/{commit}/{urllib.parse.quote(name,safe="/")}',license=(data.get('cardData') or {}).get('license','unknown'),pipelineTag=data.get('pipeline_tag','')))
     return dict(repo=repo,revision=commit,files=files,source=f'{HUB}/{repo}',license=(data.get('cardData') or {}).get('license','unknown'))
 
 

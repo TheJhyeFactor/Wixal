@@ -28,7 +28,7 @@ Interactive review uses the current catalog as sample data. Downloads and instal
 
 - Separate parameter count from download bytes. MoE active parameters, if supplied, are a separate labelled field rather than substituted for total parameters.
 - Search readable names, publishers and repository IDs. Keep exact file names in model details.
-- Type/task categories: chat, coding, reasoning, embeddings and images/text; separate broad task labels from runtime capabilities such as tool calling.
+- Model type choices and labels come from Hugging Face’s official task catalog (`pipeline_tag`), with unlisted metadata shown as unknown. Keep runtime capabilities such as tool calling separate.
 - Quantization, publisher, licence and compatibility can live in an additional filter sheet when there are enough results to warrant them.
 - Treat missing parameter count, type, size or licence as unknown. Never silently convert unknown metadata to zero or a positive capability claim.
 - Label publisher claims, runtime-reported capabilities and Wixal-tested behavior separately. Security suitability is not implied by a model name, tag or successful import.
@@ -58,3 +58,11 @@ The interactive proposal passed browser checks for parameter/download filters, e
 487 engine tests passed, including ten new browser/deletion regressions. Swift release build and strict development signature verification passed; all 143 installed source manifest entries matched. Packaged and installed helper acceptance used live public Hub metadata and a retained, verified real Qwen GGUF for import, selection and isolated deletion/cache reclamation. Native UI checks observed provider selection, live search, file expansion, RAM labels, deletion confirmation/cancel, a real transfer bar in Your models, pause, resume and transition into an installed model. Real transfer checks used a separate workspace with the canonical installed app; the user library was restored afterward.
 
 RAM figures are estimates at the displayed context, not measured minimums. Hub task labels and model-name parameter fallbacks do not establish tool or security suitability. Only public single-file GGUFs with published hashes are offered for download; successful runtime import remains required.
+
+## Filter simplification follow-up
+
+Replaced the six exposed dropdowns with Model type, Provider, Filters and Sort. Type and provider popovers show five popular GGUF choices plus search. Types use `https://huggingface.co/api/tasks`; providers are public organizations/users returned by `https://huggingface.co/api/quicksearch`. Popular defaults are ranked by occurrence in the 100 most-downloaded GGUF repositories, not claimed as a global provider league table. Task search covers the full official catalog; provider search queries the Hub after a short debounce. Size and RAM controls are in the Filters popover, with a concise active-filter summary.
+
+Hub task IDs pass directly to model search instead of guessed coding/reasoning classifications. Exact repository task metadata is retained in model provenance. Defaults are cached for 24 hours and persisted, with stale metadata labelled during offline fallback. Selecting a provider or type starts a new search; superseded searches are cancelled and stale results cannot replace the current selection.
+
+Validation: 491 engine tests, 34 focused model tests, six live packaged/installed acceptance groups, native five-choice/search popovers and the additional-filter panel. Installed source/signature checks and workspace content-preservation checks are retained in `artifacts/native/model-browser-filters-2026-10-12/validation.json`.

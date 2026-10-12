@@ -14,7 +14,17 @@ struct ModelsView:View {
     @ViewState<String> private var tab="Browse"
     @ViewState<String> private var capability="all"
     @ViewState<String> private var publisher="all"
-    @ViewState<String> private var customPublisher=""
+    @ViewState<[String:Any]> private var filterData=[:]
+    @ViewState<Bool> private var typeOpen=false
+    @ViewState<Bool> private var providerOpen=false
+    @ViewState<Bool> private var moreFiltersOpen=false
+    @ViewState<String> private var typeSearch=""
+    @ViewState<String> private var providerSearch=""
+    @ViewState<[[String:Any]]> private var providerMatches=[]
+    @ViewState<Bool> private var findingProviders=false
+    @ViewState<String> private var filterError=""
+    @ViewState<String> private var providerError=""
+    @ViewState<Task<Void,Never>?> private var hubTask=nil
     @ViewState<String> private var parameters="all"
     @ViewState<String> private var fit="all"
     @ViewState<String> private var size="all"
@@ -45,12 +55,9 @@ struct ModelsView:View {
     private var hasDownload:Bool{jobs.contains{textValue($0["state"])=="downloading"}}
     private var current:[String:Any]?{installed.first{textValue($0["name"])==selected}}
     private var context:Int{engine.state["contextSize"] as? Int ?? 8192}
-    private var providerValue:String{publisher=="custom" ? customPublisher.trimmingCharacters(in:.whitespacesAndNewlines) : publisher=="all" ? "" : publisher}
-    private var providerOptions:[(String,String)]{
-        var values=Set((records(manager["catalog"])+hubRows+installed).map{textValue($0["publisher"])}.filter{!$0.isEmpty && $0 != "Unknown"})
-        if !["all","custom"].contains(publisher){values.insert(publisher)}
-        return [("all","All providers")]+values.sorted().map{($0,$0)}+[("custom","Other provider…")]
-    }
+    private var providerValue:String{publisher=="all" ? "" : publisher}
+    private var typeName:String{records(filterData["tasks"]).first{textValue($0["id"])==capability}.map{textValue($0["label"])} ?? capability}
+    private var extraFilterCount:Int{[parameters != "all",size != "all",fit != "all"].filter{$0}.count}
     private var catalog:[[String:Any]]{
         if searchedHub{return hubRows}
         let groups=Dictionary(grouping:records(manager["catalog"])){textValue($0["repo"])}
@@ -65,18 +72,18 @@ struct ModelsView:View {
         }
         .task {
             await refresh()
+            await loadFilterOptions()
             while !Task.isCancelled {
                 do {try await Task.sleep(nanoseconds:1_000_000_000)}catch{break}
                 guard !Task.isCancelled else{break}
                 if let result=try? await engine.call("model-status") as? [String:Any]{manager=result;engine.models=installed}
             }
         }
-        .onChange(of:publisher){_,_ in invalidateSearch()}
+        .onChange(of:publisher){_,_ in invalidateSearch();if tab=="Browse"{searchHub()}}
         .onChange(of:parameters){_,_ in invalidateSearch()}
-        .onChange(of:capability){_,_ in invalidateSearch()}
-        .onChange(of:customPublisher){_,_ in invalidateSearch()}
+        .onChange(of:capability){_,_ in invalidateSearch();if tab=="Browse"{searchHub()}}
         .onChange(of:search){_,_ in invalidateSearch()}
-        .onDisappear{searchRevision+=1}
+        .onDisappear{searchRevision+=1;hubTask?.cancel()}
         .alert("Delete this model?",isPresented:Binding(get:{!deleting.isEmpty},set:{if !$0{deleting=""}})){
             Button("Cancel",role:.cancel){deleting=""}
             Button("Delete model",role:.destructive){let name=deleting;deleting="";run("model-delete",["name":name],success:"Model removed. Conversations are kept.")}
@@ -89,26 +96,85 @@ struct ModelsView:View {
             };Spacer();Button("Refresh library"){Task{await refresh()}}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(operation);if loading{ProgressView().controlSize(.small)}}
             HStack{TextField(tab=="Browse" ? "Search models or providers…" : "Search your models…",text:$search).wixalField().onSubmit{if tab=="Browse"{searchHub()}};if tab=="Browse"{Button(searchingHub ? "Searching…" : "Search Hugging Face"){searchHub()}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(searchingHub)}}
             filters
-            if publisher=="custom"{TextField("Hugging Face provider, for example bartowski",text:$customPublisher).wixalField().onSubmit{searchHub()}}
             if tab=="Browse"{browseList}else{yourModels}
             if !feedback.isEmpty{Text(feedback).wixalFont(size:11).foregroundStyle(theme.muted).textSelection(.enabled).accessibilityAddTraits(.updatesFrequently)}
             if let benchmark{HStack{ProgressView().controlSize(.small);Text("\(textValue(benchmark["name"])) · \(textValue(benchmark["phase"]))");Spacer();Button("Stop benchmark"){run("benchmark-cancel")}}.wixalFont(size:11).wixalCard()}
         }
     }
     private var filters:some View {
-        VStack(alignment:.leading,spacing:12){
-            ViewThatFits(in:.horizontal){
-                HStack(spacing:12){typePicker;providerPicker;parameterPicker}
-                VStack(alignment:.leading,spacing:10){typePicker;providerPicker;parameterPicker}
-            }
-            ViewThatFits(in:.horizontal){
-                HStack(spacing:12){sizePicker;fitPicker;sortPicker;Button("Clear"){resetFilters()}.buttonStyle(.plain).wixalFont(size:11)}
-                VStack(alignment:.leading,spacing:10){sizePicker;fitPicker;sortPicker;Button("Clear filters"){resetFilters()}.buttonStyle(.plain)}
+        VStack(alignment:.leading,spacing:10){
+            HStack(spacing:10){
+                Button(capability=="all" ? "Model type" : typeName){typeOpen=true}.popover(isPresented:$typeOpen){typePopover}
+                Button(publisher=="all" ? "Provider" : publisher){providerOpen=true}.popover(isPresented:$providerOpen){providerPopover}
+                Button(extraFilterCount==0 ? "Filters" : "Filters · \(extraFilterCount)"){moreFiltersOpen=true}.popover(isPresented:$moreFiltersOpen){additionalFilters}
+                Spacer(minLength:0)
+                Menu{Button("Name"){sort="name"};Button("Smallest file"){sort="size"};Button("Parameter count"){sort="parameters"}}label:{Image(systemName:"arrow.up.arrow.down");Text("Sort")}.menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Sort models")
+            }.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:12)
+            if capability != "all" || publisher != "all" || extraFilterCount>0 {
+                HStack(spacing:10){Text(activeFilterSummary).wixalFont(size:11).foregroundStyle(theme.muted);Spacer(minLength:0);Button("Clear filters"){resetFilters()}.buttonStyle(.plain).wixalFont(size:11)}
             }
         }
     }
-    private var typePicker:some View{filterPicker("Model type",value:$capability,options:[("all","All types"),("chat","Chat"),("coding","Coding"),("reasoning","Reasoning"),("embedding","Embeddings"),("vision","Images + text")])}
-    private var providerPicker:some View{filterPicker("Provider / publisher",value:$publisher,options:providerOptions)}
+    private var activeFilterSummary:String{
+        var labels:[String]=[]
+        if capability != "all"{labels.append(typeName)}
+        if publisher != "all"{labels.append(publisher)}
+        if parameters != "all"{labels.append(parameters=="2" ? "Under 2B" : parameters=="8" ? "2B–8B" : "Over 8B")}
+        if size != "all"{labels.append("Under \(size) GB")}
+        if fit != "all"{labels.append("Estimated RAM fit")}
+        return labels.joined(separator:" · ")
+    }
+    private var typeChoices:[[String:Any]]{
+        typeSearch.isEmpty ? records(filterData["popularTypes"]).prefix(5).map{$0} : records(filterData["tasks"]).filter{(textValue($0["label"])+" "+textValue($0["id"])).localizedCaseInsensitiveContains(typeSearch)}
+    }
+    private var typePopover:some View {
+        VStack(alignment:.leading,spacing:12){
+            Text("Model type").wixalFont(size:14,weight:.medium)
+            TextField("Search Hugging Face types…",text:$typeSearch).wixalField()
+            Button("All model types"){chooseType("all")}.buttonStyle(.plain)
+            Text(typeSearch.isEmpty ? "Popular GGUF types" : "Search results").wixalFont(size:11).foregroundStyle(theme.muted)
+            ScrollView{VStack(alignment:.leading,spacing:4){ForEach(Array(typeChoices.enumerated()),id:\.offset){_,row in choiceButton(row,selected:capability){chooseType(textValue(row["id"]))}}}}.frame(maxHeight:230)
+            if typeChoices.isEmpty{Text(filterError.isEmpty ? "No matching types" : filterError).wixalFont(size:11).foregroundStyle(theme.muted)}
+            filterSourceNote
+        }.padding(16).frame(width:300).background(theme.panel)
+    }
+    private var providerPopover:some View {
+        VStack(alignment:.leading,spacing:12){
+            Text("Provider").wixalFont(size:14,weight:.medium)
+            TextField("Search Hugging Face providers…",text:$providerSearch).wixalField()
+            Button("All providers"){chooseProvider("all")}.buttonStyle(.plain)
+            Text(providerSearch.isEmpty ? "Popular GGUF providers" : "Search results").wixalFont(size:11).foregroundStyle(theme.muted)
+            if findingProviders{ProgressView().controlSize(.small)}
+            let choices=providerSearch.isEmpty ? records(filterData["providers"]).prefix(5).map{$0} : providerMatches
+            ScrollView{VStack(alignment:.leading,spacing:4){ForEach(Array(choices.enumerated()),id:\.offset){_,row in choiceButton(row,selected:publisher){chooseProvider(textValue(row["id"]))}}}}.frame(maxHeight:230)
+            if choices.isEmpty && !findingProviders{Text(providerError.isEmpty ? filterError.isEmpty ? "No matching providers" : filterError : providerError).wixalFont(size:11).foregroundStyle(theme.muted)}
+            filterSourceNote
+        }.padding(16).frame(width:300).background(theme.panel)
+        .task(id:providerSearch){
+            providerMatches=[];providerError="";findingProviders=false
+            let query=providerSearch.trimmingCharacters(in:.whitespacesAndNewlines)
+            guard !query.isEmpty else{return}
+            do {try await Task.sleep(nanoseconds:300_000_000);findingProviders=true
+                let result=try await engine.call("model-hf-filters",["kind":"provider","search":query]) as? [String:Any] ?? [:]
+                guard !Task.isCancelled,query==providerSearch.trimmingCharacters(in:.whitespacesAndNewlines) else{return}
+                providerMatches=records(result["providers"]);findingProviders=false
+            }catch{if !Task.isCancelled{providerError=error.localizedDescription;findingProviders=false}}
+        }
+    }
+    private var filterSourceNote:some View {
+        Text("From Hugging Face\(filterData["stale"] as? Bool == true ? " · saved metadata" : "")").wixalFont(size:11).foregroundStyle(theme.muted).help("Popular choices are ranked by model count in Hugging Face’s 100 most-downloaded GGUF repositories.")
+    }
+    private func choiceButton(_ row:[String:Any],selected:String,choose:@escaping ()->Void)->some View {
+        Button(action:choose){HStack{VStack(alignment:.leading,spacing:2){Text(textValue(row["label"]));if textValue(row["label"]).replacingOccurrences(of:"-",with:" ").lowercased() != textValue(row["id"]).replacingOccurrences(of:"-",with:" ").lowercased(){Text(textValue(row["id"])).wixalFont(size:11).foregroundStyle(theme.muted)}};Spacer();if textValue(row["id"])==selected{Image(systemName:"checkmark")}}.padding(.vertical,6).frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(.plain).wixalFont(size:12)
+    }
+    private func chooseType(_ value:String){capability=value;typeOpen=false}
+    private func chooseProvider(_ value:String){publisher=value;providerOpen=false}
+    private func loadFilterOptions() async {
+        do{filterData=try await engine.call("model-hf-filters") as? [String:Any] ?? [:];filterError=""}catch{filterError=error.localizedDescription}
+    }
+    private var additionalFilters:some View {
+        VStack(alignment:.leading,spacing:16){Text("More filters").wixalFont(size:14,weight:.medium);parameterPicker;sizePicker;fitPicker;HStack{Button("Reset"){parameters="all";size="all";fit="all"};Spacer();Button("Done"){moreFiltersOpen=false;if tab=="Browse"{searchHub()}}}}.padding(16).frame(width:300).background(theme.panel)
+    }
     private var parameterPicker:some View{filterPicker("Parameters",value:$parameters,options:[("all","Any model size"),("2","Under 2B"),("8","2B–8B"),("large","Over 8B")])}
     private var sizePicker:some View{filterPicker("Download / disk size",value:$size,options:[("all","Any file size"),("2","Under 2 GB"),("5","Under 5 GB"),("10","Under 10 GB"),("20","Under 20 GB")])}
     private var fitPicker:some View{filterPicker("Memory",value:$fit,options:[("all","Any RAM estimate"),("estimated","Estimated fit on this Mac")])}
@@ -116,13 +182,13 @@ struct ModelsView:View {
     private func filterPicker(_ title:String,value:Binding<String>,options:[(String,String)])->some View {
         VStack(alignment:.leading,spacing:5){Text(title).wixalFont(size:11).foregroundStyle(theme.muted);Picker(title,selection:value){ForEach(options,id:\.0){option in Text(option.1).tag(option.0)}}.labelsHidden().wixalFont(size:12)}.frame(minWidth:130,maxWidth:.infinity,alignment:.leading)
     }
-    private func resetFilters(){capability="all";publisher="all";customPublisher="";parameters="all";fit="all";size="all";sort="name";search="";invalidateSearch()}
-    private func invalidateSearch(){searchRevision+=1;searchedHub=false;hubRows=[];nextPage="";hubError="";expanded="";searchingHub=false}
+    private func resetFilters(){capability="all";publisher="all";parameters="all";fit="all";size="all";sort="name";search="";invalidateSearch()}
+    private func invalidateSearch(){searchRevision+=1;hubTask?.cancel();searchedHub=false;hubRows=[];nextPage="";hubError="";expanded="";searchingHub=false}
     private func searchHub(more:Bool=false){
         let revision=searchRevision
-        let query:[String:Any]=["search":search.trimmingCharacters(in:.whitespacesAndNewlines),"publisher":providerValue,"parameters":parameters,"type":capability,"page":more ? nextPage : ""]
+        let query:[String:Any]=["search":search.trimmingCharacters(in:.whitespacesAndNewlines),"publisher":providerValue,"parameters":parameters,"task":capability=="all" ? "" : capability,"page":more ? nextPage : ""]
         searchingHub=true;hubError=""
-        Task {
+        hubTask=Task {
             do {let result=try await engine.call("model-hf-search",query) as? [String:Any] ?? [:]
                 guard revision==searchRevision else{return}
                 let rows=records(result["models"])
@@ -179,7 +245,7 @@ struct ModelsView:View {
         return Text(modelNumber(info["required"])>0 ? "Estimated model RAM \(modelRAM(info["required"])) · Recommended Mac RAM \(modelRAM(info["recommended"])) · \(Int(modelNumber(info["context"]))/1024)k context · \((info["fits"] as? Bool ?? false) ? "Estimated fit" : "May exceed this Mac’s budget")" : "RAM requirement unknown until file metadata is available").wixalFont(size:11).foregroundStyle(theme.muted).help("Estimate includes weights, context cache and overhead; recommended total RAM reserves 25% for macOS. Actual memory depends on the model and runtime.")
     }
     private func parameterLabel(_ model:[String:Any])->String{let count=modelNumber(model["parameters"]);return count>0 ? String(format:"%.1fB parameters",count/1e9) : "Parameters unknown"}
-    private func typeLabel(_ model:[String:Any])->String{let types=model["types"] as? [String] ?? [];return types.isEmpty ? "Type unknown" : types.map{$0=="embedding" ? "Embeddings" : $0=="vision" ? "Images + text" : $0.capitalized}.joined(separator:" / ")}
+    private func typeLabel(_ model:[String:Any])->String{let task=textValue(model["pipelineTag"]);return records(filterData["tasks"]).first{textValue($0["id"])==task}.map{textValue($0["label"])} ?? (task.isEmpty ? "Type not listed" : task)}
     private var yourModels:some View {
         VStack(alignment:.leading,spacing:12){
             let pending=jobs.filter{job in textValue(job["state"]) != "completed" && !installed.contains{model in textValue(model["name"])==textValue(job["name"])}}
@@ -206,12 +272,12 @@ struct ModelsView:View {
     }
     private func filtered(_ rows:[[String:Any]],catalog:Bool=false)->[[String:Any]] {
         rows.filter {model in
-            let count=modelNumber(model["parameters"]),types=model["types"] as? [String] ?? [],provider=textValue(model["publisher"])
+            let count=modelNumber(model["parameters"]),task=textValue(model["pipelineTag"]),provider=textValue(model["publisher"])
             let needle=[textValue(model["name"]),textValue(model["displayName"]),textValue(model["repo"]),provider].joined(separator:" ")
             let parameterMatch=parameters=="all" || count>0 && (parameters=="2" && count<2e9 || parameters=="8" && count>=2e9 && count<=8e9 || parameters=="large" && count>8e9)
             let bytes=modelNumber(model["size"]),info=model["fit"] as? [String:Any] ?? [:]
             let fileMatch=catalog ? (size=="all" && fit=="all" || !matchingFiles(model).isEmpty) : (size=="all" || bytes>0 && bytes<(Double(size) ?? 0)*1e9) && (fit=="all" || info["fits"] as? Bool == true)
-            return (search.isEmpty || needle.localizedCaseInsensitiveContains(search)) && (providerValue.isEmpty || provider.localizedCaseInsensitiveCompare(providerValue) == .orderedSame) && (capability=="all" || types.contains(capability)) && parameterMatch && fileMatch
+            return (search.isEmpty || needle.localizedCaseInsensitiveContains(search)) && (providerValue.isEmpty || provider.localizedCaseInsensitiveCompare(providerValue) == .orderedSame) && (capability=="all" || task==capability) && parameterMatch && fileMatch
         }.sorted{a,b in if sort=="size"{return modelNumber(a["size"])<modelNumber(b["size"])};if sort=="parameters"{return modelNumber(a["parameters"])<modelNumber(b["parameters"])};return textValue(a["displayName"]).localizedStandardCompare(textValue(b["displayName"])) == .orderedAscending}
     }
     private var summary:some View {

@@ -25,6 +25,16 @@ async def main():
     c=real.Client(False,helper,args.app/'Contents/Resources/ollama')
     try:
         await c.start()
+        filters=await c.call('model-hf-filters')
+        assert len(filters['popularTypes'])==5 and len(filters['providers'])==5
+        tasks={row['id']:row['label'] for row in filters['tasks']}
+        assert all(tasks[row['id']]==row['label'] for row in filters['popularTypes'])
+        providers=await c.call('model-hf-filters',dict(kind='provider',search='google'))
+        assert any(row['id'].lower()=='google' for row in providers['providers'])
+        record('liveHubTaskCatalogTopFiveAndProviderSearch',dict(filters=filters,providerSearch=providers))
+        typed=await c.call('model-hf-search',dict(search='Qwen3-0.6B',publisher='Qwen',task='text-generation'))
+        assert typed['models'] and all(row['pipelineTag']=='text-generation' for row in typed['models'])
+        record('officialTaskFilter',dict(tasks=[row['pipelineTag'] for row in typed['models']]))
         result=await c.call('model-hf-search',dict(search='Qwen3-0.6B',publisher='Qwen',parameters='2',type='all'))
         assert result['models'] and all(m['publisher']=='Qwen' and m['parameters']<=2e9 for m in result['models'])
         assert any('embedding' in m['types'] for m in result['models'])
@@ -48,6 +58,7 @@ async def main():
         else:raise TimeoutError('Real GGUF import did not complete')
         await c.call('model-use',dict(name=file['name']))
         before=await c.state();sessions=len(before['sessions'])
+        assert before['modelSources'][file['name']]['pipelineTag']=='text-generation'
         record('verifiedCachedGGUFImportAndSelection',dict(job=job,selected=before['model'],sourceSha256=file['sha256']))
         await c.call('model-delete',dict(name=file['name']))
         after=await c.state();status=await c.call('model-status')

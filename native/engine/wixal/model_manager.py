@@ -18,7 +18,7 @@ from .model_browser import Browser, metadata
 
 GIB = 1024**3
 METHODS = frozenset(('models','model-status','model-imports','model-import','model-pull','model-download-action',
-    'model-hf-search','model-hf-repository','model-delete','model-unload','model-use','model-context','runtime-start','runtime-stop','benchmark-start','benchmark-cancel'))
+    'model-hf-filters','model-hf-search','model-hf-repository','model-delete','model-unload','model-use','model-context','runtime-start','runtime-stop','benchmark-start','benchmark-cancel'))
 
 
 def validate_name(name):
@@ -66,7 +66,7 @@ class ModelManager:
         self.importing=''
         self.library=dict(loaded=[],loadedAvailable=False,diskFree=shutil.disk_usage(runtime.models).free)
         self.catalog=json.loads((Path(__file__).parent/'resources/model-catalog.json').read_text())
-        self.browser=Browser()
+        self.browser=Browser(store.data.get('modelBrowserFilters'))
         self.download_task,self.benchmark_task=None,None
         self.active_download,self.benchmark_progress=None,None
         self.closed=False
@@ -136,6 +136,10 @@ class ModelManager:
             return self.snapshot()
         if method=='model-imports': return await asyncio.to_thread(self.runtime.imports)
         if method=='model-hf-repository':return await asyncio.to_thread(hub.repository,p.get('repo',''),p.get('revision','main'))
+        if method=='model-hf-filters':
+            result=await self.browser.filters(p)
+            if p.get('kind','all')=='all':self.store.data['modelBrowserFilters']=self.browser.filter_cache;self.store.save()
+            return result
         if method=='model-hf-search':
             result=await self.browser.search(p)
             context=self.store.data.get('contextSize',8192)
@@ -297,7 +301,7 @@ class ModelManager:
             await hub.import_local(self.runtime,path,item['name'])
             self.runtime.metadata.clear();await self.refresh()
             if not any(m['name']==item['name'] for m in self.installed):raise RuntimeError('The local engine did not report the imported model')
-            self.store.data['modelSources'][item['name']]={k:item[k] for k in ('provider','repo','revision','file','sha256','size','source','license') if k in item}
+            self.store.data['modelSources'][item['name']]={k:item[k] for k in ('provider','repo','revision','file','sha256','size','source','license','pipelineTag') if k in item}
             item.update(state='completed',status='Installed',completed=item['total'],finished=now())
         except asyncio.CancelledError:
             cancelled.set()

@@ -6,6 +6,7 @@ import math
 import re
 import time
 import urllib.parse
+from collections import Counter
 from . import huggingface_models as hub
 
 
@@ -14,6 +15,7 @@ def metadata(item):
     source=row.get('provenance') or row
     repo=source.get('repo','')
     row['publisher']=repo.split('/')[0] if '/' in repo else 'Unknown'
+    if source.get('pipelineTag'):row['pipelineTag']=source['pipelineTag']
     title=repo.split('/')[-1] if repo else row.get('name','')
     row['displayName']=re.sub(r'-GGUF$', '', title, flags=re.I)
     details=row.get('details') or {}
@@ -61,6 +63,8 @@ def search_page(params):
     if not isinstance(author,str) or author and not re.fullmatch(r'[\w.-]{1,96}',author):raise ValueError('Enter a Hugging Face publisher name')
     ranges={'all':'','2':'max:2B','8':'min:2B,max:8B','large':'min:8B'}
     if count not in ranges or kind not in ('all','chat','coding','reasoning','embedding','vision'):raise ValueError('Invalid model filter')
+    task=params.get('task','')
+    if not isinstance(task,str) or task and not re.fullmatch(r'[a-z][a-z0-9-]{0,79}',task):raise ValueError('Invalid Hugging Face task')
     pairs=[('filter','gguf'),('limit','12'),('sort','downloads'),('direction','-1')]
     for field in ('gguf','tags','cardData','pipeline_tag','gated','sha'):pairs.append(('expand',field))
     if query:pairs.append(('search',query.strip()))
@@ -70,6 +74,7 @@ def search_page(params):
     if kind in ('chat','vision'):pairs.append(('pipeline_tag','text-generation' if kind=='chat' else 'image-text-to-text'))
     if kind=='embedding':pairs.append(('filter','feature-extraction'))
     if kind=='reasoning':pairs.append(('filter','reasoning'))
+    if task:pairs.append(('pipeline_tag',task))
     url=page_url(params['page']) if params.get('page') else hub.HUB+'/api/models?'+urllib.parse.urlencode(pairs)
     try:
         with hub.open_hub(url) as response:
@@ -96,7 +101,55 @@ def search_page(params):
 
 
 class Browser:
-    def __init__(self):self.cache={}
+    def __init__(self,cached_filters=None):
+        self.cache={};self.filter_cache=copy.deepcopy(cached_filters) if isinstance(cached_filters,dict) else {};self.provider_cache={}
+
+    async def filters(self,params):
+        query=params.get('search','');kind=params.get('kind','all')
+        if not isinstance(query,str) or len(query)>96 or kind not in ('all','provider'):raise ValueError('Invalid filter search')
+        query=query.strip()
+        if kind=='provider' and query:
+            cached=self.provider_cache.get(query.lower())
+            if cached and time.time()-cached[0]<300:return copy.deepcopy(cached[1])
+            raw=await asyncio.to_thread(read_hub,hub.HUB+'/api/quicksearch?'+urllib.parse.urlencode({'q':query}))
+            if not isinstance(raw,dict):raise ValueError('Invalid Hub publisher search')
+            providers={}
+            for row in (raw.get('orgs') or [])[:30]+(raw.get('users') or [])[:30]:
+                if not isinstance(row,dict):continue
+                name=row.get('name') or row.get('user')
+                if not isinstance(name,str) or not re.fullmatch(r'[\w.-]{1,96}',name):continue
+                label=row.get('fullname')
+                providers[name]=dict(id=name,label=label[:120] if isinstance(label,str) and label.strip() else name)
+            result=dict(providers=list(providers.values())[:30],source=hub.HUB,checked=time.time()*1000)
+            if len(self.provider_cache)>=16:self.provider_cache.pop(next(iter(self.provider_cache)))
+            self.provider_cache[query.lower()]=(time.time(),copy.deepcopy(result))
+            return result
+        if self.filter_cache and time.time()*1000-self.filter_cache.get('checked',0)<24*3600*1000:
+            return dict(copy.deepcopy(self.filter_cache),cached=True)
+        try:
+            tasks,models=await asyncio.gather(asyncio.to_thread(read_hub,hub.HUB+'/api/tasks'),asyncio.to_thread(read_hub,hub.HUB+'/api/models?filter=gguf&sort=downloads&direction=-1&limit=100&expand=author&expand=pipeline_tag&expand=downloads'))
+            if not isinstance(tasks,dict) or not isinstance(models,list):raise ValueError('Invalid Hub filter metadata')
+            labels=[]
+            for identifier,row in list(tasks.items())[:200]:
+                if re.fullmatch(r'[a-z][a-z0-9-]{0,79}',identifier) and isinstance(row,dict) and isinstance(row.get('label'),str):labels.append(dict(id=identifier,label=row['label'][:120]))
+            types=Counter();owners=Counter()
+            known={r['id'] for r in labels}
+            for model in models[:100]:
+                if not isinstance(model,dict):continue
+                try:repo=hub.repo_id(model.get('id',''))
+                except ValueError:continue
+                owners[repo.split('/')[0]]+=1
+                task=model.get('pipeline_tag')
+                if isinstance(task,str) and task in known:types[task]+=1
+            ranking=lambda counts:sorted(counts,key=lambda k:(-counts[k],k))[:5]
+            lookup={r['id']:r for r in labels}
+            result=dict(tasks=sorted(labels,key=lambda r:r['label'].casefold()),popularTypes=[lookup[t] for t in ranking(types)],
+                providers=[dict(id=p,label=p) for p in ranking(owners)],source=hub.HUB,
+                ranking='By model count in the 100 most-downloaded GGUF repositories',checked=time.time()*1000,cached=False)
+            self.filter_cache=copy.deepcopy(result);return result
+        except (OSError,ValueError):
+            if self.filter_cache:return dict(copy.deepcopy(self.filter_cache),cached=True,stale=True)
+            raise ValueError('Hugging Face filters are unavailable. Try refreshing later.')
 
     async def search(self,params):
         key=json.dumps(params,sort_keys=True)
@@ -116,3 +169,9 @@ class Browser:
         if len(self.cache)>=8:self.cache.pop(next(iter(self.cache)))
         self.cache[key]=(time.monotonic(),copy.deepcopy(result))
         return result
+
+
+def read_hub(url):
+    with hub.open_hub(url) as response:raw=response.read(4*1024*1024+1)
+    if len(raw)>4*1024*1024:raise ValueError('Hub metadata exceeds 4 MB')
+    return json.loads(raw)

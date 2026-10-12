@@ -9,13 +9,13 @@ The user explicitly selected these six local candidates from their supplied rese
 | Model | Hugging Face publisher | Quantization | Download GB |
 | --- | --- | --- | ---: |
 | Qwen3.5 9B | unsloth | Q4_K_M | 5.68 |
-| Gemma 4 E4B | mradermacher | Q4_K_M | 5.34 |
-| Gemma 4 12B | DhruvalLabs | Q4_K_M | 7.38 |
+| Gemma 4 E4B IT | unsloth | Q4_K_M | 4.98 |
+| Gemma 4 12B IT | bartowski | Q4_K_M | 7.66 |
 | Qwen3.8 27B | prithivMLmods | Q4_K_S | 15.83 |
 | KAT-Coder 2.5 Dev | RemySkye | Q3_K_S | 15.18 |
 | Qwen3.6 35B-A3B | unsloth | UD-Q3_K_S | 15.36 |
 
-The six files total 64.76 GB. Q3 was chosen for the two roughly 35B models to reduce weight memory on the 24 GB Mac. RAM estimates remain visible and depend on context size. Qwen3.8 exceeds the estimated budget even at 4k context; a successful short generation does not establish comfortable sustained use.
+The six files total 64.69 GB. Q3 was chosen for the two roughly 35B models to reduce weight memory on the 24 GB Mac. RAM estimates remain visible and depend on context size. Qwen3.8 exceeds the estimated budget even at 4k context; a successful short generation does not establish comfortable sustained use.
 
 Every download uses the installed desktop's production `model-pull` IPC and Wixal's existing pinned-revision, size-checked, SHA-256-checked Hugging Face downloader. Imported models carry source provenance. No Ollama registry pulls or manual weight downloads are used. The bundled Ollama 0.35.1 inference runtime remains in place; direct llama.cpp migration is deferred.
 
@@ -27,4 +27,4 @@ Local evidence is saved in `artifacts/native/model-library-refresh-2026-10-12/`:
 
 The updated app was installed at `/Applications/Wixal.app`. The release Swift build, 34 model tests and full 491-test engine suite passed. All 143 installed source-manifest entries matched the working source, and strict signature verification passed. User message arrays and draft content were preserved through installation and relaunch. One null empty draft was normalized to an empty draft object.
 
-Text generation checks do not qualify tools, agents, security workflows, vision, audio, long context or model quality. The initial two Gemma checks produced incorrect or repetitive responses despite successful imports; their output remains under investigation and must not be presented as qualified use.
+Text generation checks do not qualify tools, agents, security workflows, vision, audio, long context or model quality. The initial two Gemma selections were pretrained variants and produced incorrect or repetitive chat responses despite successful imports. They were replaced with explicitly instruction-tuned (`-it`) variants from Unsloth and bartowski through the same Wixal downloader. Initial selections and failed evidence remain saved separately; final generation results determine qualification.

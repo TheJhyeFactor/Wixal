@@ -40,6 +40,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Button("Agents"){navigate("Agents")}
                 Button("Cybersecurity"){navigate("Cybersecurity")}
                 Button("Projects"){navigate("Projects")}
+                Button("Recents"){navigate("Recents")}
+                Button("Toggle sidebar"){navigate("Toggle sidebar")}.keyboardShortcut("b")
                 Button("Terminal"){navigate("Terminal")}.keyboardShortcut("j")
                 Button("Models"){navigate("Models")}.keyboardShortcut("l")
                 Button("Usage & performance"){navigate("Performance")}

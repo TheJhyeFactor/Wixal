@@ -1,9 +1,17 @@
 import SwiftUI
 import AppKit
+import WixalInteractions
 
 struct WorkspaceView: View {
     @ObservedObject var engine: EngineClient
     @ViewState<String> private var tab = "Chat"
+    @AppStorage("navigation.workspaceArea") private var workspaceName = "Chats"
+    private var workspace:WorkspaceArea { WorkspaceArea(rawValue:workspaceName) ?? .chats }
+    @AppStorage("navigation.sidebarWidth") private var sidebarWidth = 248.0
+    @AppStorage("navigation.pinnedConversations") private var pinnedConversations = "[]"
+    @AppStorage("navigation.expandedProjects") private var expandedProjects = "[]"
+    @ViewState<Bool> private var openingContext = false
+    @ViewState<Bool> private var narrowSidebarOpen = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @ViewState<Bool> private var introFinished=true
     @ViewState<Bool> private var preferencesLoaded=false
@@ -43,9 +51,14 @@ struct WorkspaceView: View {
         VStack(spacing:0) {
             titlebar
             HStack(spacing:0) {
-                sidebar.frame(width:sidebarIsCompact ? 56 : 224).background(theme.sidebar)
+                navigationRail.frame(width:48).background(theme.sidebar)
                 Rectangle().fill(theme.line).frame(width:1)
+                if !sidebarIsCompact {
+                    sidebar.frame(width:CGFloat(SidebarPreferences.width(sidebarWidth))).background(theme.sidebar)
+                    SidebarResizeHandle(width:$sidebarWidth)
+                }
                 VStack(spacing:0) {
+                    navigationContextBar
                     if ["Chat","Agents","Files"].contains(tab){workspaceHeader}
                     HStack(spacing:0) {
                         VSplitView {
@@ -60,6 +73,7 @@ struct WorkspaceView: View {
                                 case "Models": ModelsView(engine:engine)
                                 case "Performance": PerformanceView(engine:engine)
                                 case "Projects": projectsPage
+                                case "Recents": recentsPage
                                 case "Cybersecurity": EmptyView()
                                 case "Tools": AddonLibraryView(engine:engine)
                                 case "Agents": agentsPage
@@ -76,19 +90,19 @@ struct WorkspaceView: View {
                                 }.frame(minHeight:120,idealHeight:min(200,windowSize.height*0.28),maxHeight:windowSize.height*0.32)
                             }
                         }
-                        if let drawer, windowSize.width >= 1200 {
+                        if let drawer, canDockInspector {
                             WorkspaceDrawer(engine:engine,kind:drawer,close:{self.drawer=nil})
                                 .frame(width:340).background(theme.panel).overlay(alignment:.leading){Rectangle().fill(theme.line).frame(width:1)}
                                 .shadow(color:.black.opacity(theme.light ? 0.06 : 0.15),radius:14,x:-5).transition(.move(edge:.trailing).combined(with:.opacity))
                         }
                     }
                     .overlay(alignment:.trailing) {
-                        if let drawer, windowSize.width < 1200 {
+                        if let drawer, !canDockInspector {
                             ZStack(alignment:.trailing) {
                                 theme.background.opacity(0.45).contentShape(Rectangle()).onTapGesture{self.drawer=nil}
                                     .accessibilityHidden(true)
                                 WorkspaceDrawer(engine:engine,kind:drawer,close:{self.drawer=nil})
-                                    .frame(width:min(380,windowSize.width-(collapsed ? 56 : 224)-24))
+                                    .frame(width:min(380,max(260,windowSize.width-navigationWidth-24)))
                                     .background(theme.panel).overlay(alignment:.leading){Rectangle().fill(theme.line).frame(width:1)}
                                     .shadow(color:.black.opacity(theme.light ? 0.06 : 0.15),radius:14,x:-5)
                             }
@@ -105,9 +119,11 @@ struct WorkspaceView: View {
         }.foregroundStyle(theme.text).wixalFont(size:13).background(theme.background)
         .background(SheetFocusRestorer().frame(width:0,height:0))
         .ignoresSafeArea(.container,edges:.top)
+        .onChange(of:expanded){_,ids in expandedProjects=SidebarPreferences.encodePins(ids.sorted())}
         .animation(motion,value:expanded).animation(motion,value:collapsed).animation(motion,value:drawer).animation(motion,value:tab)
         .overlay{if !introFinished{LaunchView(theme:theme,motion:!reduceMotion && (ui["launchAnimation"] as? Bool ?? true),sound:ui["launchSound"] as? Bool ?? true,done:{introFinished=true})}}
-        .onChange(of:engine.connected,initial:true){_,ready in if ready && !preferencesLoaded{preferencesLoaded=true;tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat";collapsed=ui["sidebarCollapsed"] as? Bool ?? false;if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] == nil{let setup=engine.state["setup"] as? [String:Any] ?? [:];setupPresented = !(setup["completed"] as? Bool ?? false)}}}
+        .onChange(of:engine.connected,initial:true){_,ready in if ready && !preferencesLoaded{preferencesLoaded=true;tab=workspace == .chats ? (textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat") : workspace.route;collapsed=ui["sidebarCollapsed"] as? Bool ?? false;if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] == nil{let setup=engine.state["setup"] as? [String:Any] ?? [:];setupPresented = !(setup["completed"] as? Bool ?? false)}}}
+        .onChange(of:tab){_,value in if let area=WorkspaceArea.destination(value){workspaceName=area.rawValue}}
         .onChange(of:ui["sidebarCollapsed"] as? Bool){_,value in collapsed=value ?? false}
         .onChange(of:ui["appIcon"] as? String){_,_ in updateIcon()}
         .onExitCommand{if drawer != nil{drawer=nil}else{tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat"}}
@@ -130,8 +146,8 @@ struct WorkspaceView: View {
         .sheet(item:$engine.review) {review in ReviewView(engine:engine,review:review)}
         .sheet(isPresented:Binding(get:{projectDeleteID != nil},set:{if !$0{projectDeleteID=nil}})){DeleteProjectView(engine:engine,id:projectDeleteID ?? "",close:{projectDeleteID=nil;tab="Projects"})}
         .sheet(isPresented:$modelPicker){VStack(spacing:0){HStack{Text("Choose your model").wixalFont(size:15,weight:.medium);Spacer();Button{modelPicker=false}label:{Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel("Close model picker")}.padding(20).background(theme.panel);ModelsView(engine:engine)}.frame(width:min(980,windowSize.width-40),height:min(680,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
-        .sheet(isPresented:$palette) {CommandPalette(action:{select($0);palette=false})}
-        .onAppear {StartupEvidence.record("workspace-mounted");updateIcon();expanded.insert(textValue(engine.state["activeProject"]));if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] != nil {terminal=true}}
+        .sheet(isPresented:$palette) {CommandPalette(projects:records(engine.state["projects"]),sessions:records(engine.state["sessions"]),action:{select($0);palette=false})}
+        .onAppear {StartupEvidence.record("workspace-mounted");updateIcon();expanded=Set(SidebarPreferences.pins(expandedProjects));expanded.insert(textValue(engine.state["activeProject"]));if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] != nil {terminal=true}}
         .onChange(of:engine.state["activeProject"] as? String) {_,id in expanded.insert(id ?? "")}
         .onChange(of:appearance){_,_ in updateIcon()}
         .onChange(of:engine.state["activeSession"] as? String) {_,_ in engine.browser.closeAll();if ["Chat","Agents"].contains(tab){tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat"}}
@@ -145,80 +161,170 @@ struct WorkspaceView: View {
     private var titlebar: some View {
         HStack {Text("wixal").wixalFont(size:13,design:.monospaced);Spacer();Button{palette=true}label:{Label("Search",systemImage:"magnifyingglass")}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Find a command · ⌘ K")}.padding(.leading,98).padding(.trailing,20).frame(height:48).background(theme.background)
     }
-    private var sidebarIsCompact: Bool { collapsed || tab == "Settings" }
-    private var sidebar: some View {
-        VStack(alignment:.leading,spacing:10){
-            HStack{if !sidebarIsCompact{Text("Workspace").foregroundStyle(theme.muted);Spacer()};Button{if tab == "Settings" { tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat";collapsed=false } else { collapsed.toggle() };engine.action("settings",["ui":["sidebarCollapsed":collapsed]])}label:{Image(systemName:"sidebar.left")}.buttonStyle(.plain).accessibilityLabel(sidebarIsCompact ? "Expand sidebar" : "Collapse sidebar")}.padding(.vertical,8)
-            if !sidebarIsCompact {
-                HStack(spacing:7){Image(systemName:"magnifyingglass").foregroundStyle(theme.muted);TextField("Search projects and chats",text:$search).textFieldStyle(.plain).wixalFont(size:11)}.padding(10).background(theme.panel,in:RoundedRectangle(cornerRadius:8))
-            }
-            SidebarRailButton(title:"New conversation",symbol:"+",collapsed:sidebarIsCompact){newConversation("chat")}.disabled(engine.busy || creatingConversation)
-            SidebarRailButton(title:"Chat",symbol:"◌",collapsed:sidebarIsCompact,selected:tab=="Chat"){openMode("chat")}.disabled(engine.busy)
-            SidebarRailButton(title:"Agents",symbol:"◇",collapsed:sidebarIsCompact,selected:tab=="Agents"){openMode("agent",page:"Home")}.disabled(engine.busy)
-            SidebarRailButton(title:"Cybersecurity",symbol:"⛨",collapsed:sidebarIsCompact,selected:tab=="Cybersecurity"){tab="Cybersecurity";drawer=nil}
-            SidebarRailButton(title:"Tools",symbol:"▦",collapsed:sidebarIsCompact,selected:tab=="Tools"){select("Tools")}
-            if sidebarIsCompact{SidebarRailButton(title:"Projects",symbol:"▱",collapsed:true,selected:tab=="Projects"){tab="Projects"};SidebarRailButton(title:"Recents",symbol:"◷",collapsed:true){collapsed=false;recentsExpanded=true;engine.action("settings",["ui":["sidebarCollapsed":false]])}}
-            if !sidebarIsCompact {
-                ScrollView {
-                    VStack(alignment:.leading,spacing:18){
-                        VStack(alignment:.leading,spacing:4){
-                            HStack{sectionToggle("Projects",expanded:$projectsExpanded);Button{createProjectPresented=true}label:{Image(systemName:"plus").frame(width:24,height:26)}.buttonStyle(.plain).accessibilityLabel("Add project").disabled(engine.busy)}
-                            if projectsExpanded {
-                                ForEach(Array(visibleProjects.enumerated()),id:\.offset){_,project in projectRow(project)}
-                                if visibleProjects.isEmpty{Text(search.isEmpty ? "Create a project to begin" : "No matching projects").wixalFont(size:11).foregroundStyle(theme.muted).padding(8)}
-                            }
-                        }
-                        VStack(alignment:.leading,spacing:4){
-                            HStack{sectionToggle("Recents",expanded:$recentsExpanded);Button{archives=true}label:{Image(systemName:"archivebox").frame(width:24,height:26)}.buttonStyle(.plain).accessibilityLabel("Archived chats")}
-                            if recentsExpanded {
-                                ForEach(Array(personalSessions.enumerated()),id:\.offset){_,session in conversationRow(session)}
-                                if personalSessions.isEmpty{Text(search.isEmpty ? "Your personal chats appear here" : "No matching chats").wixalFont(size:11).foregroundStyle(theme.muted).padding(8)}
-                            }
-                        }
-                    }.wixalFont(size:12).padding(.top,8)
-                }.scrollIndicators(.hidden)
-            }
-            Spacer(minLength:0)
-            SidebarRailButton(title:"Settings",symbol:"⚙",collapsed:sidebarIsCompact,selected:tab=="Settings"){openSettings()}
-        }.padding(.horizontal,collapsed ? 8 : 14).padding(.vertical,12)
+    private var sidebarIsCompact: Bool { windowSize.width < 1100 ? !narrowSidebarOpen : collapsed }
+    private var navigationWidth:CGFloat { 49 + (sidebarIsCompact ? 0 : CGFloat(SidebarPreferences.width(sidebarWidth)) + 7) }
+    private var canDockInspector:Bool { windowSize.width-navigationWidth >= 900 }
+    private var navigationBusy:Bool { engine.busy || openingContext || creatingConversation }
+    private var pinIDs:[String] { SidebarPreferences.pins(pinnedConversations) }
+    private var pinnedSessions:[[String:Any]] { pinIDs.compactMap { id in recentSessions.first { textValue($0["id"]) == id } } }
+    private func togglePin(_ id:String) {
+        var ids=pinIDs
+        if ids.contains(id){ids.removeAll{$0==id}}else{ids.append(id)}
+        pinnedConversations=SidebarPreferences.encodePins(ids)
     }
-    private var recentSessions:[[String:Any]]{records(engine.state["sessions"]).filter{($0["archivedAt"] == nil || $0["archivedAt"] is NSNull) && (search.isEmpty || textValue($0["title"]).localizedCaseInsensitiveContains(search) || projectName($0).localizedCaseInsensitiveContains(search))}.reversed()}
+    private func chooseWorkspace(_ area:WorkspaceArea) {
+        drawer=nil
+        switch area {
+        case .chats: guard !navigationBusy else{return}; openMode("chat")
+        case .agents: tab="Agents"; if agentPage=="Conversation" && textValue(engine.state["mode"]) != "agent"{agentPage="Home"}
+        case .cybersecurity:tab="Cybersecurity"
+        case .tools:tab="Tools"
+        }
+    }
+    private func toggleSidebar() {
+        if windowSize.width < 1100 { narrowSidebarOpen.toggle();return }
+        collapsed.toggle();engine.action("settings",["ui":["sidebarCollapsed":collapsed]])
+    }
+    private var navigationRail:some View {
+        VStack(spacing:6) {
+            Text("W_").wixalFont(size:16,weight:.semibold,design:.monospaced).padding(.vertical,12).accessibilityLabel("Wixal")
+            NavigationRailButton(title:"Chats",symbol:"bubble.left",selected:tab=="Chat"){chooseWorkspace(.chats)}.disabled(navigationBusy)
+            NavigationRailButton(title:"Projects",symbol:"folder",selected:tab=="Projects"){tab="Projects";drawer=nil}
+            NavigationRailButton(title:"Recents",symbol:"clock",selected:tab=="Recents"){tab="Recents";drawer=nil}
+            NavigationRailButton(title:sidebarIsCompact ? "Expand sidebar" : "Collapse sidebar",symbol:"sidebar.left"){toggleSidebar()}.help("Toggle sidebar · ⌘ B")
+            Spacer(minLength:0)
+            Menu {
+                Button("Task inbox"){select("Tasks")}
+                Button("Archived chats"){archives=true}
+                Button("Models"){select("Models")}
+                Button("Usage & performance"){select("Performance")}
+                Button("Connections"){select("Connections")}
+                Button("Setup"){select("Setup")}
+                Button("Terms"){select("Terms")}
+                Button("Privacy"){select("Privacy")}
+            } label:{Image(systemName:"ellipsis").frame(width:36,height:36)}.menuStyle(.borderlessButton).menuIndicator(.hidden).help("Utilities").accessibilityLabel("Utilities")
+            NavigationRailButton(title:"Settings",symbol:"gearshape",selected:tab=="Settings"){openSettings()}
+            NavigationRailButton(title:accountName,symbol:"person.crop.circle"){select("Account")}
+        }.padding(.vertical,6)
+    }
+    private var navigationContextBar:some View {
+        HStack(spacing:12) {
+            if sidebarIsCompact {WorkspaceSelector(selected:workspace,busy:navigationBusy,choose:chooseWorkspace)}
+            Text(engine.project.map{textValue($0["name"])} ?? "Personal workspace").wixalFont(size:11).foregroundStyle(theme.muted).lineLimit(1)
+                .help(engine.root.isEmpty ? "Personal workspace" : engine.root)
+            Spacer(minLength:8)
+            Menu("Project") {
+                Button("Overview"){tab="Projects"}
+                Button("Project files"){tab="Files"}
+                Button("Project memory"){select("Project memory")}
+                Button("Terminal"){terminal.toggle()}
+                Button("Open project…"){engine.pickProject()}.disabled(navigationBusy)
+            }.fixedSize().wixalFont(size:11)
+            if ["Chat","Agents"].contains(tab) {
+                Button("Live tools"){if tab=="Agents"{agentPage="Live tools"}else{drawer=drawer=="Tools" ? nil : "Tools"}}.buttonStyle(WixalButtonStyle()).wixalFont(size:11)
+            }
+        }.padding(.horizontal,18).frame(height:40).background(theme.panel)
+    }
+    private var sidebar: some View {
+        VStack(alignment:.leading,spacing:8) {
+            HStack {
+                WorkspaceSelector(selected:workspace,busy:navigationBusy,choose:chooseWorkspace)
+                Spacer(minLength:0)
+                Menu {
+                    Button("Narrower sidebar"){sidebarWidth=SidebarPreferences.width(sidebarWidth-16)}
+                    Button("Wider sidebar"){sidebarWidth=SidebarPreferences.width(sidebarWidth+16)}
+                    Button("Reset sidebar width"){sidebarWidth=248}
+                    Button("Collapse sidebar"){toggleSidebar()}
+                } label:{Image(systemName:"slider.horizontal.3").frame(width:28,height:32)}.menuStyle(.borderlessButton).menuIndicator(.hidden).accessibilityLabel("Sidebar preferences")
+            }.padding(.bottom,6)
+            HStack(spacing:7){Image(systemName:"magnifyingglass").foregroundStyle(theme.muted);TextField("Filter projects and chats",text:$search).textFieldStyle(.plain).wixalFont(size:12)}.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:5))
+            Menu {
+                Button("New chat"){newConversation("chat")}
+                Button("New agent conversation"){newConversation("agent")}
+            } label:{Label("New conversation",systemImage:"square.and.pencil").wixalFont(size:12).frame(maxWidth:.infinity,alignment:.leading).frame(height:32)}.menuStyle(.borderlessButton).menuIndicator(.hidden).disabled(navigationBusy)
+            ScrollView {
+                LazyVStack(alignment:.leading,spacing:14) {
+                    if !pinnedSessions.isEmpty {
+                        VStack(alignment:.leading,spacing:2){Text("Pinned").wixalFont(size:11).foregroundStyle(theme.muted).padding(6);ForEach(pinnedSessions,id: \.navigationID){session in conversationRow(session)}}
+                    }
+                    VStack(alignment:.leading,spacing:2) {
+                        HStack{sectionToggle("Projects",expanded:$projectsExpanded);Button{createProjectPresented=true}label:{Image(systemName:"plus").frame(width:28,height:28)}.buttonStyle(.plain).accessibilityLabel("Add project").disabled(navigationBusy)}
+                        if projectsExpanded {
+                            ForEach(visibleProjects,id: \.navigationID){project in projectRow(project)}
+                            if visibleProjects.isEmpty{Text(search.isEmpty ? "Create a project to begin" : "No matching projects").wixalFont(size:11).foregroundStyle(theme.muted).padding(8)}
+                        }
+                    }
+                    VStack(alignment:.leading,spacing:2) {
+                        HStack{sectionToggle("Recents",expanded:$recentsExpanded);Button{archives=true}label:{Image(systemName:"archivebox").frame(width:28,height:28)}.buttonStyle(.plain).accessibilityLabel("Archived chats")}
+                        if recentsExpanded {
+                            ForEach(Array(recentSessions.prefix(12)),id: \.navigationID){session in conversationRow(session)}
+                            if recentSessions.isEmpty{Text(search.isEmpty ? "Your conversations appear here" : "No matching chats").wixalFont(size:11).foregroundStyle(theme.muted).padding(8)}
+                            Button("All recent conversations…"){tab="Recents"}.buttonStyle(.plain).wixalFont(size:11).padding(8)
+                        }
+                    }
+                }
+            }
+        }.padding(12)
+    }
+    private var recentsPage:some View {
+        WixalPage(eyebrow:"RECENTS",title:"Recent conversations",subtitle:"Chats and agent conversations across projects and your personal workspace.") {
+            ForEach(allRecentSessions,id: \.navigationID){session in conversationRow(session)}
+            if allRecentSessions.isEmpty{Text("No conversations yet.").foregroundStyle(theme.muted)}
+            Button("Archived chats"){archives=true}.buttonStyle(WixalButtonStyle(outlined:true))
+        }
+    }
+    private var allRecentSessions:[[String:Any]]{records(engine.state["sessions"]).filter{$0["archivedAt"] == nil || $0["archivedAt"] is NSNull}.reversed()}
+    private var recentSessions:[[String:Any]]{allRecentSessions.filter{(search.isEmpty || textValue($0["title"]).localizedCaseInsensitiveContains(search) || projectName($0).localizedCaseInsensitiveContains(search))}}
     private func projectName(_ session:[String:Any])->String{textValue(records(engine.state["projects"]).first{textValue($0["id"])==textValue(session["projectId"])}?["name"]).isEmpty ? "Personal" : textValue(records(engine.state["projects"]).first{textValue($0["id"])==textValue(session["projectId"])}?["name"])}
     private var personalSessions:[[String:Any]]{recentSessions.filter{textValue($0["projectId"]).isEmpty}}
     private var visibleProjects:[[String:Any]]{records(engine.state["projects"]).filter{project in search.isEmpty || textValue(project["name"]).localizedCaseInsensitiveContains(search) || recentSessions.contains{textValue($0["projectId"])==textValue(project["id"])}}}
     private func sectionToggle(_ title:String,expanded:Binding<Bool>)->some View {
-        Button{expanded.wrappedValue.toggle()}label:{HStack(spacing:7){Image(systemName:expanded.wrappedValue ? "chevron.down" : "chevron.right").wixalFont(size:9);Text(title);Spacer(minLength:0)}.frame(maxWidth:.infinity,alignment:.leading).frame(height:28).contentShape(Rectangle())}.buttonStyle(.plain).accessibilityLabel("\(expanded.wrappedValue ? "Collapse" : "Expand") \(title)")
+        Button{expanded.wrappedValue.toggle()}label:{HStack(spacing:7){Image(systemName:expanded.wrappedValue ? "chevron.down" : "chevron.right").wixalFont(size:9);Text(title);Spacer(minLength:0)}.frame(maxWidth:.infinity,alignment:.leading).frame(height:28).contentShape(Rectangle())}.buttonStyle(.plain).accessibilityLabel("\(expanded.wrappedValue ? "Collapse" : "Expand") \(title)").accessibilityValue(expanded.wrappedValue ? "Expanded" : "Collapsed")
     }
     private func projectRow(_ project:[String:Any])->some View {
         let id=textValue(project["id"])
         let isExpanded=expanded.contains(id) || !search.isEmpty
-        return VStack(alignment:.leading,spacing:2){
-            HStack{
-                Button{if expanded.contains(id){expanded.remove(id)}else{expanded.insert(id)}}label:{HStack(spacing:7){Image(systemName:isExpanded ? "chevron.down" : "chevron.right").wixalFont(size:9);Label(textValue(project["name"]),systemImage:"folder").lineLimit(1);Spacer(minLength:0)}.frame(maxWidth:.infinity,alignment:.leading).contentShape(Rectangle())}.buttonStyle(.plain).accessibilityLabel("\(isExpanded ? "Collapse" : "Expand") \(textValue(project["name"]))")
-                Menu{Button("Open project"){engine.action("project-select",["id":id]);tab="Projects"};Divider();Button("Delete project…",role:.destructive){projectDeleteID=id}}label:{Image(systemName:"ellipsis")}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width:20).disabled(engine.busy)
-            }.padding(.vertical,9).padding(.horizontal,6)
+        return VStack(alignment:.leading,spacing:2) {
+            HStack(spacing:4) {
+                Button{if expanded.contains(id){expanded.remove(id)}else{expanded.insert(id)}}label:{Image(systemName:isExpanded ? "chevron.down" : "chevron.right").wixalFont(size:9).frame(width:24,height:32)}.buttonStyle(.plain)
+                    .accessibilityLabel("\(isExpanded ? "Collapse" : "Expand") \(textValue(project["name"])) conversations").accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+                Button{openProject(id)}label:{Label(textValue(project["name"]),systemImage:"folder").wixalFont(size:12).lineLimit(1).frame(maxWidth:.infinity,alignment:.leading).frame(height:32).contentShape(Rectangle())}.buttonStyle(.plain).disabled(navigationBusy)
+                    .help(textValue(project["name"])+" · "+textValue(project["root"]))
+                    .accessibilityLabel("Open project \(textValue(project["name"]))").accessibilityAddTraits(id==textValue(engine.state["activeProject"]) ? [.isSelected] : [])
+                Menu{Button("Open project"){openProject(id)};Divider();Button("Delete project…",role:.destructive){projectDeleteID=id}}label:{Image(systemName:"ellipsis").frame(width:24,height:28)}.menuStyle(.borderlessButton).menuIndicator(.hidden).disabled(navigationBusy).accessibilityLabel("Project actions for \(textValue(project["name"]))")
+            }.padding(.horizontal,2)
             if isExpanded {
-                ForEach(Array(recentSessions.filter{textValue($0["projectId"])==id}.enumerated()),id:\.offset){_,session in conversationRow(session).padding(.leading,14)}
+                ForEach(Array(recentSessions.filter{textValue($0["projectId"])==id}.prefix(5)),id: \.navigationID){session in conversationRow(session).padding(.leading,14)}
+                Button("All project conversations…"){openProject(id)}.buttonStyle(.plain).wixalFont(size:11).foregroundStyle(theme.muted).padding(.leading,30).padding(.vertical,5).disabled(navigationBusy)
             }
         }
     }
-    private func conversationRow(_ session:[String:Any])->some View {
-        HStack(alignment:.top){Button{openConversation(session)}label:{VStack(alignment:.leading,spacing:4){Text(textValue(session["title"])).lineLimit(1);Text(projectName(session) + (textValue(session["mode"]) == "agent" ? " · Agent" : "")).wixalFont(size:10).foregroundStyle(theme.muted).lineLimit(1)}.frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(.plain).disabled(engine.busy);Menu{Button("Rename…"){renameID=textValue(session["id"])};Button("Copy conversation"){copyConversation(textValue(session["id"]))};Button("Archive"){engine.action("session-archive",["id":textValue(session["id"])])};Divider();Button("Delete…",role:.destructive){deleteID=textValue(session["id"])}}label:{Image(systemName:"ellipsis")}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width:20).disabled(engine.busy)}.padding(8).background(textValue(session["id"])==textValue(engine.state["activeSession"]) ? theme.panel.opacity(0.7) : .clear,in:RoundedRectangle(cornerRadius:6))
+    private func openProject(_ id:String) {
+        guard !navigationBusy else{return};openingContext=true
+        Task{defer{openingContext=false};do{_=try await engine.call("project-select",["id":id]);tab="Projects";drawer=nil}catch{engine.error=error.localizedDescription}}
     }
-    private func openConversation(_ session:[String:Any],page:String="Conversation"){Task{do{_=try await engine.call("project-select",["id":session["projectId"] ?? NSNull()]);_=try await engine.call("session-select",["id":textValue(session["id"])]);tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat";agentPage=page;drawer=nil}catch{engine.error=error.localizedDescription}}}
-    private func newConversation(_ mode:String,page:String="Conversation"){guard !creatingConversation && !engine.busy else{return};creatingConversation=true;Task{defer{creatingConversation=false};do{_=try await engine.call("session-new",["mode":mode]);tab=mode == "agent" ? "Agents" : "Chat";agentPage=page;drawer=nil}catch{engine.error=error.localizedDescription}}}
+    private func conversationRow(_ session:[String:Any])->some View {
+        HStack(alignment:.top){Button{openConversation(session)}label:{VStack(alignment:.leading,spacing:4){Text(textValue(session["title"])).lineLimit(1);Text(projectName(session) + (textValue(session["mode"]) == "agent" ? " · Agent" : "")).wixalFont(size:10).foregroundStyle(theme.muted).lineLimit(1)}.frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(.plain).disabled(navigationBusy).help(textValue(session["title"])).accessibilityAddTraits(textValue(session["id"])==textValue(engine.state["activeSession"]) ? [.isSelected] : []);Menu{Button(pinIDs.contains(textValue(session["id"])) ? "Unpin conversation" : "Pin conversation"){togglePin(textValue(session["id"]))};Button("Rename…"){renameID=textValue(session["id"])};Button("Copy conversation"){copyConversation(textValue(session["id"]))};Button("Archive"){engine.action("session-archive",["id":textValue(session["id"])])};Divider();Button("Delete…",role:.destructive){deleteID=textValue(session["id"])}}label:{Image(systemName:"ellipsis")}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width:24).disabled(navigationBusy).accessibilityLabel("Conversation actions for \(textValue(session["title"]))")}.padding(8).background(textValue(session["id"])==textValue(engine.state["activeSession"]) ? theme.panel.opacity(0.7) : .clear,in:RoundedRectangle(cornerRadius:6))
+    }
+    private func openConversation(_ session:[String:Any],page:String="Conversation"){guard !navigationBusy else{return};openingContext=true;Task{defer{openingContext=false};do{_=try await engine.call("session-select",["id":textValue(session["id"]),"projectId":session["projectId"] ?? NSNull()]);tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat";agentPage=page;drawer=nil}catch{engine.error=error.localizedDescription}}}
+    private func newConversation(_ mode:String,page:String="Conversation"){guard !navigationBusy else{return};creatingConversation=true;Task{defer{creatingConversation=false};do{_=try await engine.call("session-new",["mode":mode]);tab=mode == "agent" ? "Agents" : "Chat";agentPage=page;drawer=nil}catch{engine.error=error.localizedDescription}}}
     private func openMode(_ mode:String,page:String="Conversation"){
+        guard !navigationBusy else{return}
         if textValue(engine.state["mode"]) == mode{tab=mode == "agent" ? "Agents" : "Chat";agentPage=page;drawer=nil;return}
-        if let session=recentSessions.first(where:{textValue($0["projectId"])==textValue(engine.state["activeProject"]) && textValue($0["mode"])==mode}){openConversation(session,page:page)}else{newConversation(mode,page:page)}
+        if let session=records(engine.state["sessions"]).reversed().first(where:{textValue($0["projectId"])==textValue(engine.state["activeProject"]) && textValue($0["mode"])==mode && ($0["archivedAt"] == nil || $0["archivedAt"] is NSNull)}){openConversation(session,page:page)}else{newConversation(mode,page:page)}
     }
     private var agentsPage:some View{
         AgentsHubView(engine:engine,design:agentDesign,page:$agentPage,openModels:{modelPicker=true},openFiles:{tab="Files"},newLiveTask:{newConversation("agent")})
     }
     private var projectsPage:some View{
         WixalPage(eyebrow:"PROJECTS",title:engine.project.map{textValue($0["name"])} ?? "Your projects",subtitle:engine.project == nil ? "Add a folder to keep related work together." : engine.root){
+            Text("All projects").wixalFont(size:12,weight:.medium)
+            ForEach(records(engine.state["projects"]),id: \.navigationID){project in
+                Button{openProject(textValue(project["id"]))}label:{Label(textValue(project["name"]),systemImage:"folder").frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(WixalButtonStyle()).disabled(navigationBusy)
+            }
             if engine.project != nil {
                 HStack{Button("New chat"){newConversation("chat")};Button("Files"){tab="Files"};Button("Terminal"){terminal.toggle()};Menu("Project settings"){Button("Saved context…"){drawer="Memory"};Button("Show folder in Finder"){NSWorkspace.shared.selectFile(nil,inFileViewerRootedAtPath:engine.root)};Divider();Button("Delete project…",role:.destructive){projectDeleteID=textValue(engine.state["activeProject"])}}}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy)
-                ForEach(Array(recentSessions.filter{textValue($0["projectId"])==textValue(engine.state["activeProject"])}.enumerated()),id:\.offset){_,session in conversationRow(session)}
+                ForEach(recentSessions.filter{textValue($0["projectId"])==textValue(engine.state["activeProject"])},id: \.navigationID){session in conversationRow(session)}
             }else{Button("Create project"){createProjectPresented=true}.buttonStyle(WixalButtonStyle(outlined:true))}
         }
     }
@@ -235,7 +341,13 @@ struct WorkspaceView: View {
     private func dialog<Content:View>(_ label:String,close:@escaping()->Void,@ViewBuilder content:()->Content)->some View{VStack(spacing:0){HStack{Spacer();Button(action:close){Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel(label)}.padding(18);content()}.frame(width:min(720,windowSize.width-40),height:min(760,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
     private func openSettings(){drawer=nil;tab="Settings"}
     private func select(_ action:String){
+        if action.hasPrefix("Conversation:"),let session=records(engine.state["sessions"]).first(where:{textValue($0["id"])==String(action.dropFirst(13))}){openConversation(session);return}
+        if action.hasPrefix("Project:"){openProject(String(action.dropFirst(8)));return}
+        if action=="Toggle sidebar"{toggleSidebar();return}
+        if action=="Chats"{chooseWorkspace(.chats);return}
         if action.hasPrefix("Settings:") { settings.open(action == "Settings:Connections" ? "Connections & sharing" : action == "Settings:Tools" ? "Tools & permissions" : "Data & sync");openSettings();return }
         if action == "Tools" { drawer=nil;tab="Tools";return }
-        switch action{case "Commands":palette=true;case "Settings":openSettings();case "Connections":settings.open("Connections & sharing",detail:"Companion");openSettings();case "Account":settings.open("Account");openSettings();case "Setup":setupPresented=true;case "Terms":legalDocument="terms";case "Privacy":legalDocument="privacy";case "Open project":engine.pickProject();case "New conversation":newConversation("chat");case "Chat":openMode("chat");case "Agents":openMode("agent",page:"Home");case "Tasks":tab="Agents";agentPage="Task inbox";case "Terminal":terminal.toggle();case "Tool kit":openMode("agent",page:"Live tools");case "Project memory":tab="Projects";drawer="Memory";case "Archived chats":archives=true;default:tab=action}}
+        switch action{case "Commands":palette=true;case "Settings":openSettings();case "Connections":settings.open("Connections & sharing",detail:"Companion");openSettings();case "Account":settings.open("Account");openSettings();case "Setup":setupPresented=true;case "Terms":legalDocument="terms";case "Privacy":legalDocument="privacy";case "Open project":engine.pickProject();case "New conversation":newConversation("chat");case "Chat":openMode("chat");case "Agents":chooseWorkspace(.agents);case "Tasks":tab="Agents";agentPage="Task inbox";case "Terminal":terminal.toggle();case "Tool kit":openMode("agent",page:"Live tools");case "Project memory":tab="Projects";drawer="Memory";case "Archived chats":archives=true;default:tab=action}}
 }
+
+private extension Dictionary where Key == String, Value == Any { var navigationID:String { textValue(self["id"]) } }

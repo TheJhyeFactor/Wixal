@@ -11,7 +11,7 @@ struct ModelsView:View {
     @Environment(\.wixalTheme) private var theme
     @ViewState<[String:Any]> private var manager=[:]
     @ViewState<String> private var search=""
-    @ViewState<String> private var tab="Browse"
+    @ViewState<String> private var tab="Library"
     @ViewState<String> private var capability="all"
     @ViewState<String> private var publisher="all"
     @ViewState<[String:Any]> private var filterData=[:]
@@ -40,7 +40,9 @@ struct ModelsView:View {
     @ViewState<Int> private var searchRevision=0
     @ViewState<String> private var hubError=""
     @ViewState<String> private var expanded=""
-    @ViewState<Bool> private var performanceOpen=false
+    @ViewState<Bool> private var engineOpen=false
+    @ViewState<String> private var performanceTab="Benchmarks"
+    @ViewState<String> private var inspected=""
     private var installed:[[String:Any]]{records(manager["installed"])}
     private var jobs:[[String:Any]]{records(manager["downloads"])}
     private var benchmarks:[[String:Any]]{records(manager["benchmarks"])}
@@ -62,7 +64,7 @@ struct ModelsView:View {
         return groups.values.compactMap{files in guard var row=files.first else{return nil};row["files"]=files.sorted{modelNumber($0["size"])<modelNumber($1["size"])};return row}
     }
     var body:some View {
-        WixalPage(eyebrow:"MODEL LIBRARY",title:"Models",subtitle:"Discover models on Hugging Face and manage your local library."){
+        WixalPage(eyebrow:"LOCAL AI",title:"Models & performance",subtitle:"Your models, downloads and measured performance in one place."){
             HStack(spacing:16){Text("This Mac · \(modelRAM(hardware["totalMemory"])) RAM");Text("\(modelBytes(library["diskFree"])) disk available");Spacer()}.wixalFont(size:11).foregroundStyle(theme.muted)
             modelLibrary
         }
@@ -75,9 +77,9 @@ struct ModelsView:View {
                 if let result=try? await engine.call("model-status") as? [String:Any]{manager=result;engine.models=installed}
             }
         }
-        .onChange(of:publisher){_,_ in invalidateSearch();if tab=="Browse"{searchHub()}}
+        .onChange(of:publisher){_,_ in invalidateSearch();if tab=="Discover"{searchHub()}}
         .onChange(of:parameters){_,_ in invalidateSearch()}
-        .onChange(of:capability){_,_ in invalidateSearch();if tab=="Browse"{searchHub()}}
+        .onChange(of:capability){_,_ in invalidateSearch();if tab=="Discover"{searchHub()}}
         .onChange(of:search){_,_ in invalidateSearch()}
         .onDisappear{searchRevision+=1;hubTask?.cancel()}
         .alert("Delete this model?",isPresented:Binding(get:{!deleting.isEmpty},set:{if !$0{deleting=""}})){
@@ -86,18 +88,41 @@ struct ModelsView:View {
         }message:{Text("\(deleting) will be removed from the local library. Its unused Hugging Face cache is also removed. Conversations are kept.")}
     }
     private var modelLibrary:some View {
-        VStack(alignment:.leading,spacing:16){
-            HStack(spacing:16){ForEach(["Browse","Your models","Models & engine"],id:\.self){name in
-                Button{tab=name;expanded=""}label:{Text(name + (name=="Your models" ? " · \(installed.count)" : "")).wixalFont(size:13,weight:.medium).padding(.vertical,9).padding(.horizontal,12).background(tab==name ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6))}.buttonStyle(.plain).accessibilityAddTraits(tab==name ? .isSelected : [])
-            };Spacer();Button("Refresh library"){Task{await refresh()}}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(operation);if loading{ProgressView().controlSize(.small)}}
-            if tab=="Models & engine"{engineTab}else{
-            HStack{TextField(tab=="Browse" ? "Search models or providers…" : "Search your models…",text:$search).wixalField().onSubmit{if tab=="Browse"{searchHub()}};if tab=="Browse"{Button(searchingHub ? "Searching…" : "Search Hugging Face"){searchHub()}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(searchingHub)}}
-            filters
-            if tab=="Browse"{browseList}else{yourModels}
+        VStack(alignment:.leading,spacing:18){
+            SettingsCard {
+                SettingsRow(title:selected.isEmpty ? "Choose a model" : modelTitle(current ?? ["name":selected]),detail:engine.modelConnectionLabel,scope:"All workspaces") {
+                    Button("Adjust context →"){NotificationCenter.default.post(name:.wixalNavigate,object:"Settings:Context & memory")}.buttonStyle(.plain)
+                }
+            }
+            QuietSettingsTabs(items:["Library","Discover","Downloads","Performance"],selection:$tab)
+            HStack { Text(tab=="Library" ? "\(installed.count) installed models" : tab=="Downloads" ? "\(jobs.count) download jobs" : tab=="Performance" ? "Measurements on this Mac" : "Public GGUF models").wixalFont(size:11).foregroundStyle(theme.muted);Spacer();Button("Refresh"){Task{await refresh()}}.disabled(operation);if loading{ProgressView().controlSize(.small)} }.wixalFont(size:11)
+            if tab=="Library" || tab=="Discover" {
+                HStack{TextField(tab=="Discover" ? "Search models or providers…" : "Search your models…",text:$search).wixalField().onSubmit{if tab=="Discover"{searchHub()}};if tab=="Discover"{Button(searchingHub ? "Searching…" : "Search"){searchHub()}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(searchingHub)}}
+                filters
+                if tab=="Discover"{browseList}else{yourModels;DisclosureGroup("Import existing models"){imports.padding(.top,12)}.wixalFont(size:12)}
+            } else if tab=="Downloads" {
+                if jobs.isEmpty{empty("No downloads",detail:"Find a model in Discover. Transfers stay available here while you use other pages.")}
+                ForEach(Array(jobs.enumerated()),id:\.offset){_,job in downloadCard(job)}
+            } else {
+                QuietSettingsTabs(items:["Benchmarks","Request usage"],selection:$performanceTab)
+                if performanceTab=="Benchmarks"{benchmarkControls;performance}else{PerformanceView(engine:engine,embedded:true)}
             }
             if !feedback.isEmpty{Text(feedback).wixalFont(size:11).foregroundStyle(theme.muted).textSelection(.enabled).accessibilityAddTraits(.updatesFrequently)}
             if let benchmark{HStack{ProgressView().controlSize(.small);Text("\(textValue(benchmark["name"])) · \(textValue(benchmark["phase"]))");Spacer();Button("Stop benchmark"){run("benchmark-cancel")}}.wixalFont(size:11).wixalCard()}
+            if tab != "Downloads", let job=jobs.first(where:{["queued","downloading","paused","failed"].contains(textValue($0["state"]))}) {
+                Button{tab="Downloads"}label:{HStack{Image(systemName:"arrow.down.circle");Text(textValue(job["name"])).lineLimit(1);Spacer();Text(textValue(job["state"]).capitalized);Image(systemName:"chevron.right")}.wixalFont(size:11).wixalCard()}.buttonStyle(.plain).accessibilityLabel("Open downloads")
+            }
+            DisclosureGroup("Local engine & hardware",isExpanded:$engineOpen){summary.padding(.top,12)}.wixalFont(size:12)
         }
+    }
+    private var benchmarkControls:some View {
+        VStack(alignment:.leading,spacing:10){
+            Text("Measure generation speed").wixalFont(size:13,weight:.medium)
+            Text("Choose Benchmark beside a model below. The first run includes loading; the second measures warm generation. This does not measure answer quality.").wixalFont(size:11).foregroundStyle(theme.muted)
+            ForEach(Array(installed.filter{($0["capabilities"] as? [String] ?? []).contains("completion")}.enumerated()),id:\.offset){_,model in
+                HStack{Text(modelTitle(model)).wixalFont(size:12);Spacer();Button("Benchmark"){run("benchmark-start",["name":textValue(model["name"])])}.disabled(locked || hasDownload).buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:11)}
+            }
+        }.wixalCard()
     }
     private var filters:some View {
         VStack(alignment:.leading,spacing:10){
@@ -171,7 +196,7 @@ struct ModelsView:View {
         do{filterData=try await engine.call("model-hf-filters") as? [String:Any] ?? [:];filterError=""}catch{filterError=error.localizedDescription}
     }
     private var additionalFilters:some View {
-        VStack(alignment:.leading,spacing:16){Text("More filters").wixalFont(size:14,weight:.medium);parameterPicker;sizePicker;fitPicker;HStack{Button("Reset"){parameters="all";size="all";fit="all"};Spacer();Button("Done"){moreFiltersOpen=false;if tab=="Browse"{searchHub()}}}}.padding(16).frame(width:300).background(theme.panel)
+        VStack(alignment:.leading,spacing:16){Text("More filters").wixalFont(size:14,weight:.medium);parameterPicker;sizePicker;fitPicker;HStack{Button("Reset"){parameters="all";size="all";fit="all"};Spacer();Button("Done"){moreFiltersOpen=false;if tab=="Discover"{searchHub()}}}}.padding(16).frame(width:300).background(theme.panel)
     }
     private var parameterPicker:some View{filterPicker("Parameters",value:$parameters,options:[("all","Any model size"),("2","Under 2B"),("8","2B–8B"),("large","Over 8B")])}
     private var sizePicker:some View{filterPicker("Download / disk size",value:$size,options:[("all","Any file size"),("2","Under 2 GB"),("5","Under 5 GB"),("10","Under 10 GB"),("20","Under 20 GB")])}
@@ -226,7 +251,7 @@ struct ModelsView:View {
         let name=textValue(file["name"]),present=installed.contains{textValue($0["name"])==name},queued=jobs.contains{textValue($0["name"])==name && ["queued","downloading","paused","failed"].contains(textValue($0["state"]))}
         return VStack(alignment:.leading,spacing:7){
             HStack{VStack(alignment:.leading,spacing:4){Text(textValue(file["file"])).wixalFont(size:12).textSelection(.enabled);Text("\(modelBytes(file["size"])) · \(textValue(file["license"]))").wixalFont(size:11).foregroundStyle(theme.muted)};Spacer();Button(present ? "Installed" : queued ? "In your models" : "Download"){
-                if queued{tab="Your models"}else{tab="Your models";run("model-pull",["repo":textValue(file["repo"]),"file":textValue(file["file"]),"revision":textValue(file["revision"])])}
+                if queued{tab="Downloads"}else{tab="Downloads";run("model-pull",["repo":textValue(file["repo"]),"file":textValue(file["file"]),"revision":textValue(file["revision"])])}
             }.buttonStyle(WixalButtonStyle(outlined:true)).disabled(present || (!queued && locked))}
             memoryLine(file)
         }.padding(.vertical,6)
@@ -235,37 +260,34 @@ struct ModelsView:View {
         HStack(alignment:.center,spacing:14){
             VStack(alignment:.leading,spacing:5){Text(textValue(model["displayName"]).isEmpty ? textValue(model["name"]) : textValue(model["displayName"])).wixalFont(size:13,weight:.medium).textSelection(.enabled);Text("\(textValue(model["publisher"]).isEmpty ? "Unknown provider" : textValue(model["publisher"])) · \(parameterLabel(model)) · \(typeLabel(model))").wixalFont(size:11).foregroundStyle(theme.muted)}.frame(maxWidth:.infinity,alignment:.leading)
             VStack(alignment:.trailing,spacing:3){Text(modelBytes(sizeValue)).wixalFont(size:12);Text(sizeLabel).wixalFont(size:11).foregroundStyle(theme.muted)}
-            Button(actionTitle,action:action).buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:12)
+            Button(actionTitle,action:action).buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:12).disabled(tab=="Library" && (locked || textValue(model["name"])==selected))
         }
     }
     private func memoryLine(_ model:[String:Any])->some View {
         let info=model["fit"] as? [String:Any] ?? [:]
         return Text(modelNumber(info["required"])>0 ? "Estimated model RAM \(modelRAM(info["required"])) · Recommended Mac RAM \(modelRAM(info["recommended"])) · \(Int(modelNumber(info["context"]))/1024)k context · \((info["fits"] as? Bool ?? false) ? "Estimated fit" : "May exceed this Mac’s budget")" : "RAM requirement unknown until file metadata is available").wixalFont(size:11).foregroundStyle(theme.muted).help("Estimate includes weights, context cache and overhead; recommended total RAM reserves 25% for macOS. Actual memory depends on the model and runtime.")
     }
+    private func modelTitle(_ model:[String:Any])->String{textValue(model["displayName"]).isEmpty ? textValue(model["name"]) : textValue(model["displayName"])}
     private func parameterLabel(_ model:[String:Any])->String{let count=modelNumber(model["parameters"]);return count>0 ? String(format:"%.1fB parameters",count/1e9) : "Parameters unknown"}
     private func typeLabel(_ model:[String:Any])->String{let task=textValue(model["pipelineTag"]);return records(filterData["tasks"]).first{textValue($0["id"])==task}.map{textValue($0["label"])} ?? (task.isEmpty ? "Type not listed" : task)}
     private var yourModels:some View {
-        VStack(alignment:.leading,spacing:12){
-            let pending=jobs.filter{job in textValue(job["state"]) != "completed" && !installed.contains{model in textValue(model["name"])==textValue(job["name"])}}
-            // Keep transfers visible even when an installed-model filter excludes their metadata.
-            let downloads=pending,models=filtered(installed)
-            Text("\(models.count) installed · \(downloads.count) download jobs").wixalFont(size:11).foregroundStyle(theme.muted)
-            if models.isEmpty && downloads.isEmpty{empty("No matching models",detail:"Browse Hugging Face to download a model, import an existing model, or clear the filters.")}
-            ForEach(Array(downloads.enumerated()),id:\.offset){_,job in downloadCard(job)}
-            ForEach(Array(models.enumerated()),id:\.offset){_,model in modelCard(model)}
+        VStack(alignment:.leading,spacing:0){
+            let models=filtered(installed)
+            if models.isEmpty{empty("No matching models",detail:"Find a model in Discover, import an existing model below, or clear the filters.")}
+            ForEach(Array(models.enumerated()),id:\.offset){_,model in modelCard(model);Divider().overlay(theme.line)}
         }
     }
     private func modelCard(_ model:[String:Any])->some View {
         let name=textValue(model["name"]),caps=model["capabilities"] as? [String] ?? [],saved=score(model)
         return VStack(alignment:.leading,spacing:10){
-            compactHeader(model,sizeValue:model["size"],sizeLabel:"on disk",action:{run(embeddingOnly(name) ? "memory-semantic" : "model-use",["name":name,"model":name])},actionTitle:selected==name ? "Selected" : embeddingOnly(name) ? "Use for memory" : "Use model").disabled(locked || selected==name)
-            memoryLine(model)
-            HStack(spacing:14){
-                if let saved{Text("\(String(format:"%.1f",modelNumber(saved["tokensPerSecond"]))) tok/s measured").foregroundStyle(theme.muted)}
-                Button("Benchmark"){run("benchmark-start",["name":name])}.disabled(locked || hasDownload || !caps.contains("completion"))
-                Spacer();Button("Delete model…",role:.destructive){deleting=name}.disabled(locked || hasDownload).accessibilityLabel("Delete model \(name)")
-            }.buttonStyle(.plain).wixalFont(size:11)
-        }.wixalCard()
+            compactHeader(model,sizeValue:model["size"],sizeLabel:"on disk",action:{run(embeddingOnly(name) ? "memory-semantic" : "model-use",["name":name,"model":name])},actionTitle:selected==name ? "Selected" : embeddingOnly(name) ? "Use for memory" : "Use model")
+            HStack{if let saved{Text("\(String(format:"%.1f",modelNumber(saved["tokensPerSecond"]))) tok/s measured").foregroundStyle(theme.muted)};Spacer();Button(inspected==name ? "Hide details" : "Details"){inspected=inspected==name ? "" : name}.buttonStyle(.plain).accessibilityLabel("Details for \(name)")}.wixalFont(size:11)
+            if inspected==name {
+                memoryLine(model)
+                Text(name).wixalFont(size:10).foregroundStyle(theme.muted).textSelection(.enabled)
+                HStack(spacing:14){Button("Benchmark"){performanceTab="Benchmarks";tab="Performance";run("benchmark-start",["name":name])}.disabled(locked || hasDownload || !caps.contains("completion"));Spacer();Button("Delete model…",role:.destructive){deleting=name}.disabled(locked || hasDownload).accessibilityLabel("Delete model \(name)")}.buttonStyle(.plain).wixalFont(size:11)
+            }
+        }.padding(.vertical,14)
     }
     private func filtered(_ rows:[[String:Any]],catalog:Bool=false)->[[String:Any]] {
         rows.filter {model in
@@ -276,13 +298,6 @@ struct ModelsView:View {
             let fileMatch=catalog ? (size=="all" && fit=="all" || !matchingFiles(model).isEmpty) : (size=="all" || bytes>0 && bytes<(Double(size) ?? 0)*1e9) && (fit=="all" || info["fits"] as? Bool == true)
             return (search.isEmpty || needle.localizedCaseInsensitiveContains(search)) && (providerValue.isEmpty || provider.localizedCaseInsensitiveCompare(providerValue) == .orderedSame) && (capability=="all" || task==capability) && parameterMatch && fileMatch
         }.sorted{a,b in if sort=="size"{return modelNumber(a["size"])<modelNumber(b["size"])};if sort=="parameters"{return modelNumber(a["parameters"])<modelNumber(b["parameters"])};return textValue(a["displayName"]).localizedStandardCompare(textValue(b["displayName"])) == .orderedAscending}
-    }
-    private var engineTab:some View {
-        VStack(alignment:.leading,spacing:22){
-            summary
-            WixalSection(title:"Import models",detail:"Bring an existing local model into Wixal’s managed library."){imports}
-            DisclosureGroup("Saved benchmarks",isExpanded:$performanceOpen){performance.padding(.top,12)}.wixalFont(size:12)
-        }
     }
     private var summary:some View {
         VStack(alignment:.leading,spacing:20){
@@ -336,7 +351,7 @@ struct ModelsView:View {
     private var imports:some View {
         VStack(alignment:.leading,spacing:12){
             Text("Import an existing model. Wixal verifies the model files, copies them into this library and selects chat models when ready. Embedding models can be selected for memory retrieval.").wixalFont(size:11).foregroundStyle(theme.muted).lineSpacing(4)
-            let rows=engine.imports.filter{search.isEmpty || textValue($0["name"]).localizedCaseInsensitiveContains(search)}
+            let rows=engine.imports
             if rows.isEmpty{empty("No models available to import",detail:"Wixal checks your original Wixal and Ollama model folders.")}
             ForEach(Array(rows.enumerated()),id:\.offset){_,item in HStack{VStack(alignment:.leading,spacing:6){Text(textValue(item["name"])).wixalFont(size:12,weight:.medium);Text(textValue(item["source"])).wixalFont(size:9).foregroundStyle(theme.muted).lineLimit(2)};Spacer();Button("Import & use →"){run("model-import",item,success:"Imported and selected \(textValue(item["name"])).")}.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:11).disabled(locked || hasDownload)}.wixalCard()}
         }

@@ -374,8 +374,19 @@ class Service:
                       and not draft.get("attachments") and current.get("title")=="New conversation")
             if not reusable:self.store.new_session()
         elif method == "session-select":
-            selected = next(s for s in self.store.data["sessions"] if s["id"]==params["id"] and s.get("projectId")==self.store.data["activeProject"])
+            # Validate the complete destination before changing project/session.
+            # Older callers omit projectId and remain scoped to activeProject.
+            project_id = params.get("projectId", self.store.data["activeProject"])
+            selected = next((s for s in self.store.data["sessions"]
+                             if s["id"] == params.get("id") and s.get("projectId") == project_id), None)
+            if selected is None:
+                raise ValueError("Unknown conversation in the selected project")
+            if project_id is not None and not any(p["id"] == project_id for p in self.store.data["projects"]):
+                raise ValueError("Unknown project")
             await self.tools.close()
+            if project_id != self.store.data["activeProject"]:
+                await self.mcp.close()
+            self.store.data["activeProject"] = project_id
             self.store.data["activeSession"] = selected["id"]
             self.store.data["mode"] = selected.get("mode", self.store.data["mode"])
         elif method == "session-archive":

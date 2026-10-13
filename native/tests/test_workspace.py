@@ -35,6 +35,35 @@ class WorkspaceTests(unittest.IsolatedAsyncioTestCase):
         await self.service.dispatch('session-new',dict(mode='chat'))
         self.assertNotEqual(self.service.store.session()['id'],attached)
 
+    async def test_cross_project_conversation_selection_is_atomic_and_keeps_drafts(self):
+        original_project = self.service.store.data['activeProject']
+        original_session = self.service.store.session()['id']
+        await self.service.dispatch('draft-save', dict(sessionId=original_session, text='Exact original draft', attachments=[]))
+        other = Path(self.temp.name) / 'other-project'
+        other.mkdir()
+        await self.service.dispatch('project-add', dict(root=str(other)))
+        other_project = self.service.store.data['activeProject']
+        other_session = self.service.store.session()['id']
+        before_count = len(self.service.store.data['sessions'])
+        for destination in [dict(id='missing', projectId=original_project),
+                            dict(id=original_session, projectId=other_project),
+                            dict(id=original_session)]:
+            with self.assertRaises(ValueError):
+                await self.service.dispatch('session-select', destination)
+            self.assertEqual(self.service.store.data['activeProject'], other_project)
+            self.assertEqual(self.service.store.data['activeSession'], other_session)
+        await self.service.dispatch('session-select', dict(id=original_session, projectId=original_project))
+        self.assertEqual(self.service.store.data['activeProject'], original_project)
+        self.assertEqual(self.service.store.session()['draft']['text'], 'Exact original draft')
+        self.assertEqual(len(self.service.store.data['sessions']), before_count)
+        await self.service.dispatch('session-select', dict(id=original_session))
+        await self.service.dispatch('project-select', dict(id=None))
+        personal_session = self.service.store.session()['id']
+        await self.service.dispatch('session-select', dict(id=original_session, projectId=original_project))
+        await self.service.dispatch('session-select', dict(id=personal_session, projectId=None))
+        self.assertIsNone(self.service.store.data['activeProject'])
+        self.assertEqual(self.service.store.data['activeSession'], personal_session)
+
     async def test_create_project_uses_managed_folder_and_rejects_duplicates_and_traversal(self):
         await self.service.dispatch('project-create',dict(name='My project'))
         expected=self.service.store.directory/'Projects'/'My project'

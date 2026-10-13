@@ -66,4 +66,14 @@ check(!reopened[runB].submission.isSubmitting,"Relaunch must not automatically r
 drafts[runB].finish(pendingB.id)
 check(drafts[runB].text.isEmpty && drafts.texts[runB]==nil,"Acknowledged text must be removed from the persisted snapshot")
 check(RunGuidanceDrafts.key(owner:"a",run:"bc") != RunGuidanceDrafts.key(owner:"ab",run:"c"),"Owner and run keys must not collide")
+// Persisted navigation preferences must tolerate old/corrupt values and keep
+// presentation destinations separate from the two engine session modes.
+check(WorkspaceArea.destination("Chat") == .chats,"Legacy Chat route must remain valid")
+check(WorkspaceArea.destination("Cybersecurity") == .cybersecurity,"Security is a presentation workspace")
+check(WorkspaceArea.destination("Files") == nil,"Project destination must not replace selected workspace")
+check(SidebarPreferences.width(.nan)==248,"Invalid saved width must recover")
+check(SidebarPreferences.width(100)==216 && SidebarPreferences.width(900)==320,"Saved width must clamp")
+check(SidebarPreferences.pins("not-json").isEmpty,"Corrupt pins must recover without deleting sessions")
+check(SidebarPreferences.pins("[\"a\",\"a\",\"\",\"b\"]")==["a","b"],"Pin IDs must be unique, ordered and valid")
+check(SidebarPreferences.pins(SidebarPreferences.encodePins(["project-session","personal-session"])) == ["project-session","personal-session"],"Pins must round trip without changing identity")
 print("{\"status\":\"passed\",\"checks\":\(checks),\"implementation\":\"production WixalInteractions submission and guidance state\"}")

@@ -15,8 +15,11 @@ struct MemoryDrawer:View {
     @ViewState<[[String:Any]]> private var found=[]
     @ViewState<Bool> private var reviewing=false
     @ViewState<String> private var forgetting=""
+    @ViewState<String> private var draftNamespace=""
     private var owner:String{let account=engine.state["account"] as? [String:Any] ?? [:];return account["signedIn"] as? Bool == true ? "account:"+textValue((account["profile"] as? [String:Any])?["id"]) : "guest"}
-    private func draftKey(_ scope:String)->String{owner+":"+textValue(engine.state["activeProject"])+":"+scope}
+    // Capture identity on mount: disappearing after a workspace/account switch must
+    // not move the old editor text into the newly active workspace's draft.
+    private func draftKey(_ scope:String)->String{draftNamespace+":"+scope}
     private var policy:[String:Any]{engine.memoryStatus["policy"] as? [String:Any] ?? [:]}
     private var suggestions:[[String:Any]]{records(engine.memoryStatus["suggestions"]).filter{textValue($0["scope"]) == (scope=="Project" ? "project" : "global")}}
     private var sources:[[String:Any]]{records(engine.contextInfo["memorySources"])}
@@ -38,7 +41,7 @@ struct MemoryDrawer:View {
                 }.padding(20)
             }
         }.foregroundStyle(theme.text)
-        .onAppear{global=engine.activeMemory;if engine.project==nil && scope != "Global"{scope="Global"}else{restoreDraft(scope)};engine.refreshMemory()}
+        .onAppear{draftNamespace=owner+":"+textValue(engine.state["activeProject"]);global=engine.activeMemory;if engine.project==nil && scope != "Global"{scope="Global"}else{restoreDraft(scope)};engine.refreshMemory()}
         .onChange(of:engine.activeMemory){_,value in global=value}
         .onChange(of:scope){old,new in storeDraft(old);restoreDraft(new);found=[]}
         .onDisappear{storeDraft(scope)}

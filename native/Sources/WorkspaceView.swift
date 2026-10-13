@@ -39,7 +39,7 @@ struct WorkspaceView: View {
     @ViewState<Bool> private var palette = false
     private var appearance: String {
         let stored = textValue((engine.state["ui"] as? [String:Any])?["theme"])
-        return ["paper":"Paper","midnight":"Midnight","forest":"Forest","sakura":"Sakura"][stored] ?? "Sakura"
+        return WixalPalette.resolve(stored).name
     }
     private var ui:[String:Any]{engine.state["ui"] as? [String:Any] ?? [:]}
     private var reduceMotion:Bool{systemReduceMotion || (ui["reduceMotion"] as? Bool ?? false)}
@@ -154,7 +154,7 @@ struct WorkspaceView: View {
         .environment(\.wixalTheme,theme).environment(\.wixalTextSize,CGFloat(ui["textSize"] as? Int ?? 13)).tint(theme.accent).preferredColorScheme(theme.light ? .light : .dark)
     }
     private func updateIcon(){
-        let saved=textValue(ui["appIcon"]);let variant = !saved.isEmpty && saved != "theme" ? saved : ["Paper":"pearl","Midnight":"midnight","Forest":"copper","Sakura":"sakura"][appearance] ?? "sakura"
+        let saved=textValue(ui["appIcon"]);let variant = WixalPalette.iconVariants.contains(saved) ? saved : theme.icon
         if let url=Bundle.main.url(forResource:variant,withExtension:"png",subdirectory:"icon-variants"),let image=NSImage(contentsOf:url){NSApp.applicationIconImage=image}
     }
     private var titlebar: some View {

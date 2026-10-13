@@ -18,6 +18,7 @@ from . import conversation, workspace
 from .model_manager import ModelManager
 from .integrations import NativeIntegrations
 from .requests import Requests
+from .preferences import THEMES, APP_ICONS
 
 
 def ipc_socket_path(directory):
@@ -61,11 +62,11 @@ class Service:
         if migration.get("source") and self.store.data.get("appearanceVersion",0)<2:
             try:
                 appearance = json.loads(Path(migration["source"]).read_text()).get("ui",{})
-                if appearance.get("theme") in ("sakura","midnight","paper","forest"):
+                if appearance.get("theme") in THEMES:
                     self.store.data["ui"]["theme"] = appearance["theme"]
                 for key in ("textSize","reduceMotion","launchAnimation","launchSound","sidebarCollapsed","appIcon"):
                     value=appearance.get(key)
-                    if key=="textSize" and value in (13,15,17) or key in ("reduceMotion","launchAnimation","launchSound","sidebarCollapsed") and isinstance(value,bool) or key=="appIcon" and value in ("theme","sakura","midnight","pearl","copper"):
+                    if key=="textSize" and type(value) is int and value in (11,13,15,17) or key in ("reduceMotion","launchAnimation","launchSound","sidebarCollapsed") and isinstance(value,bool) or key=="appIcon" and value in APP_ICONS:
                         self.store.data["ui"][key]=value
                 self.store.data["appearanceImported"] = True
                 self.store.data["appearanceVersion"] = 2

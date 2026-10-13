@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from .storage import now
 from .conversation import attachments
+from .preferences import THEMES, APP_ICONS
 
 
 def import_workspace(store, source, *, preview=False, preserve_preferences=False, expected_digest=None):
@@ -140,7 +141,7 @@ def import_workspace(store, source, *, preview=False, preserve_preferences=False
         if isinstance(legacy.get("autoSummary"),bool):candidate["autoSummary"]=legacy["autoSummary"]
         ui=legacy.get("ui",{})
         if isinstance(ui,dict):
-            choices={"theme":("sakura","midnight","forest","paper"),"textSize":(11,13,15,17),"appIcon":("theme","sakura","midnight","pearl","copper")}
+            choices={"theme":THEMES,"textSize":(11,13,15,17),"appIcon":APP_ICONS}
             for key,value in ui.items():
                 if key in choices and value in choices[key] or key in ("reduceMotion","launchAnimation","launchSound","sidebarCollapsed") and isinstance(value,bool):candidate["ui"][key]=value
         candidate["appearanceVersion"]=2

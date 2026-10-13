@@ -122,32 +122,8 @@ struct SettingsView: View {
         }
     }
     private var appearance: some View {
-        Group {
-            WixalSection(title:"Theme") { LazyVGrid(columns:[GridItem(.adaptive(minimum:110),spacing:10)],spacing:10) { ForEach(["Sakura","Midnight","Forest","Paper"],id:\.self) { themeCard($0) } }.disabled(appearanceLocked) }
-            WixalSection(title:"Reading & motion") {
-                SettingsCard {
-                    SettingsRow(title:"Text size",detail:"Applies to navigation, forms, messages and the terminal.") { Picker("Text size",selection:Binding(get:{ui["textSize"] as? Int ?? 13},set:{saveUI(["textSize":$0])})) { Text("Default").tag(13); Text("Large").tag(15); Text("Extra large").tag(17) }.labelsHidden() }
-                    Divider()
-                    SettingsRow(title:"Reduce motion",detail:systemReduceMotion ? "Your Mac currently requires reduced motion, including when this switch is off." : "Turn off interface animations. Your Mac’s preference also applies.") { Toggle("Reduce motion",isOn:bool("reduceMotion")).labelsHidden().toggleStyle(.switch).controlSize(.small) }
-                }.disabled(appearanceLocked)
-            }
-            WixalSection(title:"App icon",detail:"Changes the running Dock icon. Selecting an icon below turns theme matching off.") {
-                SettingsRow(title:"Match icon to theme",detail:"Sakura → Sakura, Midnight → Midnight, Paper → Pearl, Forest → Copper.") { Toggle("Match icon to theme",isOn:Binding(get:{textValue(ui["appIcon"]).isEmpty || textValue(ui["appIcon"]) == "theme"},set:{saveUI(["appIcon":$0 ? "theme" : iconVariant])})).labelsHidden().toggleStyle(.switch).controlSize(.small) }.disabled(appearanceLocked)
-                LazyVGrid(columns:[GridItem(.adaptive(minimum:90),spacing:10)],spacing:10) { ForEach(["sakura","midnight","pearl","copper"],id:\.self) { iconCard($0) } }.disabled(appearanceLocked)
-            }
-            WixalSection(title:"Launch") {
-                SettingsCard {
-                    SettingsRow(title:"Launch animation",detail:"A short Wixal wordmark reveal. Reduced motion also applies.") { Toggle("Launch animation",isOn:bool("launchAnimation",default:true)).labelsHidden().toggleStyle(.switch).controlSize(.small) }
-                    Divider()
-                    SettingsRow(title:"Launch sound",detail:"Play the quiet Wixal chime when the app opens.") { Toggle("Launch sound",isOn:bool("launchSound",default:true)).labelsHidden().toggleStyle(.switch).controlSize(.small) }
-                }.disabled(appearanceLocked)
-                ViewThatFits(in:.horizontal) { HStack { launchButtons }; VStack(alignment:.leading) { launchButtons } }
-            }
-        }
-    }
-    @ViewBuilder private var launchButtons: some View {
-        Button("Preview launch intro",action:previewLaunch).buttonStyle(WixalButtonStyle(outlined:true))
-        Button("Reset appearance…") { resetAppearance=true }.buttonStyle(.plain).disabled(appearanceLocked)
+        QuietAppearanceSettings(ui:ui,locked:appearanceLocked,systemReduceMotion:systemReduceMotion,
+            save:saveUI,previewLaunch:previewLaunch,reset:{resetAppearance=true})
     }
     private var context: some View {
         Group {
@@ -279,21 +255,7 @@ struct SettingsView: View {
     private func save(_ method: String, _ params: [String:Any]) { settings.perform(engine,method,params) }
     private func saveUI(_ value: [String:Any]) { save("settings",["ui":value]) }
     private func bool(_ key: String, default fallback: Bool = false) -> Binding<Bool> { Binding(get:{ui[key] as? Bool ?? fallback},set:{saveUI([key:$0])}) }
-    private var iconVariant: String { let saved=textValue(ui["appIcon"]); return !saved.isEmpty && saved != "theme" ? saved : ["paper":"pearl","forest":"copper","midnight":"midnight","sakura":"sakura"][textValue(ui["theme"])] ?? "sakura" }
-    private func themeCard(_ name: String) -> some View {
-        let preview=WixalTheme(name:name), selected=textValue(ui["theme"]) == name.lowercased()
-        return Button { saveUI(["theme":name.lowercased()]) } label: {
-            VStack(alignment:.leading,spacing:9) {
-                HStack(spacing:0) { preview.sidebar.frame(width:14); VStack(alignment:.leading,spacing:6) { RoundedRectangle(cornerRadius:2).fill(preview.accent).frame(width:32,height:4); RoundedRectangle(cornerRadius:2).fill(preview.line).frame(height:3) }.padding(10).frame(maxWidth:.infinity).background(preview.background) }.frame(height:46).clipShape(RoundedRectangle(cornerRadius:4))
-                Text(name).wixalFont(size:11,weight:.medium)
-            }.padding(10).background(colours.panel,in:RoundedRectangle(cornerRadius:7)).overlay(RoundedRectangle(cornerRadius:7).stroke(selected ? colours.accent : colours.line,lineWidth:selected ? 2 : 1))
-        }.buttonStyle(.plain).accessibilityLabel("\(name) theme").accessibilityValue(selected ? "Selected" : "Not selected")
-    }
-    private func iconCard(_ variant: String) -> some View {
-        Button { saveUI(["appIcon":variant]) } label: {
-            VStack(spacing:8) { if let url=Bundle.main.url(forResource:variant,withExtension:"png",subdirectory:"icon-variants"),let image=NSImage(contentsOf:url) { Image(nsImage:image).resizable().scaledToFit().frame(width:52,height:52) }; Text(variant.capitalized).wixalFont(size:11) }.padding(10).frame(maxWidth:.infinity).background(colours.panel,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).stroke(iconVariant == variant ? colours.accent : colours.line,lineWidth:iconVariant == variant ? 2 : 1))
-        }.buttonStyle(.plain).accessibilityLabel("\(variant.capitalized) app icon").accessibilityValue(iconVariant == variant ? "Selected" : "Not selected")
-    }
+
 }
 
 private struct SettingsSkillCard: View {

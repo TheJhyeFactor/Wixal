@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+from .preferences import THEMES
 
 
 class Keychain:
@@ -92,7 +93,7 @@ def profile_memory(value):
 
 def preferences(data):
     ui=data.get('ui',{})
-    if ui.get('theme') not in ('sakura','midnight','forest','paper') or ui.get('textSize') not in (13,15,17) or not isinstance(ui.get('reduceMotion'),bool) or not isinstance(ui.get('sidebarCollapsed'),bool): raise ValueError('Invalid workspace preset.')
+    if ui.get('theme') not in THEMES or (type(ui.get('textSize')) is not int or ui.get('textSize') not in (11,13,15,17)) or not isinstance(ui.get('reduceMotion'),bool) or not isinstance(ui.get('sidebarCollapsed'),bool): raise ValueError('Invalid workspace preset.')
     if data.get('contextSize') not in (4096,8192,16384,32768,65536,131072) or data.get('mode') not in ('chat','agent') or not isinstance(data.get('autoSummary'),bool): raise ValueError('Invalid workspace preset.')
     return dict(ui={key:ui[key] for key in ('theme','textSize','reduceMotion','sidebarCollapsed')},contextSize=min(32768,data['contextSize']),mode=data['mode'],autoSummary=data['autoSummary'])
 

@@ -53,7 +53,7 @@ struct TerminalPanel: NSViewRepresentable {
         return view
     }
     func updateNSView(_ view: LocalProcessTerminalView, context: Context) {apply(view)}
-    private func apply(_ view:LocalProcessTerminalView){view.font=NSFont.monospacedSystemFont(ofSize:textSize,weight:.regular);view.nativeForegroundColor=NSColor(theme.text);view.nativeBackgroundColor=NSColor(theme.background)}
+    private func apply(_ view:LocalProcessTerminalView){view.font=NSFont.monospacedSystemFont(ofSize:textSize,weight:.regular);view.nativeForegroundColor=NSColor(theme.text);view.nativeBackgroundColor=NSColor(theme.background);view.caretColor=NSColor(theme.accent)}
     // The scene owns the shell. Hiding the panel only detaches its view.
     static func dismantleNSView(_ view: LocalProcessTerminalView, coordinator: ()) {}
 }

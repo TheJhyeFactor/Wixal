@@ -1,10 +1,12 @@
 """Appearance validation is shared by idle and in-task settings updates."""
 
 UI_DEFAULTS=dict(theme='sakura',textSize=13,reduceMotion=False,launchAnimation=True,launchSound=True,sidebarCollapsed=False,appIcon='theme')
+THEMES=('pearl','cloud','paper','dune','graphite','sakura','forest','midnight','aurora','obsidian')
+APP_ICONS=('theme',*THEMES,'copper')
 
 def validate_ui(ui):
     if not isinstance(ui,dict) or set(ui)-set(UI_DEFAULTS):raise ValueError('Invalid appearance settings')
-    for key,choices in (('theme',('sakura','midnight','paper','forest')),('textSize',(11,13,15,17)),('appIcon',('theme','sakura','midnight','pearl','copper'))):
+    for key,choices in (('theme',THEMES),('textSize',(11,13,15,17)),('appIcon',APP_ICONS)):
         if key in ui and (ui[key] not in choices or key=='textSize' and type(ui[key]) is not int):raise ValueError('Invalid '+key+' preference')
     for key in ('reduceMotion','launchAnimation','launchSound','sidebarCollapsed'):
         if key in ui and not isinstance(ui[key],bool):raise ValueError('Invalid interface preference')

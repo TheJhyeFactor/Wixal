@@ -4,19 +4,22 @@ extension Color {
     init(wixal hex: UInt32) { self.init(red: Double((hex >> 16) & 255)/255,green:Double((hex >> 8) & 255)/255,blue:Double(hex & 255)/255) }
 }
 struct WixalTheme {
-    let name: String
-    var light: Bool { name == "Paper" }
-    private func colour(_ sakura:UInt32,_ paper:UInt32,_ midnight:UInt32,_ forest:UInt32)->Color { Color(wixal: name == "Paper" ? paper : name == "Midnight" ? midnight : name == "Forest" ? forest : sakura) }
-    var background: Color { colour(0x17181b,0xf3f2ef,0x17181b,0x171b19) }
-    var sidebar: Color { colour(0x1b1c20,0xebe9e4,0x1b1d20,0x1b201e) }
-    var panel: Color { colour(0x1d1e22,0xfaf9f6,0x1d1f22,0x1d2220) }
-    var raised: Color { colour(0x232428,0xfffefa,0x232528,0x232926) }
-    var inset: Color { colour(0x111215,0xf0eee9,0x111215,0x111613) }
-    var line: Color { colour(0x303136,0xdcd9d2,0x303236,0x303633) }
-    var text: Color { colour(0xe8e7e5,0x2f2d2a,0xe5e6e8,0xe5e8e7) }
-    var muted: Color { colour(0x96979e,0x4b4945,0x96999e,0x969e9a) }
-    var accent: Color { colour(0xe9a5bd,0x423a2e,0xafbcdf,0xafdfcb) }
-    var selected: Color { accent.opacity(light ? 0.055 : 0.09) }
+    let palette: WixalPalette
+    init(name: String) { palette = WixalPalette.resolve(name) }
+    var name: String { palette.name }
+    var light: Bool { palette.light }
+    var icon: String { palette.icon }
+    var background: Color { Color(wixal:palette.background) }
+    var sidebar: Color { Color(wixal:palette.sidebar) }
+    var panel: Color { Color(wixal:palette.panel) }
+    var raised: Color { Color(wixal:palette.raised) }
+    var inset: Color { Color(wixal:palette.inset) }
+    var line: Color { Color(wixal:palette.line) }
+    var text: Color { Color(wixal:palette.text) }
+    var muted: Color { Color(wixal:palette.muted) }
+    var accent: Color { Color(wixal:palette.accent) }
+    var secondaryAccent: Color { Color(wixal:palette.secondary) }
+    var selected: Color { accent.opacity(light ? 0.08 : 0.11) }
 }
 private struct WixalThemeKey: EnvironmentKey { static let defaultValue = WixalTheme(name:"Sakura") }
 extension EnvironmentValues { var wixalTheme: WixalTheme { get {self[WixalThemeKey.self]} set {self[WixalThemeKey.self]=newValue} } }

@@ -30,7 +30,7 @@ struct SetupView: View {
                     HStack { Button("Create account / sign in") { accountPresented = true }; Text(signedIn ? "Signed in" : "Guest workspace").foregroundStyle(theme.muted) }
                 }
                 step("02", "Choose your theme") {
-                    HStack(spacing: 10) { ForEach(["sakura", "midnight", "forest", "paper"], id: \.self) { name in Button { engine.action("settings", ["ui": ["theme": name]]) } label: { VStack(spacing: 8) { RoundedRectangle(cornerRadius: 6).fill(WixalTheme(name: name.capitalized).background).overlay(RoundedRectangle(cornerRadius: 6).stroke(WixalTheme(name: name.capitalized).accent, lineWidth: 2)).frame(height: 50); Text(name.capitalized) }.padding(10).frame(maxWidth: .infinity).background(theme.panel, in: RoundedRectangle(cornerRadius: 8)) }.buttonStyle(.plain) } }
+                    LazyVGrid(columns:[GridItem(.adaptive(minimum:110),spacing:10)],spacing:10) { ForEach(WixalPalette.all,id:\.id) { palette in Button { engine.action("settings", ["ui": ["theme": palette.id]]) } label: { VStack(spacing: 8) { RoundedRectangle(cornerRadius: 6).fill(WixalTheme(name: palette.name).background).overlay(RoundedRectangle(cornerRadius: 6).stroke(WixalTheme(name: palette.name).accent, lineWidth: 2)).frame(height: 50); Text(palette.name) }.padding(10).frame(maxWidth: .infinity).background(theme.panel, in: RoundedRectangle(cornerRadius: 8)) }.buttonStyle(.plain) } }
                 }
                 step("03", "Get ready to work") {
                     Text(engine.modelConnectionLabel).foregroundStyle(theme.muted)

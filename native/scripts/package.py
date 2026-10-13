@@ -62,7 +62,7 @@ destination.parent.mkdir(parents=True,exist_ok=True)
 staging=Path(tempfile.mkdtemp(prefix="wixal-native-package-",dir=destination.parent))
 app=staging/app.name
 
-source_paths=sorted(list((native/"Sources").rglob("*.swift"))+list((native/"ActivitySources").rglob("*.swift"))+list((native/"InteractionSources").rglob("*.swift"))+list((native/"MarkdownSources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))+list((native/"engine/wixal/resources").rglob("*.json"))+list((native/"engine/wixal/resources").rglob("*.md"))+[native/"Package.swift",native/"Package.resolved",native/"requirements-build.txt",Path(__file__).resolve()])
+source_paths=sorted(list((native/"Sources").rglob("*.swift"))+list((native/"ActivitySources").rglob("*.swift"))+list((native/"InteractionSources").rglob("*.swift"))+list((native/"MarkdownSources").rglob("*.swift"))+list((native/"engine").rglob("*.py"))+list((native/"engine/wixal/resources").rglob("*.json"))+list((native/"engine/wixal/resources").rglob("*.md"))+list((native/"engine/wixal/resources").rglob("*.java"))+[native/"Package.swift",native/"Package.resolved",native/"requirements-build.txt",Path(__file__).resolve()])
 source_hashes={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest() for path in source_paths}
 
 def run(*args):
@@ -73,6 +73,7 @@ bin_path = Path(subprocess.check_output(["swift", "build", "--build-system", "na
 signing=["--codesign-identity",options.identity] if options.identity else []
 run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", *signing, "--name", "wixal-engine", "--paths", native/"engine",
     "--hidden-import", "wixal.tool_qualification", "--collect-all", "tuf", "--collect-all", "securesystemslib", "--collect-all", "cryptography", "--collect-all", "urllib3",
+    "--collect-all", "docx", "--collect-all", "reportlab",
     "--add-data", str(native/"engine/wixal/resources")+":wixal/resources", native/"engine/engine_main.py")
 if app.exists():
     shutil.rmtree(app)

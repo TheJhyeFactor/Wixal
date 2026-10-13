@@ -31,3 +31,17 @@ class InteractiveCommands(unittest.IsolatedAsyncioTestCase):
         self.accept=False;await self.service.dispatch('settings',dict(mode='chat'))
         result=await self.service.tools.execute('command_start',dict(command='python3',interactive=True),self.service.store.session()['id'])
         self.assertIn('User declined',result);self.assertEqual(self.service.tools.jobs,{})
+
+    async def test_passive_reads_report_quiet_process_without_killing_it(self):
+        tools=self.service.tools;sid=self.service.store.session()['id']
+        await self.service.dispatch('settings',dict(mode='chat'))
+        result=await tools.execute('command_start',dict(command="python3 -u -c 'import time; print(\"ready\",flush=True); time.sleep(10)'",timeout_seconds=12),sid)
+        args=dict(session_id=result['session_id'],wait_ms=50)
+        try:
+            for _ in range(30):
+                result=await tools.execute('command_read',args,sid)
+                if 'ready' in result['output']:break
+            for _ in range(4):result=await tools.execute('command_read',dict(args,wait_ms=0),sid)
+            self.assertEqual(result['progressState'],'no_new_output')
+            self.assertEqual(result['state'],'running');self.assertFalse(tools.jobs[args['session_id']].get('groupTerminated'))
+        finally:await tools.close(sid)

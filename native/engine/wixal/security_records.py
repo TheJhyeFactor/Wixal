@@ -143,15 +143,14 @@ class SecurityRecords:
         allowed=run.get('evidenceIds',[])
         rows=[r for r in self.runs if r['targetId']==run['targetId'] and r['status']=='completed' and (run['capability']!='planner' or r['capability'] not in ('analysis','research','planner')) and (not allowed or r['id'] in allowed)]
         if run.get('assignmentId'):
-            from .engagement_evidence import read
+            from .engagement_evidence import specialist_source
             engagement=self.engagements.get(run['engagementId'])
             assignment=self.engagements.record('securityAssignments',run['assignmentId'],engagement)
             rows=[]
             for reference in assignment['evidenceIds']:
-                record,value=read(self.engagements,engagement,reference)
-                source=self.engagements.record('securityRuns',record['source'],engagement)
-                if source['targetId']!=run['targetId'] or source['id'] not in allowed:raise ValueError('Assignment evidence identity changed')
-                rows.append(dict(source,result=value['result']))
+                source=specialist_source(self.engagements,engagement,reference,assignment['role'],run['targetId'])
+                if source['capability']!='retained_analysis' and source['id'] not in allowed:raise ValueError('Assignment evidence identity changed')
+                rows.append(source)
 
         # Prefer compact structured evidence, no recursive sources or repeated raw XML.
         context=[]
@@ -163,6 +162,9 @@ class SecurityRecords:
             encoded=json.dumps(result,ensure_ascii=False)
             if len(encoded)>6000:result=dict(excerpt=encoded[:6000],truncated=True)
             item=dict(runId=row['id'],name=row['name'],capability=row['capability'],result=result)
+            if row.get('sourceEvidenceId'):
+                item.update(evidenceId=row['sourceEvidenceId'],evidenceSha256=row['evidenceSha256'],externalAssertions=row.get('externalAssertions',False))
+                if row['capability']=='retained_analysis':item.pop('runId')
             size=len(json.dumps(item))
             if size>remaining:break
             context.insert(0,item);remaining-=size

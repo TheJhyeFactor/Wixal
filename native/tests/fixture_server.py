@@ -17,7 +17,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path=="/api/show":
             self.wfile.write(json.dumps(dict(capabilities=["completion","tools"],model_info={"fixture.context_length":8192})).encode());return
         messages=body.get("messages",[])
-        if any(m["role"]=="tool" for m in messages):
+        if not body.get('tools'):
+            rows=[dict(message=dict(role='assistant',content='Fixture analysis of supplied evidence. No target execution was performed.'),done=True)]
+        elif any(m["role"]=="tool" for m in messages):
             rows=[dict(message=dict(role="assistant",content="The tool returned its result. "),done=False),dict(message=dict(role="assistant",content="Task finished."),done=True)]
         else:
             rows=[dict(message=dict(role="assistant",content="I will save the smoke file. ",tool_calls=[dict(function=dict(name="write_file",arguments=dict(path="smoke.txt",content="native-agent-ok\n")))]),done=True)]

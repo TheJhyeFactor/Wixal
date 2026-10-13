@@ -7,9 +7,10 @@ CATEGORIES = ('files', 'commands', 'web', 'security', 'memory', 'external')
 PROJECT_TOOLS = {'list_files','read_file','search_files','write_file','edit_file','make_directory','run_command','delegate_task','verify_json'}
 
 def requires_project(name):
-    return name in PROJECT_TOOLS or name.startswith(('command_', 'network_', 'website_'))
+    return name in PROJECT_TOOLS or name.startswith(('command_', 'network_', 'website_', 'cyber_'))
 
 def category(name):
+    if name.startswith('cyber_'):return 'security'
     if name.startswith('addon_'):return 'security'
     if name.startswith('mcp_'): return 'external'
     if name.startswith(('website_', 'network_')) or name == 'security_tools': return 'security'
@@ -43,6 +44,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
         return [t for t in available if t['function']['name'] in chosen]
     if len(available) <= 8 and not load_name and not load_category: return available
     chosen = {'workspace_info', 'recall_memory', 'load_skill', *requested}
+    if re.search(r'\b(cyber|engagement|counterevidence|retest|sarif|defensive|incident)\b',prompt,re.I):chosen.update(('cyber_read','cyber_manage'))
     if re.search(r'\b(plan|steps|implement|build|fix|refactor|workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('todo_list')
     if re.search(r'\b(checkpoint|retained|evidence)\b',prompt,re.I):chosen.add('tool_result_read')
     if re.search(r'\b(workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('workflow_manage')
@@ -75,6 +77,8 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
                 if re.search(pattern, routing_prompt, re.I): value=candidate;break
     if value:
         matching=[t['function']['name'] for t in available if category(t['function']['name']) == value]
+        if value=='security' and not load_category and not re.search(r'\b(cyber|engagement|counterevidence|retest|sarif|defensive|incident)\b',prompt,re.I):
+            matching=[name for name in matching if not name.startswith('cyber_') or name in requested]
         inspection_request=re.sub(r"\b(?:do not|don't|without|no|avoid|skip)\s+(?:service\s+)?(?:inspect\w*|enumerat\w*)\b",'',prompt,flags=re.I)
         if value=='security' and not load_category and not load_name and re.search(r'\bstandalone\s+(?:tcp\s+)?discovery\b',prompt,re.I) and not re.search(r'\b(?:inspect\w*|enumerat\w*)\b',inspection_request,re.I):
             # Progressive discovery starts with its own adapter, not every

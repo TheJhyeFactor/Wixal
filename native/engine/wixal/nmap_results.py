@@ -21,9 +21,15 @@ def parse(raw):
                 number=int(port.get('portid','0'))
                 if not 1<=number<=65535:raise ValueError('Invalid scanner port')
                 state=port.find('state');service=port.find('service')
-                services.append(dict(host=address.get('addr',''),port=str(number),protocol=port.get('protocol',''),
+                row=dict(host=address.get('addr',''),port=str(number),protocol=port.get('protocol',''),
                                      state=state.get('state','unknown') if state is not None else 'unknown',
-                                     service=dict(service.attrib) if service is not None else {}))
+                                     service=dict(service.attrib) if service is not None else {})
+                scripts=port.findall('script')
+                if scripts:
+                    row['scripts']=[dict(id=s.get('id',''),output=s.get('output','')[:16000],
+                                         truncated=len(s.get('output',''))>16000) for s in scripts[:32]]
+                if service is not None and service.findall('cpe'):row['cpe']=[c.text or '' for c in service.findall('cpe')[:16]]
+                services.append(row)
         finished=root.find('runstats/finished')
         if finished is None or finished.get('exit')!='success':raise ValueError('Scanner XML has no successful completion record')
         return services
@@ -35,6 +41,8 @@ async def finish(job):
     evidence=job['evidence'];assessment=job['assessment']
     result=dict(kind='nmap',coverage='partial',services=[],invocation=assessment,evidence=evidence,
                 interpretation='Scanner observations are evidence of port state; service labels alone do not establish vulnerabilities.')
+    if assessment.get('profile')=='rdp':
+        result['interpretation']+=' RDP script SUCCESS reports supported protocol negotiation only. It does not establish that NLA is required, authentication succeeded, exploitation was tested, or the device is secure. Certificate trust requires separate validation.'
     try:
         if job['state']!='completed' or job['exitCode']!=0 or evidence['incomplete']:
             raise ValueError('Scanner failed, stopped or produced incomplete evidence')

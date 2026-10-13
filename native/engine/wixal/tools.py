@@ -18,6 +18,8 @@ from .storage import identity, now
 DEFINITIONS = json.loads((Path(__file__).parent / "resources/tools.json").read_text())
 from .addons import definitions as addon_definitions
 DEFINITIONS += addon_definitions()
+from .cyber_tools import definitions as cyber_definitions
+DEFINITIONS += cyber_definitions()
 
 SKIP = {".git", "node_modules", ".venv", "venv", "release", ".next", "dist", ".build", ".wixal-tmp"}
 
@@ -114,6 +116,7 @@ def http_request(args):
 
 
 PROFILES = {
+    "rdp": ["-sT", "-Pn", "-sV", "--version-light", "--script", "rdp-enum-encryption,ssl-cert"],
     "discovery": ["-sn", "-PS22,80,443"], "ports": ["-sT", "-Pn"],
     "services": ["-sT", "-Pn", "-sV", "--version-light"],
     "web": ["-sT", "-Pn", "-sV", "--script", "http-title,http-headers,http-security-headers"],
@@ -369,8 +372,16 @@ class Tools:
             try:output=data.decode('utf-16-le')
             except UnicodeDecodeError as error:raise ValueError('Output offset must align to a character boundary') from error
         structured=job.get('structuredResult',{})
+        # Decepticon-inspired passive-read detection. Silence is ambiguous;
+        # report it without sending input, replaying or terminating the job.
+        signature=(job['base'],units)
+        if job.get('passiveSignature')==signature and job['state']=='running':job['unchangedReads']=job.get('unchangedReads',0)+1
+        else:job['unchangedReads']=0
+        job['passiveSignature']=signature
+        progress='no_new_output' if job.get('unchangedReads',0)>=3 and job['state']=='running' else 'running' if job['state']=='running' else 'settled'
         return dict(**({"structuredResult":structured} if structured else {}), **({"services":structured['services'],"summary":structured['summary']} if structured.get('kind')=='nmap' else {}), **({"error":job.get('error') or structured['error']} if job.get('error') or structured.get('error') else {}), **({"evidence":job["evidence"]} if job.get("evidence") else {}), session_id=job["id"], command=job["command"], state=job["state"] if job.get('settled',False) else 'running', exitCode=job["exitCode"],
                     reason=job["reason"], output=output, offset=start, next_offset=start+len(output.encode('utf-16-le'))//2,
+                    progressState=progress,unchangedReads=job['unchangedReads'],progressNote='Repeated reads returned no new output; the process may be waiting or quiet. Inspect before sending reviewed input or stopping.' if progress=='no_new_output' else '',
                     more=start+len(output.encode('utf-16-le'))//2<job["base"]+units, earliest_offset=job["base"], started=job["started"], finished=job.get("finished"))
 
     async def execute(self, name, args, session_id):
@@ -391,6 +402,9 @@ class Tools:
         root = (self.store.project() or {}).get("root")
         from .context_policy import requires_project
         if requires_project(name) and (self.store.project() or {}).get('syncRootRequired'):raise ValueError('Locate this synced project folder in Settings before using project tools')
+        if name in ('cyber_read','cyber_manage'):
+            from .cyber_tools import execute as cyber_execute
+            return await cyber_execute(self,name,args,session_id)
         if getattr(self,"management",None) and name in self.management.names:
             return await self.management.tool(name,args)
         if name.startswith("addon_"):
@@ -527,6 +541,7 @@ class Tools:
             if len(args['input'].encode())>4096:raise ValueError('Command input must be at most 4,096 bytes per reviewed write')
             if not await self.approve(dict(name=name, command=args["input"])):
                 return "User declined command input."
+            job['unchangedReads']=0;job.pop('passiveSignature',None)
             await self.read_job(dict(session_id=args['session_id'],wait_ms=0),session_id)
             if job.get('interactive'):
                 if 'pty' not in job or job['state']!='running':raise ValueError('Interactive terminal is no longer running')

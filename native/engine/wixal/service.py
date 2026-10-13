@@ -99,6 +99,10 @@ class Service:
         self.active = None
         from .security_workspace import SecurityWorkspace
         self.security_workspace = SecurityWorkspace(self)
+        self.tools.cyber=self.security_workspace.engagements.cyber
+        if not self.store.data.get('cyberToolsVersion'):
+            self.store.data['enabledTools']=list(dict.fromkeys(self.store.data['enabledTools']+['cyber_read','cyber_manage']))
+            self.store.data['cyberToolsVersion']=1;self.store.save()
         self.assessment_task = None
         self.manual_tools = 0
         self.scheduler = None

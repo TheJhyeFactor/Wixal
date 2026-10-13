@@ -17,3 +17,9 @@ Supplemental JSON and Metal C++ notices from the Ollama 0.35.1 macOS application
 ## Decepticon CVSS utility
 
 The native CVSS 3.1 arithmetic is adapted from BitterSecurity/Decepticon under Apache-2.0. See `native/third_party/decepticon/NOTICE.md` and its accompanying licence. The licence and attribution are also embedded in the native engine resources.
+
+Additional native cyber finding/reporting, planning, local defensive-log monitoring,
+session-progress and static-analysis workflows are Wixal implementations informed by
+a Decepticon source review at `00fc3b594c40f6e48e22341669cf7048c117781f`.
+The thirteen added assessment procedures retain that provenance. No Decepticon
+runtime, payload corpus, Neo4j, LangGraph or specialist images are bundled.

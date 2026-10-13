@@ -2,7 +2,7 @@
 
 A restrained static website that follows the native workspace’s Paper appearance: neutral grey surfaces, charcoal dark appearance, quiet dividers, the monospace Wixal wordmark, an actual workspace screenshot and a captured product demo. Dark appearance is available in the footer.
 
-Eight pages cover Home, Workspace, Tools, Models, Guides, Download, Privacy and Download stats. Existing routes and product section anchors remain available. The download is the current **native alpha**, with one ZIP asset and explicit signing/alpha limitations. The build reads the version from `native/engine/wixal/__init__.py`; publish matching GitHub assets before the Pages deployment completes.
+Eight pages cover Home, Workspace, Tools, Models, Guides, Download, Privacy and Download stats. Existing routes and product section anchors remain available. The download is the current **native alpha**, with one ZIP asset and explicit signing/alpha limitations. The build reads the published version/tag from `release.json`, independently of the development engine version. Publish and verify GitHub assets first, then update this small file and the release copy. Website-only publication does not run the full macOS native checks.
 
 ## Develop and check
 

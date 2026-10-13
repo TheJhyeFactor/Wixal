@@ -1,10 +1,10 @@
-# Wixal 0.7.10 Alpha 6
+# Wixal 0.7.10 Alpha 7
 
 The public download is a single native **Wixal.app** for Apple Silicon Macs running macOS 14 or newer. It uses SwiftUI/AppKit, a persistent Python engine and a bundled local Ollama runner. Python and Node do not need to be installed to use the app. Model weights are separate downloads.
 
 ## Installation and updates
 
-Download `Wixal-0.7.10-alpha.6-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.6), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
+Download `Wixal-0.7.10-alpha.7-macOS-arm64.zip` from the [GitHub alpha release](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.7), extract it and move Wixal.app into Applications. A SHA-256 checksum accompanies the release.
 
 The alpha is ad-hoc signed and **not Developer ID signed or notarised**. macOS may block the first launch. After reviewing the source and release notes, use System Settings → Privacy & Security → Open Anyway. This alpha has no automatic updater; download and install newer releases manually.
 
@@ -12,11 +12,11 @@ Native data remains at `~/Library/Application Support/Wixal Native`. Replacing t
 
 ## What changed in Alpha 6
 
-Alpha 6 adds Hugging Face model browsing, provider/type/size filters, estimated memory guidance, inline downloads, model deletion and dedicated engine controls. Agents retain durable checklists and evidence with improved run budgets. Reviewed security extensions include cookie/API mutations, same-origin OAuth PKCE, mutation-state validation, controller proposals, telemetry imports and interactive PTY jobs. See the [release notes](release-0.7.10-alpha.6.md) and [security guide](security-workflows-alpha6.md). Six-model capability qualification and fresh installed end-to-end checks of these security extensions remain pending.
+Alpha 7 adds evidence-bound findings, planning, specialist roles, local log monitoring, reviewed offline Ghidra decompilation and technical/executive reports in Markdown, PDF, Word and SARIF. Report ZIP import verifies member hashes without restoring authority. Use **Cybersecurity → Engagements → Cyber toolkit**. Ghidra/Java and Nmap are optional separately installed providers. See [release notes](release-0.7.10-alpha.7.md) and [tested behavior and remaining gaps](decepticon-cyber-completion-2026-10-13.md). Model weights are not fine-tuned by this release; AD/cloud/C2 and general model qualification remain incomplete.
 
 ## First use
 
-Start as a guest or use the optional account features. Open Models to download or import a model, or configure external Ollama. A model needs tool support for agent tasks. Real agent acceptance for this release uses gpt-oss:20b; hardware fit and reliability vary by model.
+Start as a guest or use the optional account features. Open Models to download or import a model, or configure external Ollama. A model needs tool support for agent tasks. The cyber workflow acceptance uses Qwen3.5 9B; the separate semantic matrix also tests Gemma 4 E4B. Earlier gpt-oss:20b records apply to their recorded builds; hardware fit and reliability vary by model.
 
 Open a project folder with ⌘O. Chat works with project context. Agents holds reusable agents, workflows, run history, recurring work and skill evaluations. Cybersecurity holds authorised investigation scope and evidence records. ⌘L opens Models, ⌘J opens the terminal, and ⌘, opens Settings.
 

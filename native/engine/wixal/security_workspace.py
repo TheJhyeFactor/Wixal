@@ -341,10 +341,15 @@ class SecurityWorkspace(SecurityRecords):
                     body['options']['num_predict']=1600
                     body['messages'][0]['content']='Return ONLY JSON object with name and nodes. Up to 6 nodes. Each node: id, name, stage (Recon/Research/Attacks), capability, arguments object, prompt, dependencies (node ids), reason. Use only supplied capability IDs. Choose tests supported by observed evidence. No shell commands or invented capabilities. Analysis and research need a prompt. Planner must not recursively propose planner. Targets are pinned automatically. Do not claim exploitation.\nCapabilities: '+json.dumps([dict(id=c['id'],title=c['title'],inputs=c['inputs']) for c in self.capability_catalog(target) if c['available'] and c['id']!='planner'])
                 run['status']='waiting_model';self.publish()
-                from .context_policy import fit_request, bounded_evidence
+                from .context_policy import fit_request, bounded_evidence, thinking_options
                 # Preserve instructions and source IDs while shortening structured evidence.
                 metadata=await self.service.runtime.catalog()
                 info=next((m for m in metadata if m['name']==run['model']),{})
+                body.update(thinking_options(info))
+                # This evidence-only workload needs a bounded final answer.
+                # Enum-only reasoning models retain their supported low/default level.
+                reasoning_values=(info.get('thinking') or {}).get('values',[])
+                if 'thinking' in info.get('capabilities',[]) and (not reasoning_values or False in reasoning_values):body['think']=False
                 model_context=info.get('contextLength',info.get('context_length',16384)) or 16384
                 limit=max(4096,min(16384,int(model_context)))
                 body['options']['num_ctx']=limit
@@ -363,6 +368,23 @@ class SecurityWorkspace(SecurityRecords):
                 async with self.model_lock:
                     run['status']='running';self.publish()
                     result = await stream_chat(await self.service.runtime.endpoint(), body, emit)
+                    if not result.get('content','').strip() and not result.get('tool_calls'):
+                        # Reasoning-only exhaustion is not a completed analysis.
+                        # Retain the attempt and allow exactly one conclusion request.
+                        run['inferenceAttempts']=[copy.deepcopy(result)]
+                        continuation=copy.deepcopy(body)
+                        continuation['messages'] += [dict(role='assistant',content=result.get('content',''),thinking=result.get('thinking','')[:12000]),
+                            dict(role='user',content='Return the final concise answer now using only the supplied evidence. State observed facts, evidence IDs and limitations. Do not repeat reasoning or claim unperformed actions.')]
+                        values=(info.get('thinking') or {}).get('values',[])
+                        if 'low' in values:continuation['think']='low'
+                        elif not values or False in values:continuation['think']=False
+                        continuation['messages'],reserve,_=fit_request(continuation['messages'],[],limit,min(1600,limit//3))
+                        continuation['options']['num_predict']=reserve
+                        result=await stream_chat(await self.service.runtime.endpoint(),continuation,emit)
+                        run['inferenceAttempts'].append(copy.deepcopy(result))
+                    if not result.get('content','').strip() or result.get('tool_calls'):
+                        run['result']=dict(analysis=result.get('content',''),sources=context,usage=result.get('usage',{}))
+                        raise ValueError('Model produced no final analysis within the bounded attempts, or returned unsupported tool calls. No completed analysis is established.')
                 run['result'] = dict(analysis=result['content'], sources=context, usage=result.get('usage', {}))
                 if capability=='planner':
                     try:
@@ -509,6 +531,7 @@ class SecurityWorkspace(SecurityRecords):
 
     async def close(self):
         self.closing = True
+        await self.engagements.cyber.sensors.close()
         await self.engagements.assurance.oauth.close()
         pending = list(self.tasks.values())
         for task in pending: task.cancel()

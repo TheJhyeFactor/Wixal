@@ -16,8 +16,9 @@ const version = engineVersion.match(/^VERSION = "([0-9.]+-alpha\.[0-9]+)"$/m)?.[
 if (!version) throw new Error('Website requires a native alpha release version.');
 
 const versionLabel = version.replace('-alpha.', ' Alpha ');
-const release = `${repo}/releases/tag/v${version}`;
-const zip = `${repo}/releases/download/v${version}/Wixal-${version}-macOS-arm64.zip`;
+const releaseTag = `v${version}-ui.1`;
+const release = `${repo}/releases/tag/${releaseTag}`;
+const zip = `${repo}/releases/download/${releaseTag}/Wixal-${version}-macOS-arm64.zip`;
 const url = path => base + path;
 const assetHashes = new Map(await Promise.all(['styles.css', 'site.js', 'analytics.js', 'stats.js', 'totals.js', 'assets/social-card.png', 'assets/native-workspace.png', 'assets/wixal-demo.mp4', 'assets/wixal-demo-poster.jpg'].map(async path => [path, createHash('sha256').update(await readFile(resolve(root, path.startsWith('assets/') ? 'public' : 'src', path))).digest('hex').slice(0, 10)])));
 const assetUrl = path => `${url(path)}?v=${assetHashes.get(path)}`;

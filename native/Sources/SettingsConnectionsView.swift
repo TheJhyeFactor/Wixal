@@ -72,7 +72,7 @@ struct SettingsConnectionsView: View {
     }
     private var form: some View {
         VStack(alignment:.leading,spacing:12) {
-            HStack { Text(editingID.isEmpty ? "Add MCP server" : "Edit MCP server").wixalFont(size:14,weight:.medium); Spacer(); Button("Cancel") { editor=false }.buttonStyle(.plain) }
+            HStack { Text(editingID.isEmpty ? "Add MCP server" : "Edit MCP server").wixalFont(size:14,weight:.medium); Spacer(); Button("Cancel") { editor=false }.buttonStyle(WixalButtonStyle(inline:true)) }
             Picker("Connection type",selection:$transport) { Text("Local executable").tag("stdio"); Text("Remote HTTPS").tag("http") }.pickerStyle(.segmented)
             TextField("Server name",text:$name).wixalField().accessibilityLabel("MCP server name")
             TextField(transport == "http" ? "https://server.example/mcp" : "Executable path or command",text:$endpoint).wixalField().accessibilityLabel(transport == "http" ? "MCP endpoint" : "MCP executable")

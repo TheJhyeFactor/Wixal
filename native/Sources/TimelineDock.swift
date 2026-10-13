@@ -46,9 +46,9 @@ struct TimelineDock: View {
                     engine.logUIEvent(folded ? "details-close" : "details-open")
                 } label:{
                     HStack(spacing:5){Text("Details");Image(systemName:"chevron.right").font(.system(size:9)).rotationEffect(.degrees(folded ? 0 : 90))}
-                }.buttonStyle(.plain).foregroundStyle(theme.muted).accessibilityLabel(folded ? "Show response details" : "Hide response details")
+                }.buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(theme.muted).accessibilityLabel(folded ? "Show response details" : "Hide response details")
                 Spacer(minLength:5)
-                if engine.busy {Button("Stop",action:engine.stop).buttonStyle(.plain).foregroundStyle(theme.muted).accessibilityLabel("Stop current work")}
+                if engine.busy {Button("Stop",action:engine.stop).buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(theme.muted).accessibilityLabel("Stop current work")}
             }.wixalFont(size:11).frame(minHeight:24)
                 .animation(reduceMotion ? nil : .easeInOut(duration:0.16),value:status)
             if !folded {
@@ -66,7 +66,7 @@ struct TimelineDock: View {
                                     if !step.output.isEmpty {Text(step.output).textSelection(.enabled)}
                                     if !step.updates.isEmpty {DisclosureGroup("Updates"){ForEach(Array(step.updates.enumerated()),id:\.offset){_,update in MarkdownMessage(content:update)}}}
                                     DisclosureGroup("Technical events"){Text(step.rawEvents.joined(separator:"\n\n")).textSelection(.enabled)}
-                                    Button("Copy output"){NSPasteboard.general.clearContents();NSPasteboard.general.setString(step.output,forType:.string)}.buttonStyle(.plain).disabled(step.output.isEmpty)
+                                    Button("Copy output"){NSPasteboard.general.clearContents();NSPasteboard.general.setString(step.output,forType:.string)}.buttonStyle(WixalButtonStyle(inline:true)).disabled(step.output.isEmpty)
                                 }.wixalFont(size:11,design:.monospaced).padding(.top,7)
                             } label:{HStack{Text(step.title);Spacer();Text(step.status.replacingOccurrences(of:"_",with:" ").capitalized).foregroundStyle(theme.muted)}}
                         }
@@ -76,7 +76,7 @@ struct TimelineDock: View {
                                 ForEach(Array(sources.enumerated()),id:\.offset){_,source in
                                     VStack(alignment:.leading,spacing:6){
                                         Text(textValue(source["excerpt"])).textSelection(.enabled)
-                                        if !textValue(source["sourceSession"]).isEmpty{Button("Open source conversation"){engine.openMemorySource(textValue(source["sourceSession"]))}.buttonStyle(.plain).disabled(engine.busy)}
+                                        if !textValue(source["sourceSession"]).isEmpty{Button("Open source conversation"){engine.openMemorySource(textValue(source["sourceSession"]))}.buttonStyle(WixalButtonStyle(inline:true)).disabled(engine.busy)}
                                     }.padding(.vertical,6)
                                 }
                             }

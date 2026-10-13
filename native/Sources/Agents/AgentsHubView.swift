@@ -110,8 +110,8 @@ struct AgentsHubView:View {
             AgentLiveRunView(engine:engine,run:run,workflow:true,guidance:runGuidance(run),guidanceDraftError:design.guidanceDraftError).id(textValue(run["id"]))
         }else{
             if tasks.isEmpty && flows.isEmpty{Text("No runs yet. Give a saved agent a task or start a workflow.").foregroundStyle(theme.muted)}
-            ForEach(Array(flows.reversed().enumerated()),id:\.offset){_,run in Button{selectedRun=textValue(run["id"])}label:{HStack{Text(textValue((run["definition"] as? [String:Any])?["name"]));Spacer();Text(agentOutcomeLabel(run))}.wixalCard()}.buttonStyle(.plain)}
-            ForEach(Array(tasks.reversed().enumerated()),id:\.offset){_,run in Button{selectedRun=textValue(run["id"])}label:{HStack{Text(textValue(run["prompt"])).lineLimit(2);Spacer();Text(agentOutcomeLabel(run))}.wixalCard()}.buttonStyle(.plain)}
+            ForEach(Array(flows.reversed().enumerated()),id:\.offset){_,run in Button{selectedRun=textValue(run["id"])}label:{HStack{Text(textValue((run["definition"] as? [String:Any])?["name"]));Spacer();Text(agentOutcomeLabel(run))}.wixalCard()}.buttonStyle(WixalNavigationButtonStyle())}
+            ForEach(Array(tasks.reversed().enumerated()),id:\.offset){_,run in Button{selectedRun=textValue(run["id"])}label:{HStack{Text(textValue(run["prompt"])).lineLimit(2);Spacer();Text(agentOutcomeLabel(run))}.wixalCard()}.buttonStyle(WixalNavigationButtonStyle())}
         }
     }}
     private func runGuidance(_ run:[String:Any])->Binding<AcknowledgedDraft>{

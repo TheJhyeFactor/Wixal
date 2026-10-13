@@ -189,7 +189,7 @@ struct CyberToolkitView: View {
                         HStack { sensorButtons(row) }
                         VStack(alignment:.leading) { sensorButtons(row) }
                     }
-                }.padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7))
+                }.padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7)).wixalSoftDepth(cornerRadius:7)
             }
             Text("Incident leads").bold()
             ForEach(Array(rows("securityIncidents").suffix(50)),id:\.engagementID) { row in

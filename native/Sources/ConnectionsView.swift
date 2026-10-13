@@ -18,7 +18,7 @@ struct ConnectionsView: View {
                     HStack { Text(running ? "Running on this Mac" : "Paused").foregroundStyle(running ? theme.accent : theme.muted); Spacer(); Toggle("Enable the local companion", isOn: Binding(get: { running }, set: { run($0 ? "companion-start" : "companion-stop") })).toggleStyle(.switch).controlSize(.small) }
                     if running {
                         Text("1. Install OpenAI’s Secure MCP Tunnel client and create a tunnel in your Platform account.\n2. Use the command below as its --mcp-command. Keep Wixal and the tunnel running.\n3. In ChatGPT developer mode, create a connection using that tunnel.").wixalFont(size:11).lineSpacing(5)
-                        Text(textValue(companion["command"])).wixalFont(size:11, design: .monospaced).textSelection(.enabled).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(theme.raised, in: RoundedRectangle(cornerRadius: 7))
+                        Text(textValue(companion["command"])).wixalFont(size:11, design: .monospaced).textSelection(.enabled).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(theme.raised, in: RoundedRectangle(cornerRadius: 7)).wixalSoftDepth(cornerRadius:7)
                         HStack { Button("Copy MCP command") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(textValue(companion["command"]), forType: .string) }; Button("Stop & revoke pairing") { run("companion-revoke") } }
                         HStack {
                             Link("Tunnel settings ↗", destination: URL(string: "https://platform.openai.com/settings/organization/tunnels")!)

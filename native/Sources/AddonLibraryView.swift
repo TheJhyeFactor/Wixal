@@ -89,7 +89,7 @@ struct AddonLibraryView: View {
         VStack(alignment:.leading,spacing:8) {
             Text("CATEGORIES").wixalFont(size:9,design:.monospaced).tracking(1).foregroundStyle(theme.muted).padding(.bottom,8)
             ForEach(categories.filter { $0 != "Discovered" || items.contains { textValue($0["category"]) == "Discovered" } },id:\.self) { value in
-                Button { category=value } label: { HStack(spacing:8) { Image(systemName:symbol(value)); Text(categoryName(value)); Spacer(minLength:2); Text("\(items.filter { value == "All" || textValue($0["category"]) == value }.count)").foregroundStyle(theme.muted) }.wixalFont(size:11).padding(10).frame(maxWidth:.infinity,alignment:.leading).background(category == value ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:7)) }.buttonStyle(.plain).accessibilityAddTraits(category == value ? .isSelected : [])
+                Button { category=value } label: { HStack(spacing:8) { Image(systemName:symbol(value)); Text(categoryName(value)); Spacer(minLength:2); Text("\(items.filter { value == "All" || textValue($0["category"]) == value }.count)").foregroundStyle(theme.muted) }.wixalFont(size:11).padding(10).frame(maxWidth:.infinity,alignment:.leading).background(category == value ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:7)) }.buttonStyle(WixalNavigationButtonStyle(selected:category == value)).accessibilityAddTraits(category == value ? .isSelected : [])
             }
             Spacer()
             Divider()
@@ -104,8 +104,8 @@ struct AddonLibraryView: View {
             Text(textValue(item["description"])).wixalFont(size:12).foregroundStyle(theme.muted).fixedSize(horizontal:false,vertical:true)
             Spacer(minLength:8)
             Text(workflow(item) ? "Bundled Wixal workflow" : textValue(item["registry"])).wixalFont(size:10).foregroundStyle(theme.muted)
-            HStack { Button("Details") { detailItem=item }.buttonStyle(.plain).foregroundStyle(theme.accent).accessibilityLabel("Details for " + textValue(item["name"])); Spacer(); Button(installed(item) || pending(item) ? "Manage" : item["installable"] as? Bool == true || workflow(item) ? "Install" : "View setup") { if installed(item) || pending(item) { page="Installed"; expanded=textValue(item["id"]) } else if item["installable"] as? Bool == true || workflow(item) { install(item) } else { detailItem=item } }.buttonStyle(WixalButtonStyle(outlined:true)).disabled(!engine.connected).accessibilityIdentifier("tools.action." + textValue(item["id"])).accessibilityLabel((installed(item) || pending(item) ? "Manage " : item["installable"] as? Bool == true || workflow(item) ? "Install " : "View setup for ") + textValue(item["name"])) }.wixalFont(size:11)
-        }.padding(18).frame(maxWidth:.infinity,minHeight:220,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:9)).overlay(RoundedRectangle(cornerRadius:9).stroke(theme.line,lineWidth:1))
+            HStack { Button("Details") { detailItem=item }.buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(theme.accent).accessibilityLabel("Details for " + textValue(item["name"])); Spacer(); Button(installed(item) || pending(item) ? "Manage" : item["installable"] as? Bool == true || workflow(item) ? "Install" : "View setup") { if installed(item) || pending(item) { page="Installed"; expanded=textValue(item["id"]) } else if item["installable"] as? Bool == true || workflow(item) { install(item) } else { detailItem=item } }.buttonStyle(WixalButtonStyle(outlined:true)).disabled(!engine.connected).accessibilityIdentifier("tools.action." + textValue(item["id"])).accessibilityLabel((installed(item) || pending(item) ? "Manage " : item["installable"] as? Bool == true || workflow(item) ? "Install " : "View setup for ") + textValue(item["name"])) }.wixalFont(size:11)
+        }.padding(18).frame(maxWidth:.infinity,minHeight:220,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:9)).overlay(RoundedRectangle(cornerRadius:9).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:9)
     }
     private func installedRow(_ item:[String:Any])->some View {
         VStack(alignment:.leading,spacing:12) {
@@ -140,7 +140,7 @@ struct AddonLibraryView: View {
                 ForEach(history.reversed(),id:\.toolIdentity) { job in jobRow(job) }
             }.wixalFont(size:11)
             ForEach(jobs.filter { textValue($0["addon"]) == textValue(item["id"]) && ["queued","running","waiting_review"].contains(textValue($0["status"])) },id:\.toolIdentity) { job in jobRow(job) }
-        }.padding(16).background(theme.panel,in:RoundedRectangle(cornerRadius:8))
+        }.padding(16).background(theme.panel,in:RoundedRectangle(cornerRadius:8)).wixalSoftDepth(cornerRadius:8)
     }
     private func readinessLabel(_ item:[String:Any])->String {
         if workflow(item) { return "Installed" }

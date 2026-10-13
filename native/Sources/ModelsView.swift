@@ -91,7 +91,7 @@ struct ModelsView:View {
         VStack(alignment:.leading,spacing:18){
             SettingsCard {
                 SettingsRow(title:selected.isEmpty ? "Choose a model" : modelTitle(current ?? ["name":selected]),detail:engine.modelConnectionLabel,scope:"All workspaces") {
-                    Button("Adjust context →"){NotificationCenter.default.post(name:.wixalNavigate,object:"Settings:Context & memory")}.buttonStyle(.plain)
+                    Button("Adjust context →"){NotificationCenter.default.post(name:.wixalNavigate,object:"Settings:Context & memory")}.buttonStyle(WixalButtonStyle(inline:true))
                 }
             }
             QuietSettingsTabs(items:["Library","Discover","Downloads","Performance"],selection:$tab)
@@ -110,7 +110,7 @@ struct ModelsView:View {
             if !feedback.isEmpty{Text(feedback).wixalFont(size:11).foregroundStyle(theme.muted).textSelection(.enabled).accessibilityAddTraits(.updatesFrequently)}
             if let benchmark{HStack{ProgressView().controlSize(.small);Text("\(textValue(benchmark["name"])) · \(textValue(benchmark["phase"]))");Spacer();Button("Stop benchmark"){run("benchmark-cancel")}}.wixalFont(size:11).wixalCard()}
             if tab != "Downloads", let job=jobs.first(where:{["queued","downloading","paused","failed"].contains(textValue($0["state"]))}) {
-                Button{tab="Downloads"}label:{HStack{Image(systemName:"arrow.down.circle");Text(textValue(job["name"])).lineLimit(1);Spacer();Text(textValue(job["state"]).capitalized);Image(systemName:"chevron.right")}.wixalFont(size:11).wixalCard()}.buttonStyle(.plain).accessibilityLabel("Open downloads")
+                Button{tab="Downloads"}label:{HStack{Image(systemName:"arrow.down.circle");Text(textValue(job["name"])).lineLimit(1);Spacer();Text(textValue(job["state"]).capitalized);Image(systemName:"chevron.right")}.wixalFont(size:11).wixalCard()}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Open downloads")
             }
             DisclosureGroup("Local engine & hardware",isExpanded:$engineOpen){summary.padding(.top,12)}.wixalFont(size:12)
         }
@@ -134,7 +134,7 @@ struct ModelsView:View {
                 Menu{Button("Name"){sort="name"};Button("Smallest file"){sort="size"};Button("Parameter count"){sort="parameters"}}label:{Image(systemName:"arrow.up.arrow.down");Text("Sort")}.menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Sort models")
             }.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:12)
             if capability != "all" || publisher != "all" || extraFilterCount>0 {
-                HStack(spacing:10){Text(activeFilterSummary).wixalFont(size:11).foregroundStyle(theme.muted);Spacer(minLength:0);Button("Clear filters"){resetFilters()}.buttonStyle(.plain).wixalFont(size:11)}
+                HStack(spacing:10){Text(activeFilterSummary).wixalFont(size:11).foregroundStyle(theme.muted);Spacer(minLength:0);Button("Clear filters"){resetFilters()}.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:11)}
             }
         }
     }
@@ -154,7 +154,7 @@ struct ModelsView:View {
         VStack(alignment:.leading,spacing:12){
             Text("Model type").wixalFont(size:14,weight:.medium)
             TextField("Search Hugging Face types…",text:$typeSearch).wixalField()
-            Button("All model types"){chooseType("all")}.buttonStyle(.plain)
+            Button("All model types"){chooseType("all")}.buttonStyle(WixalButtonStyle(inline:true))
             Text(typeSearch.isEmpty ? "Popular GGUF types" : "Search results").wixalFont(size:11).foregroundStyle(theme.muted)
             ScrollView{VStack(alignment:.leading,spacing:4){ForEach(Array(typeChoices.enumerated()),id:\.offset){_,row in choiceButton(row,selected:capability){chooseType(textValue(row["id"]))}}}}.frame(maxHeight:230)
             if typeChoices.isEmpty{Text(filterError.isEmpty ? "No matching types" : filterError).wixalFont(size:11).foregroundStyle(theme.muted)}
@@ -165,7 +165,7 @@ struct ModelsView:View {
         VStack(alignment:.leading,spacing:12){
             Text("Provider").wixalFont(size:14,weight:.medium)
             TextField("Search Hugging Face providers…",text:$providerSearch).wixalField()
-            Button("All providers"){chooseProvider("all")}.buttonStyle(.plain)
+            Button("All providers"){chooseProvider("all")}.buttonStyle(WixalButtonStyle(inline:true))
             Text(providerSearch.isEmpty ? "Popular GGUF providers" : "Search results").wixalFont(size:11).foregroundStyle(theme.muted)
             if findingProviders{ProgressView().controlSize(.small)}
             let choices=providerSearch.isEmpty ? records(filterData["providers"]).prefix(5).map{$0} : providerMatches
@@ -188,7 +188,7 @@ struct ModelsView:View {
         Text("From Hugging Face\(filterData["stale"] as? Bool == true ? " · saved metadata" : "")").wixalFont(size:11).foregroundStyle(theme.muted).help("Popular choices are ranked by model count in Hugging Face’s 100 most-downloaded GGUF repositories.")
     }
     private func choiceButton(_ row:[String:Any],selected:String,choose:@escaping ()->Void)->some View {
-        Button(action:choose){HStack{VStack(alignment:.leading,spacing:2){Text(textValue(row["label"]));if textValue(row["label"]).replacingOccurrences(of:"-",with:" ").lowercased() != textValue(row["id"]).replacingOccurrences(of:"-",with:" ").lowercased(){Text(textValue(row["id"])).wixalFont(size:11).foregroundStyle(theme.muted)}};Spacer();if textValue(row["id"])==selected{Image(systemName:"checkmark")}}.padding(.vertical,6).frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(.plain).wixalFont(size:12)
+        Button(action:choose){HStack{VStack(alignment:.leading,spacing:2){Text(textValue(row["label"]));if textValue(row["label"]).replacingOccurrences(of:"-",with:" ").lowercased() != textValue(row["id"]).replacingOccurrences(of:"-",with:" ").lowercased(){Text(textValue(row["id"])).wixalFont(size:11).foregroundStyle(theme.muted)}};Spacer();if textValue(row["id"])==selected{Image(systemName:"checkmark")}}.padding(.vertical,6).frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:12)
     }
     private func chooseType(_ value:String){capability=value;typeOpen=false}
     private func chooseProvider(_ value:String){publisher=value;providerOpen=false}
@@ -281,11 +281,11 @@ struct ModelsView:View {
         let name=textValue(model["name"]),caps=model["capabilities"] as? [String] ?? [],saved=score(model)
         return VStack(alignment:.leading,spacing:10){
             compactHeader(model,sizeValue:model["size"],sizeLabel:"on disk",action:{run(embeddingOnly(name) ? "memory-semantic" : "model-use",["name":name,"model":name])},actionTitle:selected==name ? "Selected" : embeddingOnly(name) ? "Use for memory" : "Use model")
-            HStack{if let saved{Text("\(String(format:"%.1f",modelNumber(saved["tokensPerSecond"]))) tok/s measured").foregroundStyle(theme.muted)};Spacer();Button(inspected==name ? "Hide details" : "Details"){inspected=inspected==name ? "" : name}.buttonStyle(.plain).accessibilityLabel("Details for \(name)")}.wixalFont(size:11)
+            HStack{if let saved{Text("\(String(format:"%.1f",modelNumber(saved["tokensPerSecond"]))) tok/s measured").foregroundStyle(theme.muted)};Spacer();Button(inspected==name ? "Hide details" : "Details"){inspected=inspected==name ? "" : name}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Details for \(name)")}.wixalFont(size:11)
             if inspected==name {
                 memoryLine(model)
                 Text(name).wixalFont(size:10).foregroundStyle(theme.muted).textSelection(.enabled)
-                HStack(spacing:14){Button("Benchmark"){performanceTab="Benchmarks";tab="Performance";run("benchmark-start",["name":name])}.disabled(locked || hasDownload || !caps.contains("completion"));Spacer();Button("Delete model…",role:.destructive){deleting=name}.disabled(locked || hasDownload).accessibilityLabel("Delete model \(name)")}.buttonStyle(.plain).wixalFont(size:11)
+                HStack(spacing:14){Button("Benchmark"){performanceTab="Benchmarks";tab="Performance";run("benchmark-start",["name":name])}.disabled(locked || hasDownload || !caps.contains("completion"));Spacer();Button("Delete model…",role:.destructive){deleting=name}.disabled(locked || hasDownload).accessibilityLabel("Delete model \(name)")}.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:11)
             }
         }.padding(.vertical,14)
     }
@@ -338,7 +338,7 @@ struct ModelsView:View {
             Button("Open model folder ↗"){
                 let path=textValue(runtime["library"])
                 if !path.isEmpty{NSWorkspace.shared.open(URL(fileURLWithPath:path))}
-            }.buttonStyle(.plain).wixalFont(size:10).foregroundStyle(theme.accent).disabled(textValue(runtime["library"]).isEmpty)
+            }.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:10).foregroundStyle(theme.accent).disabled(textValue(runtime["library"]).isEmpty)
             Text("\(modelBytes(library["diskFree"])) available on the model drive").wixalFont(size:10).foregroundStyle(theme.muted)
             if library["loadedAvailable"] as? Bool ?? false {
                 let loaded=records(library["loaded"])
@@ -375,7 +375,7 @@ struct ModelsView:View {
                     downloadAction("Dismiss",id:id,action:"remove")
                 }
                 Spacer()
-            }.buttonStyle(.plain).wixalFont(size:11).foregroundStyle(theme.accent)
+            }.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:11).foregroundStyle(theme.accent)
         }.wixalCard()
     }
     private func downloadAction(_ title:String,id:String,action:String)->some View{Button(title){run("model-download-action",["id":id,"action":action])}.disabled(operation || (engine.busy && ["resume","retry"].contains(action)) || benchmark != nil)}

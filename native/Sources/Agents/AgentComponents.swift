@@ -5,7 +5,7 @@ struct AgentAvatar:View {
     let icon:String
     var size:CGFloat=38
     @Environment(\.wixalTheme) private var theme
-    var body:some View {Image(systemName:icon).wixalFont(size:size*0.43).foregroundStyle(theme.accent).frame(width:size,height:size).background(theme.selected,in:RoundedRectangle(cornerRadius:10)).overlay(RoundedRectangle(cornerRadius:10).stroke(theme.line,lineWidth:1)).accessibilityHidden(true)}
+    var body:some View {Image(systemName:icon).wixalFont(size:size*0.43).foregroundStyle(theme.accent).frame(width:size,height:size).background(theme.selected,in:RoundedRectangle(cornerRadius:10)).overlay(RoundedRectangle(cornerRadius:10).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:10).accessibilityHidden(true)}
 }
 struct AgentRuntimeBanner:View {
     @Environment(\.wixalTheme) private var theme
@@ -18,7 +18,7 @@ struct AgentEmptyState:View {
     let action:String
     let perform:()->Void
     @Environment(\.wixalTheme) private var theme
-    var body:some View{VStack(alignment:.leading,spacing:16){AgentAvatar(icon:icon,size:48);Text(title).wixalFont(size:24,weight:.medium);Text(detail).wixalFont(size:12).foregroundStyle(theme.muted).lineSpacing(4).frame(maxWidth:520,alignment:.leading);Button(action,action:perform).buttonStyle(WixalButtonStyle(outlined:true))}.padding(28).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).stroke(theme.line,lineWidth:1))}
+    var body:some View{VStack(alignment:.leading,spacing:16){AgentAvatar(icon:icon,size:48);Text(title).wixalFont(size:24,weight:.medium);Text(detail).wixalFont(size:12).foregroundStyle(theme.muted).lineSpacing(4).frame(maxWidth:520,alignment:.leading);Button(action,action:perform).buttonStyle(WixalButtonStyle(outlined:true))}.padding(28).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:12)}
 }
 struct AgentMetadata:View {
     let title:String

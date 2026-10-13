@@ -16,7 +16,7 @@ struct AgentSkillLearningView:View {
         DisclosureGroup("Propose and evaluate a procedure"){
             VStack(alignment:.leading,spacing:12){
                 TextField("Skill name",text:$name).wixalField().accessibilityLabel("Candidate skill name")
-                TextEditor(text:$procedure).scrollContentBackground(.hidden).wixalFont(size:12).padding(8).frame(height:110).background(theme.raised,in:RoundedRectangle(cornerRadius:8)).accessibilityLabel("Candidate skill procedure")
+                TextEditor(text:$procedure).scrollContentBackground(.hidden).wixalFont(size:12).padding(8).frame(height:110).background(theme.raised,in:RoundedRectangle(cornerRadius:8)).wixalSoftDepth(cornerRadius:8).accessibilityLabel("Candidate skill procedure")
                 Button("Save candidate"){engine.action("skill-propose",["name":name,"content":procedure]);name="";procedure=""}.disabled(name.isEmpty || procedure.isEmpty || engine.busy).buttonStyle(WixalButtonStyle(outlined:true))
                 Picker("Candidate",selection:$candidateID){Text("Choose a candidate").tag("");ForEach(Array(records(engine.state["skillCandidates"]).enumerated()),id:\.offset){_,row in Text(textValue(row["name"])).tag(textValue(row["id"]))}}
                 Picker("Evaluation agent",selection:$agentID){Text("Choose an agent").tag("");ForEach(design.agents.filter{$0.archived != true}){agent in Text(agent.name).tag(agent.id)}}

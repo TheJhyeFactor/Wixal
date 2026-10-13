@@ -82,7 +82,7 @@ struct QuietContextSettings: View {
                 VStack(alignment:.leading,spacing:10) {
                     TextEditor(text:Binding(get:{draft},set:{settings.updateDraft(owner,text:$0,saved:engine.activeMemory)})).accessibilityLabel("Global instructions").wixalFont(size:12).scrollContentBackground(.hidden).frame(height:110).wixalField().disabled(!memoryWritable || settings.saving)
                     ViewThatFits(in:.horizontal) { HStack { instructionFooter }; VStack(alignment:.leading,spacing:10) { instructionFooter } }
-                    if !memoryWritable { Text("Verify your email in Account to save account instructions.").wixalFont(size:11).foregroundStyle(colours.muted); Button("Open Account") { settings.open("Account") }.buttonStyle(.plain) }
+                    if !memoryWritable { Text("Verify your email in Account to save account instructions.").wixalFont(size:11).foregroundStyle(colours.muted); Button("Open Account") { settings.open("Account") }.buttonStyle(WixalButtonStyle(inline:true)) }
                 }.wixalCard()
             }
     }

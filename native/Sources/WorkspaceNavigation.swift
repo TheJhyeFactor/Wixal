@@ -3,7 +3,8 @@ import WixalInteractions
 
 struct NavigationRailButton: View {
     let title: String
-    let symbol: String
+    var symbol: String = ""
+    var wordmark: String?
     var selected = false
     let action: () -> Void
     @Environment(\.wixalTheme) private var theme
@@ -11,8 +12,10 @@ struct NavigationRailButton: View {
     @FocusState private var focused:Bool
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).wixalFont(size: 16)
-                .frame(width: 36, height: 36).contentShape(Rectangle())
+            Group {
+                if let wordmark { Text(wordmark).wixalFont(size:16,weight:.semibold,design:.monospaced).foregroundStyle(theme.text) }
+                else { Image(systemName:symbol).wixalFont(size:16) }
+            }.frame(width: 36, height: 36).contentShape(Rectangle())
                 .background(selected ? theme.selected : hovered ? theme.raised : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .overlay(alignment: .leading) { if selected { Rectangle().fill(theme.accent).frame(width: 2, height: 18) } }
         }.buttonStyle(.plain).foregroundStyle(selected ? theme.text : theme.muted)

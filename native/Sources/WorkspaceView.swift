@@ -185,7 +185,8 @@ struct WorkspaceView: View {
     }
     private var navigationRail:some View {
         VStack(spacing:6) {
-            Text("W_").wixalFont(size:16,weight:.semibold,design:.monospaced).padding(.vertical,12).accessibilityLabel("Wixal")
+            NavigationRailButton(title:sidebarIsCompact ? "Wixal · Expand sidebar" : "Wixal · Collapse sidebar",wordmark:"W_"){toggleSidebar()}
+                .padding(.vertical,4).help("Toggle sidebar · ⌘ B")
             NavigationRailButton(title:"Chats",symbol:"bubble.left",selected:tab=="Chat"){chooseWorkspace(.chats)}.disabled(navigationBusy)
             NavigationRailButton(title:"Projects",symbol:"folder",selected:tab=="Projects"){tab="Projects";drawer=nil}
             NavigationRailButton(title:"Recents",symbol:"clock",selected:tab=="Recents"){tab="Recents";drawer=nil}

@@ -172,6 +172,7 @@ struct ChatView: View {
             }.background(theme.raised,in:RoundedRectangle(cornerRadius:12))
                 .overlay(RoundedRectangle(cornerRadius:12).stroke(theme.line,lineWidth:1))
                 .overlay(RoundedRectangle(cornerRadius:12).stroke(.white.opacity(theme.light ? 0.7 : 0.10),lineWidth:1).mask(LinearGradient(colors:[.white,.clear],startPoint:.top,endPoint:.center)).allowsHitTesting(false))
+                .compositingGroup()
                 .shadow(color:.black.opacity(theme.light ? 0.07 : 0.20),radius:2,x:0,y:1)
                 .shadow(color:.black.opacity(theme.light ? 0.05 : 0.14),radius:8,x:0,y:3)
             HStack(spacing:7){Circle().fill(engine.modelReady ? theme.accent : theme.muted).frame(width:5,height:5);Text(engine.modelConnectionLabel).lineLimit(1);Spacer();Button{detailsPresented=true}label:{Text(contextLabel).lineLimit(1)}.buttonStyle(.plain).help("Context, saved summary and response usage");if !engine.busy{Text("Ready").lineLimit(1)}}.wixalFont(size:9).foregroundStyle(theme.muted).padding(.top,14).padding(.bottom,12)

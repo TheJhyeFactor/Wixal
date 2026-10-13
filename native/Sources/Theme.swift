@@ -77,6 +77,7 @@ private struct WixalButtonBody<Label:View>:View {
             .overlay(shape.stroke(elevated ? active ? theme.accent.opacity(0.45) : theme.line : .clear,lineWidth:1))
             .overlay(shape.stroke(.white.opacity(elevated && !depressed ? theme.light ? 0.7 : 0.12 : 0),lineWidth:1).mask(LinearGradient(colors:[.white,.clear],startPoint:.top,endPoint:.center)).allowsHitTesting(false))
             .overlay(shape.fill(.black.opacity(depressed && elevated ? 0.08 : 0)).allowsHitTesting(false))
+            .compositingGroup()
             .shadow(color:.black.opacity(enabled && elevated && !depressed ? theme.light ? 0.10 : 0.24 : 0),radius:1,x:0,y:1)
             .shadow(color:.black.opacity(enabled && elevated && !depressed ? theme.light ? 0.06 : 0.18 : 0),radius:hover ? 4 : 2,x:0,y:hover ? 2 : 1)
             .offset(y:reduceMotion || !enabled || !elevated ? 0 : depressed ? 0.5 : hover ? -0.5 : 0)

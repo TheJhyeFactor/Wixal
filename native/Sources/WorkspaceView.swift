@@ -11,7 +11,6 @@ struct WorkspaceView: View {
     @AppStorage("navigation.pinnedConversations") private var pinnedConversations = "[]"
     @AppStorage("navigation.expandedProjects") private var expandedProjects = "[]"
     @ViewState<Bool> private var openingContext = false
-    @ViewState<Bool> private var narrowSidebarOpen = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @ViewState<Bool> private var introFinished=true
     @ViewState<Bool> private var preferencesLoaded=false
@@ -161,7 +160,7 @@ struct WorkspaceView: View {
     private var titlebar: some View {
         HStack {Text("wixal").wixalFont(size:13,design:.monospaced);Spacer();Button{palette=true}label:{Label("Search",systemImage:"magnifyingglass")}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Find a command · ⌘ K")}.padding(.leading,98).padding(.trailing,20).frame(height:48).background(theme.background)
     }
-    private var sidebarIsCompact: Bool { windowSize.width < 1100 ? !narrowSidebarOpen : collapsed }
+    private var sidebarIsCompact: Bool { collapsed }
     private var navigationWidth:CGFloat { 49 + (sidebarIsCompact ? 0 : CGFloat(SidebarPreferences.width(sidebarWidth)) + 7) }
     private var canDockInspector:Bool { windowSize.width-navigationWidth >= 900 }
     private var navigationBusy:Bool { engine.busy || openingContext || creatingConversation }
@@ -182,7 +181,6 @@ struct WorkspaceView: View {
         }
     }
     private func toggleSidebar() {
-        if windowSize.width < 1100 { narrowSidebarOpen.toggle();return }
         collapsed.toggle();engine.action("settings",["ui":["sidebarCollapsed":collapsed]])
     }
     private var navigationRail:some View {
@@ -238,15 +236,10 @@ struct WorkspaceView: View {
                 } label:{Image(systemName:"slider.horizontal.3").frame(width:28,height:32)}.menuStyle(.borderlessButton).menuIndicator(.hidden).accessibilityLabel("Sidebar preferences")
             }.padding(.bottom,6)
             HStack(spacing:7){Image(systemName:"magnifyingglass").foregroundStyle(theme.muted);TextField("Filter projects and chats",text:$search).textFieldStyle(.plain).wixalFont(size:12)}.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:5))
-            Menu {
-                Button("New chat"){newConversation("chat")}
-                Button("New agent conversation"){newConversation("agent")}
-            } label:{Label("New conversation",systemImage:"square.and.pencil").wixalFont(size:12).frame(maxWidth:.infinity,alignment:.leading).frame(height:32)}.menuStyle(.borderlessButton).menuIndicator(.hidden).disabled(navigationBusy)
+            Button {newConversation(workspace == .agents ? "agent" : "chat")} label:{Label(workspace == .agents ? "New agent conversation" : "New chat",systemImage:"square.and.pencil").wixalFont(size:12).frame(maxWidth:.infinity,alignment:.leading).frame(height:32)}.buttonStyle(.plain).disabled(navigationBusy)
             ScrollView {
                 LazyVStack(alignment:.leading,spacing:14) {
-                    if !pinnedSessions.isEmpty {
-                        VStack(alignment:.leading,spacing:2){Text("Pinned").wixalFont(size:11).foregroundStyle(theme.muted).padding(6);ForEach(pinnedSessions,id: \.navigationID){session in conversationRow(session)}}
-                    }
+                    VStack(alignment:.leading,spacing:2){Text("Pinned").wixalFont(size:11).foregroundStyle(theme.muted).padding(6);ForEach(pinnedSessions,id: \.navigationID){session in conversationRow(session)};if pinnedSessions.isEmpty{Text("Pin a conversation from its menu").wixalFont(size:11).foregroundStyle(theme.muted).padding(6)}}
                     VStack(alignment:.leading,spacing:2) {
                         HStack{sectionToggle("Projects",expanded:$projectsExpanded);Button{createProjectPresented=true}label:{Image(systemName:"plus").frame(width:28,height:28)}.buttonStyle(.plain).accessibilityLabel("Add project").disabled(navigationBusy)}
                         if projectsExpanded {

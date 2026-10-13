@@ -190,7 +190,6 @@ struct WorkspaceView: View {
             NavigationRailButton(title:"Chats",symbol:"bubble.left",selected:tab=="Chat"){chooseWorkspace(.chats)}.disabled(navigationBusy)
             NavigationRailButton(title:"Projects",symbol:"folder",selected:tab=="Projects"){tab="Projects";drawer=nil}
             NavigationRailButton(title:"Recents",symbol:"clock",selected:tab=="Recents"){tab="Recents";drawer=nil}
-            NavigationRailButton(title:sidebarIsCompact ? "Expand sidebar" : "Collapse sidebar",symbol:"sidebar.left"){toggleSidebar()}.help("Toggle sidebar · ⌘ B")
             Spacer(minLength:0)
             NavigationUtilities { route in select(route) }
             NavigationRailButton(title:"Settings",symbol:"gearshape",selected:tab=="Settings"){openSettings()}

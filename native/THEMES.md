@@ -16,7 +16,7 @@ Each theme maps to the icon with the same identifier. Paper and Forest now have 
 ## Verification
 
 - `swift build --build-system native --package-path native --product WixalNative`: passed using Swift 6.4.
-- `PYTHONPATH=native/engine:native/tests native/.venv/bin/python -m unittest test_theme_catalogue test_settings test_engine test_startup_recovery -q`: 32 tests passed.
+- `PYTHONPATH=native/engine:native/tests native/.venv/bin/python -m unittest test_theme_catalogue test_settings test_engine test_startup_recovery -q`: 33 tests passed (including Small text preset validation).
 - Contrast regression checks cover primary and muted text against all five content surfaces, and accent text against background/sidebar/panel, at a minimum 4.5:1 ratio. Pearl and Dune accents were darkened slightly from the original concept to meet that target.
 - All ten themes persist when committed SQLite state is reopened through the production Store, preserving exact saved messages and an unsent multiline draft. All themes also work during a held task without unlocking model context or tool permissions. Invalid combined theme/icon updates leave state unchanged.
 - Native UI check in an isolated debug app at the production 920 × 640 minimum: selected all ten themes, rendered and selected all eleven icon choices, verified manual Copper survives a switch to Aurora, and restored matching to Aurora.
@@ -38,3 +38,11 @@ The pre-install workspace snapshot and post-install state matched for all nine c
 The two isolated preview bundles and the duplicate release output were moved to Trash and unregistered. Final inventory found one Wixal application outside Trash, `/Applications/Wixal.app`, with one running native app process. A ZIP of the previous installed version is retained under `~/Library/Application Support/Wixal Release Backups/` for rollback. Historical preview bundle paths above are no longer active installations. Deployment evidence is recorded in `artifacts/native/theme-preview/installed-verification.json`, `deploy-cleanup.json` and `deployment-final.json`.
 
 Regenerate the seven new vector/PNG icon pairs with `node native/scripts/generate-theme-icons.cjs`. The existing native packager copies the entire `assets/icon-variants` directory into the bundle.
+
+## Quiet controls Appearance layout
+
+Appearance uses a compact workspace preview followed by adjacent theme and Dock icon controls. The theme dropdown shows the matching icon and a miniature palette preview for each of the ten themes, with a checkmark for the active choice. Arrow keys move between choices and Escape dismisses the picker. The Dock icon chooser opens on request; choosing an icon disables theme matching, while re-enabling matching derives the current theme icon.
+
+Text size includes Small (11), Default (13), Large (15), and Extra large (17). The message composer also responds to Small. Account presets and legacy appearance restoration accept all four sizes and reject invalid types. Motion and launch controls use simple rows. Reset retains confirmation and does not alter conversations, memory or account settings. All changes use the existing acknowledged engine save path.
+
+The layout adapts by stacking the theme/icon controls and row controls when the settings area becomes narrow. The theme popup scrolls within a bounded height on small windows. No permanent theme or icon galleries are shown.

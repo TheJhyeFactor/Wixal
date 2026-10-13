@@ -122,7 +122,7 @@ struct NavigationUtilities:View {
             .overlay(alignment:.leading){if (hovered || focused) && !presented {Text("Utilities").wixalFont(size:11,weight:.medium).fixedSize().padding(.horizontal,9).padding(.vertical,6).background(theme.raised,in:RoundedRectangle(cornerRadius:4)).overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1)).offset(x:44).allowsHitTesting(false).accessibilityHidden(true)}}
             .zIndex(hovered || focused ? 10 : 0)
             .popover(isPresented:$presented,arrowEdge:.trailing) {
-                VStack(alignment:.leading,spacing:8) {
+                ScrollView { VStack(alignment:.leading,spacing:8) {
                     Text("Utilities").wixalFont(size:14,weight:.semibold).padding(.horizontal,10).padding(.top,5)
                     ForEach(groups.indices,id:\.self){index in
                         VStack(alignment:.leading,spacing:1) {
@@ -134,7 +134,7 @@ struct NavigationUtilities:View {
                         }
                         if index < groups.count-1 {Rectangle().fill(theme.line).frame(height:1).padding(.horizontal,8)}
                     }
-                }.padding(8).frame(width:260).background(theme.panel).foregroundStyle(theme.text).onExitCommand{presented=false}
+                }.padding(8) }.frame(width:260,height:360).background(theme.panel).foregroundStyle(theme.text).onExitCommand{presented=false}
             }
     }
 }

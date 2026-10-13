@@ -24,7 +24,7 @@ struct QuietContextSettings: View {
             QuietSettingsTabs(items:["Context","Instructions","Saved memory","Suggestions"],selection:$settings.contextTab)
             if settings.contextTab=="Context"{
                 ViewThatFits(in:.horizontal){
-                    HStack(alignment:.top,spacing:16){conversation.frame(minWidth:340);sourceEligibility.frame(width:220)}
+                    HStack(alignment:.top,spacing:16){conversation.frame(width:400);sourceEligibility.frame(width:220)}
                     VStack(alignment:.leading,spacing:16){conversation;sourceEligibility}
                 }
                 summary
@@ -96,7 +96,7 @@ struct QuietContextSettings: View {
     }
     private var contextHint: String {
         let model=records(engine.modelStatus["installed"]).first { textValue($0["name"]) == textValue(engine.state["model"]) }
-        if let suggested=model?["suggestedContext"] as? Int { return "Suggested: \(suggested/1024)k for \(textValue(model?["name"])). Larger windows use more memory." }
+        if let suggested=model?["suggestedContext"] as? Int { return "Suggested: \(suggested/1024)k for \(textValue(model?["displayName"]).isEmpty ? textValue(model?["name"]) : textValue(model?["displayName"])). Larger windows use more memory." }
         return "Larger windows use more memory. Models shows the selected model’s limits and fit estimates."
     }
     private func save(_ method:String,_ params:[String:Any]){settings.perform(engine,method,params){_ in engine.refreshMemory()}}

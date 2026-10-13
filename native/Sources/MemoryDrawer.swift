@@ -11,6 +11,7 @@ struct MemoryDrawer:View {
     @ViewState<String> private var global=""
     @ViewState<String> private var scope="Project"
     @ViewState<String> private var query=""
+    @ViewState<String> private var noteSearch=""
     @ViewState<[[String:Any]]> private var found=[]
     @ViewState<Bool> private var reviewing=false
     @ViewState<String> private var forgetting=""
@@ -56,6 +57,7 @@ struct MemoryDrawer:View {
                 if suggestions.isEmpty{Text("No suggestions to review. Lasting memories need your approval before saving.").wixalFont(size:12).foregroundStyle(theme.muted)}else{suggestedMemories}
                 DisclosureGroup("Suggestion review settings"){suggestionControls.padding(.top,10)}.wixalFont(size:12)
             }else{
+                TextField("Search saved notes…",text:$noteSearch).wixalField().accessibilityLabel("Search saved notes")
                 if section==nil && !suggestions.isEmpty{suggestedMemories}
                 if scope=="Project"{projectContent}else{globalContent}
                 DisclosureGroup("Recall & indexing"){recallControls.padding(.top,10)}.wixalFont(size:12)
@@ -74,7 +76,7 @@ struct MemoryDrawer:View {
                 Text("\(used.formatted()) / \(budget.formatted()) saved characters").wixalFont(size:10).foregroundStyle(theme.muted)
                 Text("Relevant notes and earlier chats are selected to fit the model’s context. Earlier chats do not consume the saved-note budget. Current corrections take precedence.").wixalFont(size:10).foregroundStyle(theme.muted).lineSpacing(3)
                 if memories.isEmpty{Text("No saved project notes yet.").wixalFont(size:11).foregroundStyle(theme.muted)}
-                ForEach(Array(memories.enumerated()),id:\.offset){_,item in VStack(alignment:.leading,spacing:10){Text(textValue(item["content"])).wixalFont(size:12).textSelection(.enabled);HStack{Button("Edit"){editing=textValue(item["id"]);note=textValue(item["content"])}.disabled(!projectEnabled);Button("Delete",role:.destructive){forgetting=textValue(item["id"])};Spacer()}.wixalFont(size:10).buttonStyle(.plain).disabled(engine.busy)}.wixalCard()}
+                ForEach(Array(memories.filter{noteSearch.isEmpty || textValue($0["content"]).localizedCaseInsensitiveContains(noteSearch)}.enumerated()),id:\.offset){_,item in VStack(alignment:.leading,spacing:10){Text(textValue(item["content"])).wixalFont(size:12).textSelection(.enabled);HStack{Button("Edit"){editing=textValue(item["id"]);note=textValue(item["content"])}.disabled(!projectEnabled);Button("Delete",role:.destructive){forgetting=textValue(item["id"])};Spacer()}.wixalFont(size:10).buttonStyle(.plain).disabled(engine.busy)}.wixalCard()}
                 Text(editing==nil ? "Add a note" : "Edit saved note").wixalFont(size:12,weight:.medium)
                 TextEditor(text:$note).accessibilityLabel("New project memory").wixalFont(size:12).scrollContentBackground(.hidden).frame(height:120).wixalField().disabled(!projectEnabled || engine.busy)
                 Text("\(note.count) / 4,000 characters").wixalFont(size:10).foregroundStyle(note.count>4000 ? .red : theme.muted)
@@ -93,10 +95,11 @@ struct MemoryDrawer:View {
             }
             Text("Saved global memories on this Mac").wixalFont(size:12,weight:.medium)
             if !globalEnabled{Text("Global recall is disabled here. Enable global preferences and choose Both or Global in the project memory scope to save global notes.").wixalFont(size:11).foregroundStyle(theme.muted)}
-            Text("These notes belong to the active guest or account identity. Project-only chats exclude them. They are kept locally; the short profile above retains its account sync.").wixalFont(size:10).foregroundStyle(theme.muted).lineSpacing(3)
-            ForEach(Array(globalNotes.enumerated()),id:\.offset){_,item in VStack(alignment:.leading,spacing:8){Text(textValue(item["content"])).wixalFont(size:12).textSelection(.enabled);HStack{Button("Edit"){editing=textValue(item["id"]);note=textValue(item["content"])}.disabled(!globalEnabled);Button("Forget",role:.destructive){forgetting=textValue(item["id"])}}.wixalFont(size:10).buttonStyle(.plain).disabled(engine.busy)}.wixalCard()}
+            Text(section==nil ? "These notes belong to the active guest or account identity. Project-only chats exclude them. Notes stay local; the short profile retains its account sync." : "These notes belong to the active guest or account identity and stay on this Mac. Project-only chats exclude them. Edit the separate short profile in Instructions.").wixalFont(size:10).foregroundStyle(theme.muted).lineSpacing(3)
+            ForEach(Array(globalNotes.filter{noteSearch.isEmpty || textValue($0["content"]).localizedCaseInsensitiveContains(noteSearch)}.enumerated()),id:\.offset){_,item in VStack(alignment:.leading,spacing:8){Text(textValue(item["content"])).wixalFont(size:12).textSelection(.enabled);HStack{Button("Edit"){editing=textValue(item["id"]);note=textValue(item["content"])}.disabled(!globalEnabled);Button("Forget",role:.destructive){forgetting=textValue(item["id"])}}.wixalFont(size:10).buttonStyle(.plain).disabled(engine.busy)}.wixalCard()}
             TextEditor(text:$note).accessibilityLabel("New global memory").wixalFont(size:12).scrollContentBackground(.hidden).frame(height:100).wixalField().disabled(!globalEnabled || engine.busy)
             HStack{Button(editing==nil ? "Save global memory" : "Save changes"){saveGlobalNote()}.disabled(!globalEnabled || note.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || note.count>4000 || engine.busy);if editing != nil{Button("Cancel edit"){editing=nil;note=""}}}.wixalFont(size:11).buttonStyle(WixalButtonStyle(outlined:true))
+            Text("\(note.count) / 4,000 characters").wixalFont(size:10).foregroundStyle(note.count>4000 ? .red : theme.muted)
             Text("\(engine.memoryStatus["globalUsed"] as? Int ?? 0) / 8,000 saved characters").wixalFont(size:10).foregroundStyle(theme.muted)
         }
     }

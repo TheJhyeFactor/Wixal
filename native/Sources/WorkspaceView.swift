@@ -330,7 +330,13 @@ struct WorkspaceView: View {
         if action.hasPrefix("Project:"){openProject(String(action.dropFirst(8)));return}
         if action=="Toggle sidebar"{toggleSidebar();return}
         if action=="Chats"{chooseWorkspace(.chats);return}
-        if action.hasPrefix("Settings:") { settings.open(action == "Settings:Connections" ? "Connections & sharing" : action == "Settings:Tools" ? "Tools & permissions" : "Data & sync");openSettings();return }
+        if action.hasPrefix("Settings:") {
+            let requested=String(action.dropFirst(9))
+            let aliases=["Connections":"Connections & sharing","Tools":"Tools & permissions","Data":"Data & sync"]
+            let category=aliases[requested] ?? requested
+            settings.open(SettingsCategory.all.contains{$0.id==category} ? category : "Data & sync")
+            openSettings();return
+        }
         if action == "Tools" { drawer=nil;tab="Tools";return }
         switch action{case "Commands":palette=true;case "Settings":openSettings();case "Connections":settings.open("Connections & sharing",detail:"Companion");openSettings();case "Account":settings.open("Account");openSettings();case "Setup":setupPresented=true;case "Terms":legalDocument="terms";case "Privacy":legalDocument="privacy";case "Open project":engine.pickProject();case "New conversation":newConversation("chat");case "Chat":openMode("chat");case "Agents":chooseWorkspace(.agents);case "Tasks":tab="Agents";agentPage="Task inbox";case "Terminal":terminal.toggle();case "Tool kit":openMode("agent",page:"Live tools");case "Project memory":tab="Projects";drawer="Memory";case "Archived chats":archives=true;default:tab=action}}
 }

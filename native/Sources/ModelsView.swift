@@ -90,7 +90,7 @@ struct ModelsView:View {
     private var modelLibrary:some View {
         VStack(alignment:.leading,spacing:18){
             SettingsCard {
-                SettingsRow(title:selected.isEmpty ? "Choose a model" : selected,detail:engine.modelConnectionLabel,scope:"All workspaces") {
+                SettingsRow(title:selected.isEmpty ? "Choose a model" : modelTitle(current ?? ["name":selected]),detail:engine.modelConnectionLabel,scope:"All workspaces") {
                     Button("Adjust context →"){NotificationCenter.default.post(name:.wixalNavigate,object:"Settings:Context & memory")}.buttonStyle(.plain)
                 }
             }
@@ -120,7 +120,7 @@ struct ModelsView:View {
             Text("Measure generation speed").wixalFont(size:13,weight:.medium)
             Text("Choose Benchmark beside a model below. The first run includes loading; the second measures warm generation. This does not measure answer quality.").wixalFont(size:11).foregroundStyle(theme.muted)
             ForEach(Array(installed.filter{($0["capabilities"] as? [String] ?? []).contains("completion")}.enumerated()),id:\.offset){_,model in
-                HStack{Text(textValue(model["name"])).wixalFont(size:12);Spacer();Button("Benchmark"){run("benchmark-start",["name":textValue(model["name"])])}.disabled(locked || hasDownload).buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:11)}
+                HStack{Text(modelTitle(model)).wixalFont(size:12);Spacer();Button("Benchmark"){run("benchmark-start",["name":textValue(model["name"])])}.disabled(locked || hasDownload).buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:11)}
             }
         }.wixalCard()
     }
@@ -267,6 +267,7 @@ struct ModelsView:View {
         let info=model["fit"] as? [String:Any] ?? [:]
         return Text(modelNumber(info["required"])>0 ? "Estimated model RAM \(modelRAM(info["required"])) · Recommended Mac RAM \(modelRAM(info["recommended"])) · \(Int(modelNumber(info["context"]))/1024)k context · \((info["fits"] as? Bool ?? false) ? "Estimated fit" : "May exceed this Mac’s budget")" : "RAM requirement unknown until file metadata is available").wixalFont(size:11).foregroundStyle(theme.muted).help("Estimate includes weights, context cache and overhead; recommended total RAM reserves 25% for macOS. Actual memory depends on the model and runtime.")
     }
+    private func modelTitle(_ model:[String:Any])->String{textValue(model["displayName"]).isEmpty ? textValue(model["name"]) : textValue(model["displayName"])}
     private func parameterLabel(_ model:[String:Any])->String{let count=modelNumber(model["parameters"]);return count>0 ? String(format:"%.1fB parameters",count/1e9) : "Parameters unknown"}
     private func typeLabel(_ model:[String:Any])->String{let task=textValue(model["pipelineTag"]);return records(filterData["tasks"]).first{textValue($0["id"])==task}.map{textValue($0["label"])} ?? (task.isEmpty ? "Type not listed" : task)}
     private var yourModels:some View {

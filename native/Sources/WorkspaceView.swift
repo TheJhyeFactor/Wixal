@@ -151,7 +151,7 @@ struct WorkspaceView: View {
         .onChange(of:appearance){_,_ in updateIcon()}
         .onChange(of:engine.state["activeSession"] as? String) {_,_ in engine.browser.closeAll();if ["Chat","Agents"].contains(tab){tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat"}}
         .onGeometryChange(for:CGSize.self){$0.size}action:{windowSize=$0}
-        .environment(\.wixalTheme,theme).environment(\.wixalTextSize,CGFloat(ui["textSize"] as? Int ?? 13)).tint(theme.accent).preferredColorScheme(theme.light ? .light : .dark)
+        .environment(\.wixalTheme,theme).environment(\.wixalReducedMotion,reduceMotion).environment(\.wixalTextSize,CGFloat(ui["textSize"] as? Int ?? 13)).tint(theme.accent).preferredColorScheme(theme.light ? .light : .dark)
     }
     private func updateIcon(){
         let saved=textValue(ui["appIcon"]);let variant = WixalPalette.iconVariants.contains(saved) ? saved : theme.icon
@@ -227,7 +227,7 @@ struct WorkspaceView: View {
                 } label:{Image(systemName:"slider.horizontal.3").frame(width:28,height:32)}.menuStyle(.borderlessButton).menuIndicator(.hidden).accessibilityLabel("Sidebar preferences")
             }.padding(.bottom,6)
             HStack(spacing:7){Image(systemName:"magnifyingglass").foregroundStyle(theme.muted);TextField("Filter projects and chats",text:$search).textFieldStyle(.plain).wixalFont(size:12)}.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:5))
-            Button {newConversation(workspace == .agents ? "agent" : "chat")} label:{Label(workspace == .agents ? "New agent conversation" : "New chat",systemImage:"square.and.pencil").wixalFont(size:12).frame(maxWidth:.infinity,alignment:.leading).frame(height:32)}.buttonStyle(.plain).disabled(navigationBusy)
+            Button {newConversation(workspace == .agents ? "agent" : "chat")} label:{Label(workspace == .agents ? "New agent conversation" : "New chat",systemImage:"square.and.pencil").wixalFont(size:12).padding(.horizontal,10).frame(maxWidth:.infinity,alignment:.leading).frame(height:32)}.buttonStyle(WixalButtonStyle(prominent:true,compact:true)).disabled(navigationBusy)
             ScrollView {
                 LazyVStack(alignment:.leading,spacing:14) {
                     VStack(alignment:.leading,spacing:2){Text("Pinned").wixalFont(size:11).foregroundStyle(theme.muted).padding(6);ForEach(pinnedSessions,id: \.navigationID){session in conversationRow(session)};if pinnedSessions.isEmpty{Text("Pin a conversation from its menu").wixalFont(size:11).foregroundStyle(theme.muted).padding(6)}}

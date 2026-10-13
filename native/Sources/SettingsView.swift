@@ -123,7 +123,18 @@ struct SettingsView: View {
     }
     private var appearance: some View {
         Group {
-            WixalSection(title:"Theme") { LazyVGrid(columns:[GridItem(.adaptive(minimum:110),spacing:10)],spacing:10) { ForEach(["Sakura","Midnight","Forest","Paper"],id:\.self) { themeCard($0) } }.disabled(appearanceLocked) }
+            WixalSection(title:"Theme",detail:"Ten coordinated palettes, from bright light to near-black.") {
+                VStack(alignment:.leading,spacing:16) {
+                    ForEach([true,false],id:\.self) { light in
+                        VStack(alignment:.leading,spacing:8) {
+                            Text(light ? "Light" : "Dark").wixalFont(size:11,weight:.medium).foregroundStyle(colours.muted)
+                            LazyVGrid(columns:[GridItem(.adaptive(minimum:120),spacing:10)],spacing:10) {
+                                ForEach(WixalPalette.all.filter { $0.light == light },id:\.id) { themeCard($0.name) }
+                            }
+                        }
+                    }
+                }.disabled(appearanceLocked)
+            }
             WixalSection(title:"Reading & motion") {
                 SettingsCard {
                     SettingsRow(title:"Text size",detail:"Applies to navigation, forms, messages and the terminal.") { Picker("Text size",selection:Binding(get:{ui["textSize"] as? Int ?? 13},set:{saveUI(["textSize":$0])})) { Text("Default").tag(13); Text("Large").tag(15); Text("Extra large").tag(17) }.labelsHidden() }
@@ -132,8 +143,8 @@ struct SettingsView: View {
                 }.disabled(appearanceLocked)
             }
             WixalSection(title:"App icon",detail:"Changes the running Dock icon. Selecting an icon below turns theme matching off.") {
-                SettingsRow(title:"Match icon to theme",detail:"Sakura → Sakura, Midnight → Midnight, Paper → Pearl, Forest → Copper.") { Toggle("Match icon to theme",isOn:Binding(get:{textValue(ui["appIcon"]).isEmpty || textValue(ui["appIcon"]) == "theme"},set:{saveUI(["appIcon":$0 ? "theme" : iconVariant])})).labelsHidden().toggleStyle(.switch).controlSize(.small) }.disabled(appearanceLocked)
-                LazyVGrid(columns:[GridItem(.adaptive(minimum:90),spacing:10)],spacing:10) { ForEach(["sakura","midnight","pearl","copper"],id:\.self) { iconCard($0) } }.disabled(appearanceLocked)
+                SettingsRow(title:"Match icon to theme",detail:"Each theme has a matching icon. Copper is also available as an independent choice.") { Toggle("Match icon to theme",isOn:Binding(get:{textValue(ui["appIcon"]).isEmpty || textValue(ui["appIcon"]) == "theme"},set:{saveUI(["appIcon":$0 ? "theme" : iconVariant])})).labelsHidden().toggleStyle(.switch).controlSize(.small) }.disabled(appearanceLocked)
+                LazyVGrid(columns:[GridItem(.adaptive(minimum:90),spacing:10)],spacing:10) { ForEach(WixalPalette.iconVariants,id:\.self) { iconCard($0) } }.disabled(appearanceLocked)
             }
             WixalSection(title:"Launch") {
                 SettingsCard {
@@ -279,13 +290,20 @@ struct SettingsView: View {
     private func save(_ method: String, _ params: [String:Any]) { settings.perform(engine,method,params) }
     private func saveUI(_ value: [String:Any]) { save("settings",["ui":value]) }
     private func bool(_ key: String, default fallback: Bool = false) -> Binding<Bool> { Binding(get:{ui[key] as? Bool ?? fallback},set:{saveUI([key:$0])}) }
-    private var iconVariant: String { let saved=textValue(ui["appIcon"]); return !saved.isEmpty && saved != "theme" ? saved : ["paper":"pearl","forest":"copper","midnight":"midnight","sakura":"sakura"][textValue(ui["theme"])] ?? "sakura" }
+    private var iconVariant: String { let saved=textValue(ui["appIcon"]); return WixalPalette.iconVariants.contains(saved) ? saved : WixalPalette.resolve(textValue(ui["theme"])).icon }
     private func themeCard(_ name: String) -> some View {
         let preview=WixalTheme(name:name), selected=textValue(ui["theme"]) == name.lowercased()
         return Button { saveUI(["theme":name.lowercased()]) } label: {
             VStack(alignment:.leading,spacing:9) {
-                HStack(spacing:0) { preview.sidebar.frame(width:14); VStack(alignment:.leading,spacing:6) { RoundedRectangle(cornerRadius:2).fill(preview.accent).frame(width:32,height:4); RoundedRectangle(cornerRadius:2).fill(preview.line).frame(height:3) }.padding(10).frame(maxWidth:.infinity).background(preview.background) }.frame(height:46).clipShape(RoundedRectangle(cornerRadius:4))
-                Text(name).wixalFont(size:11,weight:.medium)
+                HStack(spacing:0) {
+                    preview.sidebar.frame(width:18)
+                    VStack(alignment:.leading,spacing:6) {
+                        RoundedRectangle(cornerRadius:2).fill(preview.accent).frame(width:32,height:4)
+                        RoundedRectangle(cornerRadius:2).fill(preview.text.opacity(0.35)).frame(height:3)
+                        RoundedRectangle(cornerRadius:3).fill(preview.panel).overlay(RoundedRectangle(cornerRadius:3).stroke(preview.line,lineWidth:1)).frame(height:14)
+                    }.padding(9).frame(maxWidth:.infinity).background(preview.background)
+                }.frame(height:62).clipShape(RoundedRectangle(cornerRadius:4))
+                HStack { Text(name).wixalFont(size:11,weight:.medium); Spacer(); if selected { Image(systemName:"checkmark.circle.fill").foregroundStyle(colours.accent).font(.system(size:11)) } }
             }.padding(10).background(colours.panel,in:RoundedRectangle(cornerRadius:7)).overlay(RoundedRectangle(cornerRadius:7).stroke(selected ? colours.accent : colours.line,lineWidth:selected ? 2 : 1))
         }.buttonStyle(.plain).accessibilityLabel("\(name) theme").accessibilityValue(selected ? "Selected" : "Not selected")
     }

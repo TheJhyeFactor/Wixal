@@ -20,7 +20,7 @@ struct StartupPreferences {
     }
     static func from(_ ui: [String:Any]) -> Self {
         let saved = textValue(ui["theme"])
-        return Self(theme:["sakura","midnight","forest","paper"].contains(saved) ? saved : "sakura",
+        return Self(theme:WixalPalette.resolve(saved).id,
                     animation:ui["launchAnimation"] as? Bool ?? true,
                     sound:ui["launchSound"] as? Bool ?? true,
                     reducedMotion:ui["reduceMotion"] as? Bool ?? false)
@@ -31,7 +31,7 @@ struct StartupPreferences {
                                    "launchSound":value.sound,"reduceMotion":value.reducedMotion],forKey:key)
     }
     var colours: WixalTheme {
-        WixalTheme(name:["sakura":"Sakura","midnight":"Midnight","forest":"Forest","paper":"Paper"][theme] ?? "Sakura")
+        WixalTheme(name:theme)
     }
 }
 

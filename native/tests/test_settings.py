@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from wixal.service import Service
 from wixal.conversation import attachments
+from wixal.preferences import THEMES, APP_ICONS
 
 PAYLOAD=Path(__file__).resolve().parents[2]/'runtime/ollama'
 
@@ -25,10 +26,44 @@ class SettingsTests(unittest.IsolatedAsyncioTestCase):
         event=asyncio.Event();self.service.active=asyncio.create_task(event.wait())
         await self.service.dispatch('settings',{'ui':{'textSize':17,'theme':'forest'}})
         self.assertEqual(self.service.store.data['ui']['textSize'],17)
+        for theme in THEMES:
+            await self.service.dispatch('settings',{'ui':{'theme':theme,'appIcon':theme}})
+            self.assertEqual(self.service.store.data['ui']['theme'],theme)
         for params in ({'contextSize':4096},{'approvalMode':'bypass'},{'enabledTools':[]}):
             with self.assertRaisesRegex(ValueError,'current agent task'):await self.service.dispatch('settings',params)
         with self.assertRaises(ValueError):await self.service.dispatch('settings',{'ui':{'textSize':True}})
         self.assertFalse(self.service.active.done());event.set();await self.service.active
+    async def test_all_themes_and_icons_persist_without_changing_conversations_or_drafts(self):
+        from wixal.storage import Store
+        store=self.service.store
+        await self.service.dispatch('session-new',{})
+        session=store.session()
+        session['messages']=[{'role':'user','content':'Retain this exact message.'}]
+        session['draft']='Unsent draft\nwith a second line.'
+        store.save()
+        before=copy.deepcopy(store.data['sessions'])
+        for icon in APP_ICONS:
+            await self.service.dispatch('settings',{'ui':{'appIcon':icon}})
+            self.assertEqual(store.data['ui']['appIcon'],icon)
+        for theme in THEMES:
+            with self.subTest(theme=theme):
+                await self.service.dispatch('settings',{'ui':{'theme':theme,'appIcon':'theme'}})
+                # Copy SQLite's committed state to an independent location and open
+                # it through the production Store, including its startup migrations.
+                target=self.path/theme;target.mkdir()
+                import sqlite3
+                db=sqlite3.connect(target/'workspace.sqlite3')
+                store.db.backup(db);db.close()
+                reopened=Store(target)
+                try:
+                    self.assertEqual(reopened.data['ui']['theme'],theme)
+                    self.assertEqual(reopened.data['ui']['appIcon'],'theme')
+                    self.assertEqual(reopened.data['sessions'],before)
+                finally:reopened.close()
+        before=copy.deepcopy(store.data)
+        for patch in ({'theme':'unknown'},{'appIcon':'unknown'},{'theme':'pearl','appIcon':'unknown'}):
+            with self.assertRaises(ValueError):await self.service.dispatch('settings',{'ui':patch})
+            self.assertEqual(store.data,before)
     async def test_backup_preview_roundtrip_images_and_existing_preferences(self):
         store=self.service.store;root=self.path/'project';root.mkdir()
         await self.service.dispatch('project-add',{'root':str(root)})

@@ -70,7 +70,7 @@ class Store:
             raise
         self.session_digests={};self.session_revisions={}
         had_setup = "setup" in self.data
-        defaults = dict(projects=[], sessions=[], memories=[], tasks=[], schedules=[], skills=[], agentProfiles=[],agentWorkflows=[],workflowRuns=[],agentJobs=[],skillCandidates=[],notifications=[],
+        defaults = dict(projects=[], sessions=[], memories=[], tasks=[], schedules=[], skills=[], agentProfiles=[],agentWorkflows=[],workflowRuns=[],agentJobs=[],agentDelegations=[],skillCandidates=[],notifications=[],
                         enabledTools=[], activeProject=None, activeSession=None, model="", mode="agent",
                         contextSize=8192, autoSummary=True, globalMemory="", globalMemoryEnabled=True,
                         setup=dict(entryCompleted=False, completed=False),assessmentResults=[],

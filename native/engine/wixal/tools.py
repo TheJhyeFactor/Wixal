@@ -429,12 +429,15 @@ class Tools:
             return load(self.store, args)
         if name == "delegate_task":
             if not self.delegate: raise ValueError("Delegation is unavailable in a child agent")
-            return await self.delegate(args["prompt"], args.get("context", ""))
+            return await self.delegate(args["prompt"], args.get("context", ""), args.get("agent_id"))
         if name == "workspace_info":
             from .context_policy import eligible,category,search_tools
             available=eligible(self.catalog(),available_names(self,self.store),self.store.project())
             if args.get('query'):available=search_tools(available,args['query'])
-            return dict(app="Wixal Native",environment=self.environment(), project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name']),description=t['function']['description']) for t in available],memory=self.store.memory.snapshot()['policy'])
+            from .memory import owner
+            project_id=(self.store.project() or {}).get('id')
+            specialists=[dict(id=a['id'],name=a['name'],purpose=a['purpose'],model=a['model'],delegation='Read-only project inspection') for a in self.store.data.get('agentProfiles',[]) if a.get('owner','guest')==owner(self.store) and not a.get('archived') and (a.get('projectScope')!='Current project only' or a.get('projectId')==project_id)] if any(t['function']['name']=='delegate_task' for t in available) else []
+            return dict(app="Wixal Native",environment=self.environment(), project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name']),description=t['function']['description']) for t in available],specialists=specialists,memory=self.store.memory.snapshot()['policy'])
         if name == "verify_json":
             from .outcomes import criteria,verify,source_value
             check=criteria([dict(kind='json_matches_source',**args)])[0]

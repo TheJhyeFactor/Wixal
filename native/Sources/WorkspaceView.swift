@@ -226,6 +226,10 @@ struct WorkspaceView: View {
                     Button("Collapse sidebar"){toggleSidebar()}
                 } label:{Image(systemName:"slider.horizontal.3").frame(width:28,height:32)}.menuStyle(.borderlessButton).menuIndicator(.hidden).accessibilityLabel("Sidebar preferences")
             }.padding(.bottom,6)
+            if workspace == .agents {
+                AgentWorkspaceNavigation(page:$agentPage,openConversation:{openMode("agent")},newConversation:{newConversation("agent")})
+                Spacer(minLength:0)
+            }else{
             HStack(spacing:7){Image(systemName:"magnifyingglass").foregroundStyle(theme.muted);TextField("Filter projects and chats",text:$search).textFieldStyle(.plain).wixalFont(size:12)}.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:5)).wixalSoftDepth(cornerRadius:5)
             Button {newConversation(workspace == .agents ? "agent" : "chat")} label:{Label(workspace == .agents ? "New agent conversation" : "New chat",systemImage:"square.and.pencil").wixalFont(size:12).padding(.horizontal,10).frame(maxWidth:.infinity,alignment:.leading).frame(height:32)}.buttonStyle(WixalButtonStyle(prominent:true,compact:true)).disabled(navigationBusy)
             ScrollView {
@@ -247,6 +251,7 @@ struct WorkspaceView: View {
                         }
                     }
                 }
+            }
             }
         }.padding(12)
     }
@@ -298,7 +303,7 @@ struct WorkspaceView: View {
         if let session=records(engine.state["sessions"]).reversed().first(where:{textValue($0["projectId"])==textValue(engine.state["activeProject"]) && textValue($0["mode"])==mode && ($0["archivedAt"] == nil || $0["archivedAt"] is NSNull)}){openConversation(session,page:page)}else{newConversation(mode,page:page)}
     }
     private var agentsPage:some View{
-        AgentsHubView(engine:engine,design:agentDesign,page:$agentPage,openModels:{modelPicker=true},openFiles:{tab="Files"},newLiveTask:{newConversation("agent")},openLiveConversation:{openMode("agent")})
+        AgentsHubView(engine:engine,design:agentDesign,page:$agentPage,openModels:{modelPicker=true},openFiles:{tab="Files"},newLiveTask:{newConversation("agent")},openLiveConversation:{openMode("agent")},showNavigation:sidebarIsCompact)
     }
     private var projectsPage:some View{
         WixalPage(eyebrow:"PROJECTS",title:engine.project.map{textValue($0["name"])} ?? "Your projects",subtitle:engine.project == nil ? "Add a folder to keep related work together." : engine.root){

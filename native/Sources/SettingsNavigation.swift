@@ -6,7 +6,7 @@ struct SettingsCategory: Identifiable {
     let detail: String
     let terms: String
     static let all: [SettingsCategory] = [
-        .init(id:"Appearance",symbol:"paintpalette",detail:"Make your workspace comfortable and familiar.",terms:"theme pearl cloud paper dune graphite sakura forest midnight aurora obsidian light dark text font size motion animation icon copper launch sound"),
+        .init(id:"Appearance",symbol:"paintpalette",detail:"Theme, icon and reading comfort—in one place.",terms:"theme pearl cloud paper dune graphite sakura forest midnight aurora obsidian light dark text font size motion animation icon copper launch sound"),
         .init(id:"Models & performance",symbol:"cpu",detail:"Manage local models and understand their resource use.",terms:"model library downloads import benchmark engine memory ram usage tokens speed"),
         .init(id:"Context & memory",symbol:"brain",detail:"Choose what Wixal includes when it responds.",terms:"context window summary summarise instructions global project recall history semantic indexing notes"),
         .init(id:"Tools & permissions",symbol:"checkmark.shield",detail:"Manage global installation and choose how actions are reviewed.",terms:"tools installation install automatic downloads global permissions review approval commands skills markdown"),

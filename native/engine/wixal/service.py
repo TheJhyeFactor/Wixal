@@ -66,7 +66,7 @@ class Service:
                     self.store.data["ui"]["theme"] = appearance["theme"]
                 for key in ("textSize","reduceMotion","launchAnimation","launchSound","sidebarCollapsed","appIcon"):
                     value=appearance.get(key)
-                    if key=="textSize" and value in (13,15,17) or key in ("reduceMotion","launchAnimation","launchSound","sidebarCollapsed") and isinstance(value,bool) or key=="appIcon" and value in APP_ICONS:
+                    if key=="textSize" and type(value) is int and value in (11,13,15,17) or key in ("reduceMotion","launchAnimation","launchSound","sidebarCollapsed") and isinstance(value,bool) or key=="appIcon" and value in APP_ICONS:
                         self.store.data["ui"][key]=value
                 self.store.data["appearanceImported"] = True
                 self.store.data["appearanceVersion"] = 2

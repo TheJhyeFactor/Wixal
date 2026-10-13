@@ -31,6 +31,16 @@ class ThemeCatalogueTests(unittest.TestCase):
             value=dict(ui=dict(theme=theme,textSize=13,reduceMotion=False,sidebarCollapsed=False),contextSize=8192,mode='chat',autoSummary=True)
             self.assertEqual(preferences(value)['ui']['theme'],theme)
 
+    def test_small_text_survives_presets_and_invalid_sizes_are_rejected(self):
+        value=dict(ui=dict(theme='sakura',textSize=11,reduceMotion=False,sidebarCollapsed=False),contextSize=8192,mode='chat',autoSummary=True)
+        self.assertEqual(preferences(value)['ui']['textSize'],11)
+        self.assertEqual(validate_ui({'textSize':11}),{'textSize':11})
+        for size in (True,False,10,12,'11',11.0):
+            with self.subTest(size=size):
+                value['ui']['textSize']=size
+                with self.assertRaises(ValueError):preferences(value)
+                with self.assertRaises(ValueError):validate_ui({'textSize':size})
+
     def test_text_contrast_and_distinct_surface_layers(self):
         def luminance(hex_value):
             channels=[(hex_value>>shift&255)/255 for shift in (16,8,0)]

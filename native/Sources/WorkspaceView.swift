@@ -84,7 +84,7 @@ struct WorkspaceView: View {
                             }.frame(maxWidth:.infinity,maxHeight:.infinity)
                             if terminal {
                                 VStack(spacing:0) {
-                                    HStack(spacing:8) { Text("›_").wixalFont(size:12,design:.monospaced); Text("Terminal"); Text(engine.root.isEmpty ? "Home" : engine.root).lineLimit(1).foregroundStyle(theme.muted); Spacer(); Text("Host shell").foregroundStyle(theme.muted); Button("Clear"){engine.terminalSession.clear()}.buttonStyle(.plain); Button {terminal=false} label:{Image(systemName:"xmark")}.buttonStyle(.plain).help("Hide terminal").accessibilityLabel("Hide terminal") }.wixalFont(size:11).padding(.horizontal,14).frame(height:34).background(theme.panel)
+                                    HStack(spacing:8) { Text("›_").wixalFont(size:12,design:.monospaced); Text("Terminal"); Text(engine.root.isEmpty ? "Home" : engine.root).lineLimit(1).foregroundStyle(theme.muted); Spacer(); Text("Host shell").foregroundStyle(theme.muted); Button("Clear"){engine.terminalSession.clear()}.buttonStyle(WixalButtonStyle(inline:true)); Button {terminal=false} label:{Image(systemName:"xmark")}.buttonStyle(WixalButtonStyle(inline:true)).help("Hide terminal").accessibilityLabel("Hide terminal") }.wixalFont(size:11).padding(.horizontal,14).frame(height:34).background(theme.panel)
                                     TerminalPanel(session:engine.terminalSession,root:engine.root,theme:theme,textSize:CGFloat(ui["textSize"] as? Int ?? 13)).id(engine.root)
                                 }.frame(minHeight:120,idealHeight:min(200,windowSize.height*0.28),maxHeight:windowSize.height*0.32)
                             }
@@ -111,7 +111,7 @@ struct WorkspaceView: View {
                         HStack { Text(engine.activity); Spacer(); Button(engine.restarting ? "Restarting…" : "Restart engine") { engine.restart() }.disabled(engine.restarting) }.wixalFont(size:12).padding(12).background(theme.panel)
                     }
                     if !engine.error.isEmpty {
-                        HStack { Image(systemName:"exclamationmark.triangle"); Text(engine.error).textSelection(.enabled); Spacer(); Button("Dismiss") {engine.error=""}.buttonStyle(.plain) }.wixalFont(size:11).padding(12).background(.red.opacity(0.08))
+                        HStack { Image(systemName:"exclamationmark.triangle"); Text(engine.error).textSelection(.enabled); Spacer(); Button("Dismiss") {engine.error=""}.buttonStyle(WixalButtonStyle(inline:true)) }.wixalFont(size:11).padding(12).background(.red.opacity(0.08))
                     }
                 }.background(theme.background)
             }
@@ -144,21 +144,21 @@ struct WorkspaceView: View {
         .sheet(isPresented:Binding(get:{deleteID != nil},set:{if !$0{deleteID=nil}})){DeleteConversationView(engine:engine,id:deleteID ?? "",close:{deleteID=nil})}
         .sheet(item:$engine.review) {review in ReviewView(engine:engine,review:review)}
         .sheet(isPresented:Binding(get:{projectDeleteID != nil},set:{if !$0{projectDeleteID=nil}})){DeleteProjectView(engine:engine,id:projectDeleteID ?? "",close:{projectDeleteID=nil;tab="Projects"})}
-        .sheet(isPresented:$modelPicker){VStack(spacing:0){HStack{Text("Choose your model").wixalFont(size:15,weight:.medium);Spacer();Button{modelPicker=false}label:{Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel("Close model picker")}.padding(20).background(theme.panel);ModelsView(engine:engine)}.frame(width:min(980,windowSize.width-40),height:min(680,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
+        .sheet(isPresented:$modelPicker){VStack(spacing:0){HStack{Text("Choose your model").wixalFont(size:15,weight:.medium);Spacer();Button{modelPicker=false}label:{Image(systemName:"xmark")}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Close model picker")}.padding(20).background(theme.panel);ModelsView(engine:engine)}.frame(width:min(980,windowSize.width-40),height:min(680,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
         .sheet(isPresented:$palette) {CommandPalette(projects:records(engine.state["projects"]),sessions:records(engine.state["sessions"]),action:{select($0);palette=false})}
         .onAppear {StartupEvidence.record("workspace-mounted");updateIcon();expanded=Set(SidebarPreferences.pins(expandedProjects));expanded.insert(textValue(engine.state["activeProject"]));if ProcessInfo.processInfo.environment["WIXAL_NATIVE_SMOKE"] != nil {terminal=true}}
         .onChange(of:engine.state["activeProject"] as? String) {_,id in expanded.insert(id ?? "")}
         .onChange(of:appearance){_,_ in updateIcon()}
         .onChange(of:engine.state["activeSession"] as? String) {_,_ in engine.browser.closeAll();if ["Chat","Agents"].contains(tab){tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat"}}
         .onGeometryChange(for:CGSize.self){$0.size}action:{windowSize=$0}
-        .environment(\.wixalTheme,theme).environment(\.wixalReducedMotion,reduceMotion).environment(\.wixalTextSize,CGFloat(ui["textSize"] as? Int ?? 13)).tint(theme.accent).preferredColorScheme(theme.light ? .light : .dark)
+        .buttonStyle(WixalButtonStyle()).environment(\.wixalTheme,theme).environment(\.wixalReducedMotion,reduceMotion).environment(\.wixalTextSize,CGFloat(ui["textSize"] as? Int ?? 13)).tint(theme.accent).preferredColorScheme(theme.light ? .light : .dark)
     }
     private func updateIcon(){
         let saved=textValue(ui["appIcon"]);let variant = WixalPalette.iconVariants.contains(saved) ? saved : theme.icon
         if let url=Bundle.main.url(forResource:variant,withExtension:"png",subdirectory:"icon-variants"),let image=NSImage(contentsOf:url){NSApp.applicationIconImage=image}
     }
     private var titlebar: some View {
-        HStack {Text("wixal").wixalFont(size:13,design:.monospaced);Spacer();Button{palette=true}label:{Label("Search",systemImage:"magnifyingglass")}.buttonStyle(.plain).foregroundStyle(theme.muted).help("Find a command · ⌘ K")}.padding(.leading,98).padding(.trailing,20).frame(height:48).background(theme.background)
+        HStack {Text("wixal").wixalFont(size:13,design:.monospaced);Spacer();Button{palette=true}label:{Label("Search",systemImage:"magnifyingglass")}.buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(theme.muted).help("Find a command · ⌘ K")}.padding(.leading,98).padding(.trailing,20).frame(height:48).background(theme.background)
     }
     private var sidebarIsCompact: Bool { collapsed }
     private var navigationWidth:CGFloat { 49 + (sidebarIsCompact ? 0 : CGFloat(SidebarPreferences.width(sidebarWidth)) + 7) }
@@ -226,24 +226,24 @@ struct WorkspaceView: View {
                     Button("Collapse sidebar"){toggleSidebar()}
                 } label:{Image(systemName:"slider.horizontal.3").frame(width:28,height:32)}.menuStyle(.borderlessButton).menuIndicator(.hidden).accessibilityLabel("Sidebar preferences")
             }.padding(.bottom,6)
-            HStack(spacing:7){Image(systemName:"magnifyingglass").foregroundStyle(theme.muted);TextField("Filter projects and chats",text:$search).textFieldStyle(.plain).wixalFont(size:12)}.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:5))
+            HStack(spacing:7){Image(systemName:"magnifyingglass").foregroundStyle(theme.muted);TextField("Filter projects and chats",text:$search).textFieldStyle(.plain).wixalFont(size:12)}.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:5)).wixalSoftDepth(cornerRadius:5)
             Button {newConversation(workspace == .agents ? "agent" : "chat")} label:{Label(workspace == .agents ? "New agent conversation" : "New chat",systemImage:"square.and.pencil").wixalFont(size:12).padding(.horizontal,10).frame(maxWidth:.infinity,alignment:.leading).frame(height:32)}.buttonStyle(WixalButtonStyle(prominent:true,compact:true)).disabled(navigationBusy)
             ScrollView {
                 LazyVStack(alignment:.leading,spacing:14) {
                     VStack(alignment:.leading,spacing:2){Text("Pinned").wixalFont(size:11).foregroundStyle(theme.muted).padding(6);ForEach(pinnedSessions,id: \.navigationID){session in conversationRow(session)};if pinnedSessions.isEmpty{Text("Pin a conversation from its menu").wixalFont(size:11).foregroundStyle(theme.muted).padding(6)}}
                     VStack(alignment:.leading,spacing:2) {
-                        HStack{sectionToggle("Projects",expanded:$projectsExpanded);Button{createProjectPresented=true}label:{Image(systemName:"plus").frame(width:28,height:28)}.buttonStyle(.plain).accessibilityLabel("Add project").disabled(navigationBusy)}
+                        HStack{sectionToggle("Projects",expanded:$projectsExpanded);Button{createProjectPresented=true}label:{Image(systemName:"plus").frame(width:28,height:28)}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Add project").disabled(navigationBusy)}
                         if projectsExpanded {
                             ForEach(visibleProjects,id: \.navigationID){project in projectRow(project)}
                             if visibleProjects.isEmpty{Text(search.isEmpty ? "Create a project to begin" : "No matching projects").wixalFont(size:11).foregroundStyle(theme.muted).padding(8)}
                         }
                     }
                     VStack(alignment:.leading,spacing:2) {
-                        HStack{sectionToggle("Recents",expanded:$recentsExpanded);Button{archives=true}label:{Image(systemName:"archivebox").frame(width:28,height:28)}.buttonStyle(.plain).accessibilityLabel("Archived chats")}
+                        HStack{sectionToggle("Recents",expanded:$recentsExpanded);Button{archives=true}label:{Image(systemName:"archivebox").frame(width:28,height:28)}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Archived chats")}
                         if recentsExpanded {
                             ForEach(Array(recentSessions.prefix(12)),id: \.navigationID){session in conversationRow(session)}
                             if recentSessions.isEmpty{Text(search.isEmpty ? "Your conversations appear here" : "No matching chats").wixalFont(size:11).foregroundStyle(theme.muted).padding(8)}
-                            Button("All recent conversations…"){tab="Recents"}.buttonStyle(.plain).wixalFont(size:11).padding(8)
+                            Button("All recent conversations…"){tab="Recents"}.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:11).padding(8)
                         }
                     }
                 }
@@ -263,23 +263,23 @@ struct WorkspaceView: View {
     private var personalSessions:[[String:Any]]{recentSessions.filter{textValue($0["projectId"]).isEmpty}}
     private var visibleProjects:[[String:Any]]{records(engine.state["projects"]).filter{project in search.isEmpty || textValue(project["name"]).localizedCaseInsensitiveContains(search) || recentSessions.contains{textValue($0["projectId"])==textValue(project["id"])}}}
     private func sectionToggle(_ title:String,expanded:Binding<Bool>)->some View {
-        Button{expanded.wrappedValue.toggle()}label:{HStack(spacing:7){Image(systemName:expanded.wrappedValue ? "chevron.down" : "chevron.right").wixalFont(size:9);Text(title);Spacer(minLength:0)}.frame(maxWidth:.infinity,alignment:.leading).frame(height:28).contentShape(Rectangle())}.buttonStyle(.plain).accessibilityLabel("\(expanded.wrappedValue ? "Collapse" : "Expand") \(title)").accessibilityValue(expanded.wrappedValue ? "Expanded" : "Collapsed")
+        Button{expanded.wrappedValue.toggle()}label:{HStack(spacing:7){Image(systemName:expanded.wrappedValue ? "chevron.down" : "chevron.right").wixalFont(size:9);Text(title);Spacer(minLength:0)}.frame(maxWidth:.infinity,alignment:.leading).frame(height:28).contentShape(Rectangle())}.buttonStyle(WixalNavigationButtonStyle()).accessibilityLabel("\(expanded.wrappedValue ? "Collapse" : "Expand") \(title)").accessibilityValue(expanded.wrappedValue ? "Expanded" : "Collapsed")
     }
     private func projectRow(_ project:[String:Any])->some View {
         let id=textValue(project["id"])
         let isExpanded=expanded.contains(id) || !search.isEmpty
         return VStack(alignment:.leading,spacing:2) {
             HStack(spacing:4) {
-                Button{if expanded.contains(id){expanded.remove(id)}else{expanded.insert(id)}}label:{Image(systemName:isExpanded ? "chevron.down" : "chevron.right").wixalFont(size:9).frame(width:24,height:32)}.buttonStyle(.plain)
+                Button{if expanded.contains(id){expanded.remove(id)}else{expanded.insert(id)}}label:{Image(systemName:isExpanded ? "chevron.down" : "chevron.right").wixalFont(size:9).frame(width:24,height:32)}.buttonStyle(WixalNavigationButtonStyle())
                     .accessibilityLabel("\(isExpanded ? "Collapse" : "Expand") \(textValue(project["name"])) conversations").accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-                Button{openProject(id)}label:{Label(textValue(project["name"]),systemImage:"folder").wixalFont(size:12).lineLimit(1).frame(maxWidth:.infinity,alignment:.leading).frame(height:32).contentShape(Rectangle())}.buttonStyle(.plain).disabled(navigationBusy)
+                Button{openProject(id)}label:{Label(textValue(project["name"]),systemImage:"folder").wixalFont(size:12).lineLimit(1).frame(maxWidth:.infinity,alignment:.leading).frame(height:32).contentShape(Rectangle())}.buttonStyle(WixalNavigationButtonStyle()).disabled(navigationBusy)
                     .help(textValue(project["name"])+" · "+textValue(project["root"]))
                     .accessibilityLabel("Open project \(textValue(project["name"]))").accessibilityAddTraits(id==textValue(engine.state["activeProject"]) ? [.isSelected] : [])
                 Menu{Button("Open project"){openProject(id)};Divider();Button("Delete project…",role:.destructive){projectDeleteID=id}}label:{Image(systemName:"ellipsis").frame(width:24,height:28)}.menuStyle(.borderlessButton).menuIndicator(.hidden).disabled(navigationBusy).accessibilityLabel("Project actions for \(textValue(project["name"]))")
             }.padding(.horizontal,2)
             if isExpanded {
                 ForEach(Array(recentSessions.filter{textValue($0["projectId"])==id}.prefix(5)),id: \.navigationID){session in conversationRow(session).padding(.leading,14)}
-                Button("All project conversations…"){openProject(id)}.buttonStyle(.plain).wixalFont(size:11).foregroundStyle(theme.muted).padding(.leading,30).padding(.vertical,5).disabled(navigationBusy)
+                Button("All project conversations…"){openProject(id)}.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:11).foregroundStyle(theme.muted).padding(.leading,30).padding(.vertical,5).disabled(navigationBusy)
             }
         }
     }
@@ -288,7 +288,7 @@ struct WorkspaceView: View {
         Task{defer{openingContext=false};do{_=try await engine.call("project-select",["id":id]);tab="Projects";drawer=nil}catch{engine.error=error.localizedDescription}}
     }
     private func conversationRow(_ session:[String:Any])->some View {
-        HStack(alignment:.top){Button{openConversation(session)}label:{VStack(alignment:.leading,spacing:4){Text(textValue(session["title"])).lineLimit(1);Text(projectName(session) + (textValue(session["mode"]) == "agent" ? " · Agent" : "")).wixalFont(size:10).foregroundStyle(theme.muted).lineLimit(1)}.frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(.plain).disabled(navigationBusy).help(textValue(session["title"])).accessibilityAddTraits(textValue(session["id"])==textValue(engine.state["activeSession"]) ? [.isSelected] : []);Menu{Button(pinIDs.contains(textValue(session["id"])) ? "Unpin conversation" : "Pin conversation"){togglePin(textValue(session["id"]))};Button("Rename…"){renameID=textValue(session["id"])};Button("Copy conversation"){copyConversation(textValue(session["id"]))};Button("Archive"){engine.action("session-archive",["id":textValue(session["id"])])};Divider();Button("Delete…",role:.destructive){deleteID=textValue(session["id"])}}label:{Image(systemName:"ellipsis")}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width:24).disabled(navigationBusy).accessibilityLabel("Conversation actions for \(textValue(session["title"]))")}.padding(8).background(textValue(session["id"])==textValue(engine.state["activeSession"]) ? theme.panel.opacity(0.7) : .clear,in:RoundedRectangle(cornerRadius:6))
+        HStack(alignment:.top){Button{openConversation(session)}label:{VStack(alignment:.leading,spacing:4){Text(textValue(session["title"])).lineLimit(1);Text(projectName(session) + (textValue(session["mode"]) == "agent" ? " · Agent" : "")).wixalFont(size:10).foregroundStyle(theme.muted).lineLimit(1)}.frame(maxWidth:.infinity,alignment:.leading)}.buttonStyle(WixalNavigationButtonStyle()).disabled(navigationBusy).help(textValue(session["title"])).accessibilityAddTraits(textValue(session["id"])==textValue(engine.state["activeSession"]) ? [.isSelected] : []);Menu{Button(pinIDs.contains(textValue(session["id"])) ? "Unpin conversation" : "Pin conversation"){togglePin(textValue(session["id"]))};Button("Rename…"){renameID=textValue(session["id"])};Button("Copy conversation"){copyConversation(textValue(session["id"]))};Button("Archive"){engine.action("session-archive",["id":textValue(session["id"])])};Divider();Button("Delete…",role:.destructive){deleteID=textValue(session["id"])}}label:{Image(systemName:"ellipsis")}.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width:24).disabled(navigationBusy).accessibilityLabel("Conversation actions for \(textValue(session["title"]))")}.padding(8).background(textValue(session["id"])==textValue(engine.state["activeSession"]) ? theme.panel.opacity(0.7) : .clear,in:RoundedRectangle(cornerRadius:6))
     }
     private func openConversation(_ session:[String:Any],page:String="Conversation"){guard !navigationBusy else{return};openingContext=true;Task{defer{openingContext=false};do{_=try await engine.call("session-select",["id":textValue(session["id"]),"projectId":session["projectId"] ?? NSNull()]);tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat";agentPage=page;drawer=nil}catch{engine.error=error.localizedDescription}}}
     private func newConversation(_ mode:String,page:String="Conversation"){guard !navigationBusy else{return};creatingConversation=true;Task{defer{creatingConversation=false};do{_=try await engine.call("session-new",["mode":mode]);tab=mode == "agent" ? "Agents" : "Chat";agentPage=page;drawer=nil}catch{engine.error=error.localizedDescription}}}
@@ -322,7 +322,7 @@ struct WorkspaceView: View {
     private func deferredSelect(_ action:String){Task{try? await Task.sleep(for:.milliseconds(180));select(action)}}
     private func addFileContext(_ file:[String:Any]){let draft=engine.session?["draft"] as? [String:Any] ?? [:];var attachments=records(draft["attachments"]);guard attachments.count<8 else{engine.error="Attach at most eight files or images";return};attachments.append(file);Task{do{_=try await engine.call("draft-save",["sessionId":textValue(engine.state["activeSession"]),"text":textValue(draft["text"]),"attachments":attachments]);tab=textValue(engine.state["mode"]) == "agent" ? "Agents" : "Chat"}catch{engine.error=error.localizedDescription}}}
     private func copyConversation(_ id:String){Task{do{let text=try await engine.call("session-copy",["id":id]) as? String ?? "";NSPasteboard.general.clearContents();NSPasteboard.general.setString(text,forType:.string)}catch{engine.error=error.localizedDescription}}}
-    private func dialog<Content:View>(_ label:String,close:@escaping()->Void,@ViewBuilder content:()->Content)->some View{VStack(spacing:0){HStack{Spacer();Button(action:close){Image(systemName:"xmark")}.buttonStyle(.plain).accessibilityLabel(label)}.padding(18);content()}.frame(width:min(720,windowSize.width-40),height:min(760,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
+    private func dialog<Content:View>(_ label:String,close:@escaping()->Void,@ViewBuilder content:()->Content)->some View{VStack(spacing:0){HStack{Spacer();Button(action:close){Image(systemName:"xmark")}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel(label)}.padding(18);content()}.frame(width:min(720,windowSize.width-40),height:min(760,windowSize.height-60)).background(theme.background).environment(\.wixalTheme,theme)}
     private func openSettings(){drawer=nil;tab="Settings"}
     private func select(_ action:String){
         if action.hasPrefix("Conversation:"),let session=records(engine.state["sessions"]).first(where:{textValue($0["id"])==String(action.dropFirst(13))}){openConversation(session);return}

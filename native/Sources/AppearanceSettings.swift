@@ -54,8 +54,8 @@ struct QuietAppearanceSettings: View {
     }
     private var sizeName: String { [11:"Small",13:"Default",15:"Large",17:"Extra large"][textSize] ?? "Default" }
     @ViewBuilder private var footer: some View {
-        Button("Reset appearance…",action:reset).buttonStyle(.plain).foregroundStyle(colours.muted)
-        Button("Preview launch intro",action:previewLaunch).buttonStyle(.plain).foregroundStyle(colours.muted)
+        Button("Reset appearance…",action:reset).buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(colours.muted)
+        Button("Preview launch intro",action:previewLaunch).buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(colours.muted)
     }
     private func quietRow<Control:View>(_ title:String,detail:String,@ViewBuilder control:()->Control)->some View {
         ViewThatFits(in:.horizontal) {
@@ -70,9 +70,9 @@ struct QuietAppearanceSettings: View {
         VStack(alignment:.leading,spacing:9) {
             Text("Theme").wixalFont(size:12,weight:.medium)
             Button { themePicker.toggle() } label: {
-                HStack(spacing:9) { AppearanceIcon(variant:palette.icon,size:26); Text(palette.name).wixalFont(size:12); Spacer(minLength:8); AppearancePalettePreview(palette:palette); Image(systemName:"chevron.down").wixalFont(size:9).foregroundStyle(colours.muted) }
+                HStack(spacing:9) { AppearanceIcon(variant:palette.icon,size:26); Text(palette.name).wixalFont(size:12).fixedSize(horizontal:true,vertical:false); Spacer(minLength:8); AppearancePalettePreview(palette:palette); Image(systemName:"chevron.down").wixalFont(size:9).foregroundStyle(colours.muted) }
                     .padding(8).background(colours.panel,in:RoundedRectangle(cornerRadius:5)).overlay(RoundedRectangle(cornerRadius:5).stroke(colours.line,lineWidth:1))
-            }.buttonStyle(.plain).accessibilityLabel("Theme: \(palette.name)").accessibilityValue(themePicker ? "Expanded" : "Collapsed")
+            }.buttonStyle(WixalButtonStyle(compact:true)).accessibilityLabel("Theme: \(palette.name)").accessibilityValue(themePicker ? "Expanded" : "Collapsed")
                 .popover(isPresented:$themePicker,arrowEdge:.bottom) {
                     ScrollViewReader { scroll in
                     ScrollView {
@@ -121,7 +121,7 @@ struct QuietAppearanceSettings: View {
                                         VStack(spacing:5) { AppearanceIcon(variant:variant,size:38); Text(variant.capitalized).wixalFont(size:11) }.padding(8).frame(maxWidth:.infinity)
                                             .background(icon == variant ? colours.selected : .clear,in:RoundedRectangle(cornerRadius:5))
                                             .overlay(RoundedRectangle(cornerRadius:5).stroke(icon == variant ? colours.accent : colours.line,lineWidth:1))
-                                    }.buttonStyle(.plain).accessibilityLabel("\(variant.capitalized) Dock icon").accessibilityAddTraits(icon == variant ? [.isSelected] : [])
+                                    }.buttonStyle(WixalButtonStyle(compact:true)).accessibilityLabel("\(variant.capitalized) Dock icon").accessibilityAddTraits(icon == variant ? [.isSelected] : [])
                                 }
                             }
                             Text("Changes the running Dock icon.").wixalFont(size:11).foregroundStyle(colours.muted)

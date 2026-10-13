@@ -18,7 +18,7 @@ struct CybersecurityAgentsView:View {
             Text("Selected project: "+(engine.project.map{textValue($0["name"])} ?? "Choose a project before project or assessment work")).wixalFont(size:12).foregroundStyle(theme.muted)
             Picker("Investigation target",selection:$targetID){Text("Choose target").tag("");ForEach(Array(investigationTargets.enumerated()),id:\.offset){_,target in Text(textValue(target["address"])).tag(textValue(target["id"]))}}
             Picker("Investigation model",selection:$model){Text("Choose model").tag("");ForEach(Array(engine.models.enumerated()),id:\.offset){_,entry in Text(textValue(entry["name"])).tag(textValue(entry["name"]))}}
-            TextEditor(text:$brief).wixalFont(size:13).scrollContentBackground(.hidden).padding(12).frame(height:130).background(theme.raised,in:RoundedRectangle(cornerRadius:8)).accessibilityLabel("Security agent task and authorised scope")
+            TextEditor(text:$brief).wixalFont(size:13).scrollContentBackground(.hidden).padding(12).frame(height:130).background(theme.raised,in:RoundedRectangle(cornerRadius:8)).wixalSoftDepth(cornerRadius:8).accessibilityLabel("Security agent task and authorised scope")
             HStack{Button("Choose project",action:engine.pickProject);Button("Start security agent"){
                 Task{do{
                     if !brief.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty{_=try await engine.call("security-target-update",["id":targetID,"objective":brief])}

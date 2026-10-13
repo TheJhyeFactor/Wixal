@@ -17,7 +17,7 @@ struct QuietSettingsTabs: View {
                 Text(item).wixalFont(size:12,weight:.medium).padding(.horizontal,12).padding(.vertical,8)
                     .background(selection==item ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6))
                     .foregroundStyle(selection==item ? theme.accent : theme.muted)
-            }.buttonStyle(.plain).accessibilityAddTraits(selection==item ? .isSelected : [])
+            }.buttonStyle(WixalNavigationButtonStyle(selected:selection==item)).accessibilityAddTraits(selection==item ? .isSelected : [])
         }
     }
 }

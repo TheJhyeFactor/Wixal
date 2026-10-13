@@ -86,10 +86,11 @@ Keep exactly one installed application: `/Applications/Wixal.app`. After packagi
 
 ```sh
 native/.venv/bin/python native/scripts/cleanup-installs.py
-native/.venv/bin/python native/scripts/cleanup-installs.py --apply
+native/.venv/bin/python native/scripts/cleanup-installs.py --include-build-copies
+native/.venv/bin/python native/scripts/cleanup-installs.py --include-build-copies --apply
 ```
 
-The cleanup script verifies the canonical app, refuses to move running obsolete bundles, unregisters obsolete LaunchServices entries and moves only recognised Wixal app bundles to Trash. It preserves workspace databases, models, credentials, preferences and retained acceptance reports. Review the cleanup report and confirm only the canonical app remains in application folders before calling a release complete. Never empty Trash as part of release automation.
+The cleanup script verifies the canonical app, refuses to move running obsolete bundles, unregisters obsolete LaunchServices entries and moves only recognised Wixal app bundles to Trash. `--include-build-copies` also inventories release/artifact/output folders, Desktop and Downloads, including Cyber QA names and `.app.previous` bundles. Add `--search-root PATH` for another reviewed location; overlapping roots are deduplicated, and symlinks, Trash and local-runtime data are excluded. Run this only after packaging, archive creation and installed acceptance are complete. It preserves workspace databases, models, credentials, preferences and retained acceptance reports. Review the cleanup report and confirm only the canonical app remains in application folders before calling a release complete. Never empty Trash as part of release automation.
 
 Create future isolated builds under a temporary validation directory rather than accumulating named copies in `/Applications`. If an installed copy is needed for a specific acceptance case, remove it after the case settles. The installer updates only scheduler commands already belonging to the canonical app; it must not activate schedules from test installations. Retain exact bundle/helper/source hashes and reports; archive a binary only when a future reproduction requires its exact bytes. Keep one compressed rollback bundle outside application folders and review older build archives separately. Do not delete user data or edit historical evidence to imply an old build was tested on the new release.
 

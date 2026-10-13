@@ -27,11 +27,11 @@ struct AttachmentStrip:View {
     @ViewState<ChatAttachment?> private var preview=nil
     var body:some View {
         ScrollView(.horizontal){HStack(spacing:8){ForEach(attachments){item in HStack(spacing:8){
-            if let image=item.image{Button{preview=item}label:{Image(nsImage:image).resizable().scaledToFill().frame(width:40,height:36).clipped()}.buttonStyle(.plain).accessibilityLabel("Preview \(item.name)")}
-            else if item.type=="image"{Button{preview=item}label:{Image(systemName:"photo").frame(width:40,height:36)}.buttonStyle(.plain).accessibilityLabel("Preview \(item.name)")}else{Image(systemName:"doc.text").foregroundStyle(theme.muted)}
+            if let image=item.image{Button{preview=item}label:{Image(nsImage:image).resizable().scaledToFill().frame(width:40,height:36).clipped()}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Preview \(item.name)")}
+            else if item.type=="image"{Button{preview=item}label:{Image(systemName:"photo").frame(width:40,height:36)}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Preview \(item.name)")}else{Image(systemName:"doc.text").foregroundStyle(theme.muted)}
             VStack(alignment:.leading,spacing:3){Text(item.name).font(.system(size:10)).lineLimit(1);if item.type=="file"{Text("\(item.content.count) characters").font(.system(size:9)).foregroundStyle(theme.muted)}}.frame(maxWidth:140,alignment:.leading)
-            if let remove{Button{remove(item.id)}label:{Image(systemName:"xmark").font(.system(size:9))}.buttonStyle(.plain).accessibilityLabel("Remove \(item.name)")}
-        }.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:6)).overlay(RoundedRectangle(cornerRadius:6).stroke(theme.line,lineWidth:1))}}}.fixedSize(horizontal:false,vertical:true)
+            if let remove{Button{remove(item.id)}label:{Image(systemName:"xmark").font(.system(size:9))}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Remove \(item.name)")}
+        }.padding(8).background(theme.panel,in:RoundedRectangle(cornerRadius:6)).overlay(RoundedRectangle(cornerRadius:6).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:6)}}}.fixedSize(horizontal:false,vertical:true)
         .sheet(item:$preview){item in ImageAttachmentPreview(attachment:item,engine:engine,close:{preview=nil})}
     }
 }
@@ -86,7 +86,7 @@ struct StructuredToolResult:View {
             if !findings.isEmpty{ForEach(Array(findings.enumerated()),id:\.offset){_,finding in HStack(alignment:.top){Text(textValue(finding["severity"]).uppercased()).font(.system(size:9,weight:.semibold));VStack(alignment:.leading){Text(textValue(finding["title"]));Text(textValue(finding["evidence"] ?? finding["description"])).foregroundStyle(theme.muted)}}}}
             DisclosureGroup("Full result"){Text(pretty(value)).font(.system(size:10,design:.monospaced)).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}
         }else{Text(textValue(message["content"])).font(.system(size:11,design:.monospaced)).textSelection(.enabled)}
-    }.font(.system(size:11)).padding(10).frame(maxWidth:.infinity,alignment:.leading).background(theme.inset,in:RoundedRectangle(cornerRadius:6))}
+    }.font(.system(size:11)).padding(10).frame(maxWidth:.infinity,alignment:.leading).background(theme.inset,in:RoundedRectangle(cornerRadius:6)).wixalSoftDepth(cornerRadius:6)}
 }
 
 struct ConversationDetailsView:View {

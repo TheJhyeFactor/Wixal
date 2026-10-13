@@ -65,7 +65,7 @@ struct EngagementWorkspaceView: View {
             }
         }.wixalFont(size:12).padding(24).foregroundStyle(theme.text).background(theme.background)
         .disabled(working || !engine.connected)
-        .overlay(alignment:.bottomTrailing) { if working { ProgressView("Waiting for engine or review…").padding().background(theme.panel,in:RoundedRectangle(cornerRadius:8)) } }
+        .overlay(alignment:.bottomTrailing) { if working { ProgressView("Waiting for engine or review…").padding().background(theme.panel,in:RoundedRectangle(cornerRadius:8)).wixalSoftDepth(cornerRadius:8) } }
         .sheet(isPresented:$creating) { EngagementSetupView(engine:engine,engagement:nil) { args in perform("security-engagement-create",args);creating=false } }
         .sheet(isPresented:$editing) { if let selected { EngagementSetupView(engine:engine,engagement:selected) { args in perform("security-engagement-scope",args);editing=false } } }
         .task { if selection.isEmpty { selection=engagementText(engagements.first?["id"]) } }

@@ -55,7 +55,7 @@ struct SettingsView: View {
             HStack(spacing:7) {
                 Image(systemName:"magnifyingglass").foregroundStyle(colours.muted)
                 TextField("Find a setting…",text:$settings.search).textFieldStyle(.plain).wixalFont(size:11).accessibilityLabel("Find a setting")
-                if !settings.search.isEmpty { Button { settings.search="" } label:{Image(systemName:"xmark.circle.fill")}.buttonStyle(.plain).accessibilityLabel("Clear settings search") }
+                if !settings.search.isEmpty { Button { settings.search="" } label:{Image(systemName:"xmark.circle.fill")}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Clear settings search") }
             }.padding(9).background(colours.background,in:RoundedRectangle(cornerRadius:6)).overlay(RoundedRectangle(cornerRadius:6).stroke(colours.line,lineWidth:1))
             ScrollView {
                 VStack(spacing:4) {
@@ -66,7 +66,7 @@ struct SettingsView: View {
                                 .background(settings.category == item.id ? colours.selected : .clear,in:RoundedRectangle(cornerRadius:6))
                                 .overlay(RoundedRectangle(cornerRadius:6).stroke(settings.category == item.id ? colours.line : .clear,lineWidth:1))
                                 .foregroundStyle(settings.category == item.id ? colours.accent : colours.text)
-                        }.buttonStyle(.plain).accessibilityAddTraits(settings.category == item.id ? .isSelected : [])
+                        }.buttonStyle(WixalNavigationButtonStyle(selected:settings.category == item.id)).accessibilityAddTraits(settings.category == item.id ? .isSelected : [])
                     }
                 }
             }.scrollIndicators(.hidden)
@@ -85,7 +85,7 @@ struct SettingsView: View {
     private var feedback: some View {
         VStack(alignment:.leading,spacing:6) {
             if !settings.failure.isEmpty { Label(settings.failure,systemImage:"exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled) }
-            if !settings.status.isEmpty { HStack { if settings.saving { ProgressView().controlSize(.small) } else { Image(systemName:settings.failure.isEmpty ? "checkmark" : "exclamationmark.circle") }; Text(settings.status); Spacer(); if !settings.saving { Button("Dismiss") { settings.status=""; settings.failure="" }.buttonStyle(.plain) } } }
+            if !settings.status.isEmpty { HStack { if settings.saving { ProgressView().controlSize(.small) } else { Image(systemName:settings.failure.isEmpty ? "checkmark" : "exclamationmark.circle") }; Text(settings.status); Spacer(); if !settings.saving { Button("Dismiss") { settings.status=""; settings.failure="" }.buttonStyle(WixalButtonStyle(inline:true)) } } }
             if engine.busy { Text("A task is running. Appearance and navigation remain available; changes to its context, tools and data wait until it finishes.") }
         }.wixalFont(size:11).foregroundStyle(colours.muted).padding(settings.status.isEmpty && settings.failure.isEmpty && !engine.busy ? 0 : 12).frame(maxWidth:.infinity,alignment:.leading).background(colours.panel).accessibilityElement(children:.contain)
     }
@@ -94,7 +94,7 @@ struct SettingsView: View {
             VStack(alignment:.leading,spacing:18) {
                 Text("Search settings").wixalFont(size:25,weight:.medium)
                 Text("\(matches.count) matching categories").wixalFont(size:11).foregroundStyle(colours.muted)
-                ForEach(matches) { item in Button { settings.open(item.id) } label: { HStack { Image(systemName:item.symbol); VStack(alignment:.leading,spacing:6) { Text(item.id); Text(item.detail).wixalFont(size:11).foregroundStyle(colours.muted) }; Spacer(); Image(systemName:"chevron.right") }.frame(maxWidth:.infinity,alignment:.leading).wixalCard() }.buttonStyle(.plain) }
+                ForEach(matches) { item in Button { settings.open(item.id) } label: { HStack { Image(systemName:item.symbol); VStack(alignment:.leading,spacing:6) { Text(item.id); Text(item.detail).wixalFont(size:11).foregroundStyle(colours.muted) }; Spacer(); Image(systemName:"chevron.right") }.frame(maxWidth:.infinity,alignment:.leading).wixalCard() }.buttonStyle(WixalButtonStyle(inline:true)) }
                 if matches.isEmpty { Text("No matching settings. Try memory, sound, tools or backup.").foregroundStyle(colours.muted) }
             }.padding(24).frame(maxWidth:.infinity,alignment:.leading)
         }
@@ -112,7 +112,7 @@ struct SettingsView: View {
     }
     @ViewBuilder private func detailView(_ detail: String) -> some View {
         VStack(spacing:0) {
-            HStack { Button { settings.detail=nil } label:{Label(settings.category,systemImage:"chevron.left")}.buttonStyle(.plain); Spacer() }.wixalFont(size:11).padding(16).background(colours.panel)
+            HStack { Button { settings.detail=nil } label:{Label(settings.category,systemImage:"chevron.left")}.buttonStyle(WixalButtonStyle(inline:true)); Spacer() }.wixalFont(size:11).padding(16).background(colours.panel)
             switch detail {
             case "Models": ModelsView(engine:engine)
             case "Performance": PerformanceView(engine:engine)
@@ -162,7 +162,7 @@ struct SettingsView: View {
                     Divider()
                     SettingsRow(title:"Background schedules",detail:"Run configured schedules while Wixal is closed, when your Mac is awake. Actions requiring review pause.") { Toggle("Background schedules",isOn:Binding(get:{(engine.state["backgroundScheduler"] as? [String:Any])?["enabled"] as? Bool ?? false},set:{save("background-settings",["enabled":$0])})).labelsHidden().toggleStyle(.switch).controlSize(.small).disabled(locked) }
                 }
-                Button("Manage recurring tasks →") { navigate("Tasks") }.buttonStyle(.plain)
+                Button("Manage recurring tasks →") { navigate("Tasks") }.buttonStyle(WixalButtonStyle(inline:true))
             }
             SettingsDiagnosticsView(engine:engine,settings:settings)
             WixalSection(title:"Keyboard shortcuts") {

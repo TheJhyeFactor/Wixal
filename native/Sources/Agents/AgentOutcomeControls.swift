@@ -75,7 +75,7 @@ struct AgentAuthorityLines:View{
     @Binding var values:[String]
     @ViewState private var input=""
     @Environment(\.wixalTheme) private var theme
-    var body:some View{VStack(alignment:.leading,spacing:6){Text(title).wixalFont(size:12);TextEditor(text:$input).scrollContentBackground(.hidden).wixalFont(size:11,design:.monospaced).padding(8).frame(height:70).background(theme.raised,in:RoundedRectangle(cornerRadius:8)).accessibilityLabel(title);Text(hint).wixalFont(size:10).foregroundStyle(theme.muted)}.onAppear{input=values.joined(separator:"\n")}.onChange(of:input){_,text in values=text.components(separatedBy:"\n").filter{!$0.trimmingCharacters(in:.whitespaces).isEmpty}}}
+    var body:some View{VStack(alignment:.leading,spacing:6){Text(title).wixalFont(size:12);TextEditor(text:$input).scrollContentBackground(.hidden).wixalFont(size:11,design:.monospaced).padding(8).frame(height:70).background(theme.raised,in:RoundedRectangle(cornerRadius:8)).wixalSoftDepth(cornerRadius:8).accessibilityLabel(title);Text(hint).wixalFont(size:10).foregroundStyle(theme.muted)}.onAppear{input=values.joined(separator:"\n")}.onChange(of:input){_,text in values=text.components(separatedBy:"\n").filter{!$0.trimmingCharacters(in:.whitespaces).isEmpty}}}
 }
 func agentOutcomeLabel(_ run:[String:Any])->String {
     let status=textValue(run["status"]),verification=run["verification"] as? [String:Any] ?? [:]

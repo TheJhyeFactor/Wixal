@@ -69,23 +69,23 @@ struct AccountView: View {
                 Button("Sign out & use guest workspace") { run("account-sign-out") }
             } else {
                 HStack {
-                    Button("Sign in") { create = false }.buttonStyle(WixalButtonStyle(outlined: !create))
-                    Button("Create account") { create = true }.buttonStyle(WixalButtonStyle(outlined: create))
+                    Button("Sign in") { create = false }.buttonStyle(WixalButtonStyle(prominent:!create))
+                    Button("Create account") { create = true }.buttonStyle(WixalButtonStyle(prominent:create))
                 }
                 VStack(alignment: .leading, spacing: 14) {
                     if create { labeled("Display name") { TextField("Your name", text: $name).wixalField() } }
                     labeled("Email") { TextField("you@example.com", text: $email).textContentType(.emailAddress).wixalField() }
                     labeled("Password") { SecureField(create ? "At least 10 characters" : "Password", text: $password).textContentType(create ? .newPassword : .password).wixalField().onSubmit(authenticate) }
-                    Button(create ? "Create account" : "Sign in", action: authenticate).buttonStyle(WixalButtonStyle(outlined: false)).disabled(email.isEmpty || password.isEmpty || (create && (name.isEmpty || password.count < 10)))
-                    Button("Forgot password? Send reset email") { run("account-reset", ["email": email]) }.buttonStyle(.plain).foregroundStyle(theme.muted).disabled(email.trimmingCharacters(in:.whitespaces).isEmpty)
-                    Button("Restore saved sign-in from Keychain") { run("account-restore") }.buttonStyle(.plain).foregroundStyle(theme.muted)
+                    Button(create ? "Create account" : "Sign in", action: authenticate).buttonStyle(WixalButtonStyle(prominent:true)).disabled(email.isEmpty || password.isEmpty || (create && (name.isEmpty || password.count < 10)))
+                    Button("Forgot password? Send reset email") { run("account-reset", ["email": email]) }.buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(theme.muted).disabled(email.trimmingCharacters(in:.whitespaces).isEmpty)
+                    Button("Restore saved sign-in from Keychain") { run("account-restore") }.buttonStyle(WixalButtonStyle(inline:true)).foregroundStyle(theme.muted)
                 }.wixalCard()
             }
             HStack {
                 Button("Terms & Conditions") { navigate("Terms") }
                 Text("·").foregroundStyle(theme.muted)
                 Button("Privacy Policy") { navigate("Privacy") }
-            }.buttonStyle(.plain).wixalFont(size:11)
+            }.buttonStyle(WixalButtonStyle(inline:true)).wixalFont(size:11)
             if working { HStack { ProgressView().controlSize(.small); Text("Contacting account service…") } }
             Text(status.isEmpty ? textValue(account["message"]) : status).wixalFont(size:11).foregroundStyle(theme.muted).textSelection(.enabled).id(status.isEmpty ? textValue(account["message"]) : status)
         }.wixalFont(size:12).disabled(working).onAppear { memory = textValue(account["globalMemory"]) }

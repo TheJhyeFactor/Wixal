@@ -93,7 +93,7 @@ struct EngagementRecordsView:View {
                     Text(label(row)).bold();Text(engagementText(row["hypothesis"]))
                     Text("Expected: "+engagementText(row["successSignal"])).foregroundStyle(theme.muted)
                     Text("Status: "+engagementText(row["status"])).foregroundStyle(theme.muted)
-                }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:7))
+                }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:7)).wixalSoftDepth(cornerRadius:7)
             }
             Divider();targetPicker
             TextField("Objective title",text:$title).wixalField()
@@ -117,7 +117,7 @@ struct EngagementRecordsView:View {
                     Text(entityName(engagementText(row["fromId"]))+" → "+entityName(engagementText(row["toId"]))).bold()
                     Text(engagementText(row["kind"])+" · "+engagementText(row["state"]));Text(engagementText(row["rationale"]))
                     Text("Evidence references: \((row["evidenceIds"] as? [String] ?? []).count)").foregroundStyle(theme.muted)
-                }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:7))
+                }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:7)).wixalSoftDepth(cornerRadius:7)
             }
             ForEach(Array(candidatePaths.enumerated()),id:\.offset) { index,path in
                 VStack(alignment:.leading,spacing:8) {
@@ -129,7 +129,7 @@ struct EngagementRecordsView:View {
                         }
                     }
                     Text(engagementText(path["limitation"])).foregroundStyle(theme.muted)
-                }.padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7))
+                }.padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7)).wixalSoftDepth(cornerRadius:7)
             }
             picker("From",selection:$from,items:entities);picker("To",selection:$to,items:entities)
             Picker("Relationship",selection:$kind) {ForEach(["runs_on","exposes","may_enable","requires","can_access","supports","contradicts"],id:\.self){Text($0.replacingOccurrences(of:"_",with:" "))}}
@@ -146,7 +146,7 @@ struct EngagementRecordsView:View {
         VStack(alignment:.leading,spacing:14) {
             Text("Restricted specialists").wixalFont(size:18,weight:.medium)
             Text("Each assignment receives selected retained target evidence and a question. It runs through the existing model queue with no tool execution, credentials or parent private context. A verifier's opinion is not an independent check.").foregroundStyle(theme.muted)
-            ForEach(rows("securityAssignments"),id:\.engagementID) { row in VStack(alignment:.leading,spacing:5){Text(engagementText(row["role"])+" · "+engagementText(row["status"])).bold();Text(engagementText(row["question"]));Text(engagementText(row["authority"])).foregroundStyle(theme.muted)}.padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7)) }
+            ForEach(rows("securityAssignments"),id:\.engagementID) { row in VStack(alignment:.leading,spacing:5){Text(engagementText(row["role"])+" · "+engagementText(row["status"])).bold();Text(engagementText(row["question"]));Text(engagementText(row["authority"])).foregroundStyle(theme.muted)}.padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7)).wixalSoftDepth(cornerRadius:7) }
             targetPicker
             Picker("Role",selection:$role) {ForEach(["planner","recon_analyst","researcher","verifier","reporter","defensive_analyst","binary_analyst","remediation_reviewer"],id:\.self){Text($0.replacingOccurrences(of:"_",with:" "))}}
             Picker("Local model",selection:$model) {Text("Choose model").tag("");ForEach(engine.models,id:\.engagementNameID){Text(engagementText($0["name"])).tag(engagementText($0["name"]))}}
@@ -166,7 +166,7 @@ struct EngagementRecordsView:View {
                     if !engagementText(row["output"]).isEmpty {DisclosureGroup("Retained output excerpt"){Text(String(engagementText(row["output"]).suffix(12000))).wixalFont(size:10,design:.monospaced).textSelection(.enabled)}}
                     if row["workerContainer"] != nil {Button("Inspect owned environment"){perform("security-engagement-worker-reconcile",["runId":row["id"] ?? ""])};Button("Review worker cleanup"){perform("security-engagement-worker-cleanup",["runId":row["id"] ?? ""])}}
                     if ["queued","blocked","running","waiting_review","waiting_model"].contains(engagementText(row["status"])) {Button("Stop operation"){perform("security-run-stop",["id":row["id"] ?? ""])}}
-                }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:7))
+                }.padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:7)).wixalSoftDepth(cornerRadius:7)
             }
         }
     }
@@ -208,7 +208,7 @@ struct EngagementRecordsView:View {
         VStack(alignment:.leading,spacing:14) {
             Text("Report and cleanup").wixalFont(size:18,weight:.medium)
             Text("A stopped operation can leave effects behind. Record each cleanup requirement, inspect evidence, and explicitly review its disposition. Accepted cleanup retains the rationale; it is separate from verified cleanup.").foregroundStyle(theme.muted)
-            ForEach(rows("securityCleanup"),id:\.engagementID) { row in VStack(alignment:.leading,spacing:8){Text(label(row)+" · "+engagementText(row["status"])).bold();Text(engagementText(row["description"]));HStack{Button("Review acceptance"){perform("security-cleanup-update",["cleanupId":row["id"] ?? "","status":"accepted","rationale":rationale,"evidenceIds":Array(selectedEvidence)])};Button("Review collected evidence"){perform("security-cleanup-update",["cleanupId":row["id"] ?? "","status":"verified","rationale":rationale,"evidenceIds":Array(selectedEvidence)])}}.disabled(closed || rationale.isEmpty).padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7)) } }
+            ForEach(rows("securityCleanup"),id:\.engagementID) { row in VStack(alignment:.leading,spacing:8){Text(label(row)+" · "+engagementText(row["status"])).bold();Text(engagementText(row["description"]));HStack{Button("Review acceptance"){perform("security-cleanup-update",["cleanupId":row["id"] ?? "","status":"accepted","rationale":rationale,"evidenceIds":Array(selectedEvidence)])};Button("Review collected evidence"){perform("security-cleanup-update",["cleanupId":row["id"] ?? "","status":"verified","rationale":rationale,"evidenceIds":Array(selectedEvidence)])}}.disabled(closed || rationale.isEmpty).padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7)).wixalSoftDepth(cornerRadius:7) } }
             picker("Operation to reconcile (optional)",selection:$parent,items:rows("securityRuns"))
             TextField("Cleanup item",text:$cleanupTitle).wixalField()
             TextField("Required removal or reconciliation",text:$cleanupDescription,axis:.vertical).wixalField()

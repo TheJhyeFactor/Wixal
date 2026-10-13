@@ -18,14 +18,14 @@ struct NavigationRailButton: View {
             }.frame(width: 36, height: 36).contentShape(Rectangle())
                 .background(selected ? theme.selected : hovered ? theme.raised : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .overlay(alignment: .leading) { if selected { Rectangle().fill(theme.accent).frame(width: 2, height: 18) } }
-        }.buttonStyle(.plain).foregroundStyle(selected ? theme.text : theme.muted)
+        }.buttonStyle(WixalNavigationButtonStyle(selected:selected)).foregroundStyle(selected ? theme.text : theme.muted)
             .onHover { hovered = $0 }.focused($focused)
             .overlay(alignment:.leading) {
                 if hovered || focused {
                     Text(title).wixalFont(size:11,weight:.medium).fixedSize()
                         .padding(.horizontal,9).padding(.vertical,6)
-                        .background(theme.raised,in:RoundedRectangle(cornerRadius:4))
-                        .overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1))
+                        .background(theme.raised,in:RoundedRectangle(cornerRadius:4)).wixalSoftDepth(cornerRadius:4)
+                        .overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:4)
                         .offset(x:44).allowsHitTesting(false).accessibilityHidden(true)
                 }
             }.zIndex(hovered || focused ? 10 : 0).accessibilityLabel(title)
@@ -50,7 +50,7 @@ struct WorkspaceSelector: View {
                 Text(selected.rawValue).wixalFont(size:14,weight:.semibold)
                 Image(systemName:"chevron.down").wixalFont(size:9).foregroundStyle(theme.muted)
             }.padding(.horizontal,8).frame(height:36).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel("Workspace: \(selected.rawValue)")
+        }.buttonStyle(WixalButtonStyle(compact:true)).accessibilityLabel("Workspace: \(selected.rawValue)")
             .accessibilityValue(presented ? "Expanded" : "Collapsed")
             .help("Switch workspace")
             .popover(isPresented:$presented,arrowEdge:.bottom) {
@@ -120,9 +120,9 @@ struct NavigationUtilities:View {
     var body:some View {
         Button{presented.toggle()}label:{Image(systemName:"ellipsis").wixalFont(size:16).frame(width:36,height:36).contentShape(Rectangle())
             .background(hovered || presented ? theme.raised : .clear,in:RoundedRectangle(cornerRadius:5))}
-            .buttonStyle(.plain).foregroundStyle(theme.muted).onHover{hovered=$0}.focused($focused)
+            .buttonStyle(WixalNavigationButtonStyle()).foregroundStyle(theme.muted).onHover{hovered=$0}.focused($focused)
             .accessibilityLabel("Utilities").accessibilityValue(presented ? "Expanded" : "Collapsed")
-            .overlay(alignment:.leading){if (hovered || focused) && !presented {Text("Utilities").wixalFont(size:11,weight:.medium).fixedSize().padding(.horizontal,9).padding(.vertical,6).background(theme.raised,in:RoundedRectangle(cornerRadius:4)).overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1)).offset(x:44).allowsHitTesting(false).accessibilityHidden(true)}}
+            .overlay(alignment:.leading){if (hovered || focused) && !presented {Text("Utilities").wixalFont(size:11,weight:.medium).fixedSize().padding(.horizontal,9).padding(.vertical,6).background(theme.raised,in:RoundedRectangle(cornerRadius:4)).overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:4).offset(x:44).allowsHitTesting(false).accessibilityHidden(true)}}
             .zIndex(hovered || focused ? 10 : 0)
             .popover(isPresented:$presented,arrowEdge:.trailing) {
                 ScrollView { VStack(alignment:.leading,spacing:8) {

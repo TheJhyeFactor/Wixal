@@ -179,7 +179,7 @@ struct SecurityPlanStudio:View {
                             ForEach(plans,id:\.securityRecordID) { plan in
                                 Button { selected=textValue(plan["id"]);name=textValue(plan["name"]);nodes=records(plan["nodes"]);editor=pretty(nodes) } label:{
                                     VStack(alignment:.leading,spacing:5) { Text(textValue(plan["name"]));Text(textValue(plan["status"])).foregroundStyle(theme.muted) }.frame(maxWidth:.infinity,alignment:.leading)
-                                }.buttonStyle(.plain)
+                                }.buttonStyle(WixalButtonStyle(inline:true))
                             }
                             Divider()
                             Text("Reusable templates").foregroundStyle(theme.muted)
@@ -366,10 +366,10 @@ struct SecurityChainGraph:View {
                         Text(textValue(item.row["name"])).wixalFont(size:12,weight:.medium).lineLimit(2)
                         Text(textValue(item.row["stage"]) + " · " + textValue(item.row["capability"])).wixalFont(size:9).foregroundStyle(theme.muted).lineLimit(1)
                         if let condition=item.row["condition"] as? [String:Any],!condition.isEmpty{Text(textValue(condition["kind"])+": "+String(describing:condition["value"] ?? "")).wixalFont(size:9).foregroundStyle(theme.accent)}
-                    }.padding(10).frame(width:190,height:88,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).stroke(theme.line,lineWidth:1)).position(item.point)
+                    }.padding(10).frame(width:190,height:88,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:8).position(item.point)
                 }
             }.frame(width:width,height:height)
-        }.background(theme.panel.opacity(0.4),in:RoundedRectangle(cornerRadius:8))
+        }.background(theme.panel.opacity(0.4),in:RoundedRectangle(cornerRadius:8)).wixalSoftDepth(cornerRadius:8)
     }
 }
 

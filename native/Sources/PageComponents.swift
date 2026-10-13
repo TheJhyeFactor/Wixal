@@ -24,11 +24,11 @@ struct WixalSection<Content:View>:View {
 }
 struct WixalCard:ViewModifier {
     @Environment(\.wixalTheme) private var theme
-    func body(content:Content)->some View {content.padding(16).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:9)).overlay(RoundedRectangle(cornerRadius:9).stroke(theme.line,lineWidth:1)).shadow(color:.black.opacity(theme.light ? 0.035 : 0.1),radius:4,x:0,y:2)}
+    func body(content:Content)->some View {content.padding(16).frame(maxWidth:.infinity,alignment:.leading).background(theme.panel,in:RoundedRectangle(cornerRadius:9)).overlay(RoundedRectangle(cornerRadius:9).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:9)}
 }
 struct WixalField:ViewModifier {
     @Environment(\.wixalTheme) private var theme
-    func body(content:Content)->some View{content.textFieldStyle(.plain).wixalFont(size:12).padding(10).background(theme.raised,in:RoundedRectangle(cornerRadius:7)).overlay(RoundedRectangle(cornerRadius:7).stroke(theme.line,lineWidth:1))}
+    func body(content:Content)->some View{content.textFieldStyle(.plain).wixalFont(size:12).padding(10).background(theme.raised,in:RoundedRectangle(cornerRadius:7)).overlay(RoundedRectangle(cornerRadius:7).stroke(theme.line,lineWidth:1)).wixalSoftDepth()}
 }
 struct PreferenceRow<Content:View>:View {
     let title:String

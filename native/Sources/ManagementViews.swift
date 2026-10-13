@@ -13,12 +13,12 @@ struct FilesView:View {
     var body:some View {
         HSplitView {
             VStack(alignment:.leading,spacing:16){
-                HStack{Text("PROJECT FILES").font(.system(size:10,weight:.medium)).tracking(1);Spacer();Button(action:load){Image(systemName:"arrow.clockwise")}.buttonStyle(.plain).accessibilityLabel("Refresh project files")}
+                HStack{Text("PROJECT FILES").font(.system(size:10,weight:.medium)).tracking(1);Spacer();Button(action:load){Image(systemName:"arrow.clockwise")}.buttonStyle(WixalButtonStyle(inline:true)).accessibilityLabel("Refresh project files")}
                 TextField("Find a file…",text:$query).wixalField()
                 if loading{ProgressView().controlSize(.small)}
                 if !readError.isEmpty{Text(readError).font(.system(size:11)).foregroundStyle(.red)}
                 if !loading && files.isEmpty{Text("No project files found.").font(.system(size:11)).foregroundStyle(theme.muted)}
-                ScrollView{LazyVStack(alignment:.leading,spacing:2){ForEach(files.filter{query.isEmpty || $0.localizedCaseInsensitiveContains(query)},id:\.self){file in Button{selected=file;read(file)}label:{HStack(spacing:8){Image(systemName:"doc.text").foregroundStyle(theme.muted);Text(file).lineLimit(1).truncationMode(.middle);Spacer(minLength:0)}.font(.system(size:11,design:.monospaced)).padding(9).frame(maxWidth:.infinity,alignment:.leading).background(selected==file ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6))}.buttonStyle(.plain)}}}
+                ScrollView{LazyVStack(alignment:.leading,spacing:2){ForEach(files.filter{query.isEmpty || $0.localizedCaseInsensitiveContains(query)},id:\.self){file in Button{selected=file;read(file)}label:{HStack(spacing:8){Image(systemName:"doc.text").foregroundStyle(theme.muted);Text(file).lineLimit(1).truncationMode(.middle);Spacer(minLength:0)}.font(.system(size:11,design:.monospaced)).padding(9).frame(maxWidth:.infinity,alignment:.leading).background(selected==file ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6))}.buttonStyle(WixalButtonStyle(inline:true))}}}
                 Text("\(files.count) files").font(.system(size:10)).foregroundStyle(theme.muted)
             }.padding(20).frame(minWidth:220,idealWidth:270,maxWidth:340).background(theme.panel)
             ScrollView{VStack(alignment:.leading,spacing:18){

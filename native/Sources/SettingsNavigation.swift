@@ -60,7 +60,7 @@ struct SettingsScope: View {
     @Environment(\.wixalTheme) private var theme
     var body: some View {
         Text(text).wixalFont(size:10).foregroundStyle(theme.muted).padding(.horizontal,6).padding(.vertical,2)
-            .overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1))
+            .overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1)).wixalSoftDepth(cornerRadius:4)
     }
 }
 

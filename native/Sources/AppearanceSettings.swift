@@ -25,7 +25,7 @@ struct QuietAppearanceSettings: View {
             workspacePreview.padding(.bottom,20)
             Divider()
             ViewThatFits(in:.horizontal) {
-                HStack(alignment:.top,spacing:28) { themeControl.frame(minWidth:200,maxWidth:.infinity); iconControl.frame(minWidth:210,maxWidth:.infinity) }
+                HStack(alignment:.top,spacing:20) { themeControl.frame(minWidth:170,maxWidth:.infinity); iconControl.frame(minWidth:180,maxWidth:.infinity) }
                 VStack(alignment:.leading,spacing:18) { themeControl; iconControl }
             }.padding(.vertical,16)
             Divider()
@@ -73,7 +73,8 @@ struct QuietAppearanceSettings: View {
                 HStack(spacing:9) { AppearanceIcon(variant:palette.icon,size:26); Text(palette.name).wixalFont(size:12); Spacer(minLength:8); AppearancePalettePreview(palette:palette); Image(systemName:"chevron.down").wixalFont(size:9).foregroundStyle(colours.muted) }
                     .padding(8).background(colours.panel,in:RoundedRectangle(cornerRadius:5)).overlay(RoundedRectangle(cornerRadius:5).stroke(colours.line,lineWidth:1))
             }.buttonStyle(.plain).accessibilityLabel("Theme: \(palette.name)").accessibilityValue(themePicker ? "Expanded" : "Collapsed")
-                .popover(isPresented:$themePicker,arrowEdge:.top) {
+                .popover(isPresented:$themePicker,arrowEdge:.bottom) {
+                    ScrollViewReader { scroll in
                     ScrollView {
                         VStack(spacing:2) {
                             ForEach(WixalPalette.all,id:\.id) { option in
@@ -88,16 +89,19 @@ struct QuietAppearanceSettings: View {
                                         .background(option.id == palette.id ? colours.selected : .clear,in:RoundedRectangle(cornerRadius:4))
                                 }.buttonStyle(WixalButtonStyle()).focused($focusedTheme,equals:option.id)
                                     .accessibilityLabel("\(option.name) theme, \(option.light ? "light" : "dark") palette and matching icon")
-                                    .accessibilityAddTraits(option.id == palette.id ? [.isSelected] : [])
+                                    .accessibilityAddTraits(option.id == palette.id ? [.isSelected] : []).id(option.id)
                             }
                         }.padding(6)
                     }.frame(width:300,height:420).background(colours.panel).foregroundStyle(colours.text)
-                        .onAppear { focusedTheme=palette.id }.onExitCommand { themePicker=false }
+                        .onAppear { focusedTheme=palette.id; scroll.scrollTo(palette.id) }
+                        .onChange(of:focusedTheme) { _,id in if let id { scroll.scrollTo(id) } }
+                        .onExitCommand { themePicker=false }
                         .onKeyPress(keys:[.upArrow,.downArrow]) { press in
                             let ids=WixalPalette.all.map(\.id), index=ids.firstIndex(of:focusedTheme ?? palette.id) ?? 0
                             focusedTheme=ids[(index+(press.key == .downArrow ? 1 : ids.count-1))%ids.count]
                             return .handled
                         }
+                    }
                 }
             Text("Ten palettes · light to dark").wixalFont(size:11).foregroundStyle(colours.muted)
         }
@@ -108,7 +112,7 @@ struct QuietAppearanceSettings: View {
             HStack(spacing:9) {
                 AppearanceIcon(variant:icon,size:32).accessibilityLabel("\(icon.capitalized) Dock icon")
                 Button("Choose icon…") { iconPicker.toggle() }.buttonStyle(WixalButtonStyle(outlined:true)).wixalFont(size:11)
-                    .popover(isPresented:$iconPicker,arrowEdge:.top) {
+                    .popover(isPresented:$iconPicker,arrowEdge:.bottom) {
                         VStack(alignment:.leading,spacing:12) {
                             Text("Dock icon").wixalFont(size:13,weight:.medium)
                             LazyVGrid(columns:[GridItem(.adaptive(minimum:72),spacing:8)],spacing:8) {

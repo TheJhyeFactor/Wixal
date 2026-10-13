@@ -24,7 +24,7 @@ struct EngagementWorkspaceView: View {
     @Environment(\.wixalTheme) private var theme
     private var engagements: [[String:Any]] { records(engine.state["securityEngagements"]).filter { engagementText($0["projectId"]) == engagementText(engine.state["activeProject"]) } }
     private var selected: [String:Any]? { engagements.first { engagementText($0["id"]) == selection } }
-    private let pages = ["Brief & scope", "Objectives", "Attack paths", "Specialists", "Operations", "Evidence & verification", "Report & cleanup","Validation & identities"]
+    private let pages = ["Brief & scope", "Objectives", "Attack paths", "Specialists", "Operations", "Evidence & verification", "Report & cleanup","Validation & identities","Cyber toolkit"]
     var body: some View {
         VStack(alignment:.leading, spacing:14) {
             HStack {
@@ -58,6 +58,7 @@ struct EngagementWorkspaceView: View {
                     ScrollView {
                         if page == "Brief & scope" { brief(selected) }
                         else if page == "Validation & identities" { EngagementAssuranceView(engine:engine,engagement:selected,perform:perform) }
+                        else if page == "Cyber toolkit" { CyberToolkitView(engine:engine,engagement:selected) }
                         else { EngagementRecordsView(engine:engine,engagement:selected,page:page,perform:perform) }
                     }
                 }
@@ -79,7 +80,7 @@ struct EngagementWorkspaceView: View {
             if method == "security-engagement-create",let row=result as? [String:Any] { selection=engagementText(row["id"]) }
             if let data=result as? [String:Any], let paths=data["paths"] as? [String] { notice=paths.joined(separator:"\n") }
             else if method == "security-engagement-worker-inspect",let data=result as? [String:Any] { notice=data["available"] as? Bool == true ? "Linux worker ready: "+engagementText(data["imageId"]) : "Linux worker unavailable: "+engagementText(data["error"]) }
-            else if method == "security-engagement-skills" { notice="Five retained-evidence procedures are available in Skills." }
+            else if method == "security-engagement-skills",let data=result as? [String:Any] { notice="\((data["skillIds"] as? [String] ?? []).count) cyber procedures are available in Skills." }
             else if method == "security-relation-paths",let data=result as? [String:Any] { notice="Candidate paths: \(records(data["paths"]).count). Relationships require evidence; paths do not prove access." }
         } catch { self.error=error.localizedDescription }
             working=false

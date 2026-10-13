@@ -46,6 +46,11 @@ struct EngagementRecordsView:View {
     private var entities:[[String:Any]] {targets + rows("securityObjectives") + records(engine.state["securityDiscoveries"]).filter{targetIDs.contains(engagementText($0["targetId"])) && engagementText($0["projectId"]) == engagementText(engagement["projectId"])}}
     private var evidence:[[String:Any]] {rows("securityEvidence")}
     private var liveEvidence:[[String:Any]] {evidence.filter{engagementText($0["kind"]) == "run"}}
+    private var selectableEvidence:[[String:Any]] {
+        if page == "Specialists" && role == "defensive_analyst" {return evidence.filter{["run","sensor-batch"].contains(engagementText($0["kind"]))}}
+        if page == "Specialists" && role == "binary_analyst" {return evidence.filter{["run","binary-analysis","external-binary-analysis"].contains(engagementText($0["kind"]))}}
+        return liveEvidence
+    }
     private var closed:Bool {["completed","closed_incomplete","cancelled"].contains(engagementText(engagement["status"]))}
     private func label(_ row:[String:Any])->String {
         if engagementText(row["kind"]) == "run",let run=records(engine.state["securityRuns"]).first(where:{engagementText($0["id"]) == engagementText(row["source"])}) {return engagementText(run["name"])}
@@ -73,10 +78,10 @@ struct EngagementRecordsView:View {
     private var targetPicker:some View {picker("Target",selection:$target,items:targets)}
     private var evidencePicker:some View {
         DisclosureGroup("Select retained evidence (\(selectedEvidence.count))") {
-            ForEach(liveEvidence,id:\.engagementID) { row in
+            ForEach(selectableEvidence,id:\.engagementID) { row in
                 Toggle(label(row),isOn:Binding(get:{selectedEvidence.contains(engagementText(row["id"]))},set:{if $0{selectedEvidence.insert(engagementText(row["id"]))}else{selectedEvidence.remove(engagementText(row["id"]))}}))
             }
-            if liveEvidence.isEmpty {Text("Run a scoped assessment to collect evidence first.").foregroundStyle(theme.muted)}
+            if selectableEvidence.isEmpty {Text("Collect scoped observations or role-specific analysis first.").foregroundStyle(theme.muted)}
         }
     }
     private var objectives:some View {
@@ -116,7 +121,8 @@ struct EngagementRecordsView:View {
             }
             ForEach(Array(candidatePaths.enumerated()),id:\.offset) { index,path in
                 VStack(alignment:.leading,spacing:8) {
-                    Text("Candidate path \(index+1) · \(engagementText(path["hops"])) hops").bold()
+                    Text("Candidate path \(index+1) · \(engagementText(path["hops"])) hops · priority \(engagementText(path["priorityScore"]))").bold()
+                    Text(engagementText(path["rationale"])).foregroundStyle(theme.muted)
                     ForEach(path["edgeIds"] as? [String] ?? [],id:\.self) { edgeID in
                         if let edge=rows("securityRelations").first(where:{engagementText($0["id"]) == edgeID}) {
                             Label(entityName(engagementText(edge["fromId"]))+" → "+entityName(engagementText(edge["toId"]))+" · "+engagementText(edge["state"]),systemImage:"arrow.triangle.branch")
@@ -142,7 +148,7 @@ struct EngagementRecordsView:View {
             Text("Each assignment receives selected retained target evidence and a question. It runs through the existing model queue with no tool execution, credentials or parent private context. A verifier's opinion is not an independent check.").foregroundStyle(theme.muted)
             ForEach(rows("securityAssignments"),id:\.engagementID) { row in VStack(alignment:.leading,spacing:5){Text(engagementText(row["role"])+" · "+engagementText(row["status"])).bold();Text(engagementText(row["question"]));Text(engagementText(row["authority"])).foregroundStyle(theme.muted)}.padding(12).background(theme.panel,in:RoundedRectangle(cornerRadius:7)) }
             targetPicker
-            Picker("Role",selection:$role) {ForEach(["planner","recon_analyst","researcher","verifier","reporter"],id:\.self){Text($0.replacingOccurrences(of:"_",with:" "))}}
+            Picker("Role",selection:$role) {ForEach(["planner","recon_analyst","researcher","verifier","reporter","defensive_analyst","binary_analyst","remediation_reviewer"],id:\.self){Text($0.replacingOccurrences(of:"_",with:" "))}}
             Picker("Local model",selection:$model) {Text("Choose model").tag("");ForEach(engine.models,id:\.engagementNameID){Text(engagementText($0["name"])).tag(engagementText($0["name"]))}}
             TextField("Assignment question",text:$question,axis:.vertical).wixalField();evidencePicker
             Button("Assign specialist") {perform("security-specialist-assign",["targetId":target,"role":role,"question":question,"model":model,"evidenceIds":Array(selectedEvidence)])}.disabled(closed || target.isEmpty || model.isEmpty || question.isEmpty || selectedEvidence.isEmpty)

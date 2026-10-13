@@ -1,6 +1,6 @@
 # Wixal native alpha
 
-**0.7.10 Alpha 6** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.6); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
+**0.7.10 Alpha 7** is the current Wixal app. The canonical build is `release/native/Wixal.app`, installed locally as `/Applications/Wixal.app`. The public alpha download is on [GitHub](https://github.com/TheJhyeFactor/Wixal/releases/tag/v0.7.10-alpha.7); [the alpha guide](../docs/native-alpha.md) covers installation, workflows and limitations.
 
 SwiftUI provides workspace screens, AppKit provides desktop integration and SwiftTerm, WebKit renders reviewed browser sessions, and a persistent Python engine owns the agent loop and SQLite storage. Bundled Ollama handles inference. The app runs without Node, Electron or a separately installed Python. No model weights are bundled.
 
@@ -8,7 +8,7 @@ The current source includes the [prioritized application gap audit and fixes](AP
 
 ## Alpha 6 changes
 
-Alpha 6 combines Hugging Face downloads and compact model browsing, dedicated engine controls, stronger agent run budgets and reviewed security extensions. Cookie/API mutations, same-origin OAuth PKCE, independent mutation-state validation, external proposal imports, telemetry imports and interactive PTY jobs are documented in the [release notes](../docs/release-0.7.10-alpha.6.md) and [security guide](../docs/security-workflows-alpha6.md). The combined engine suite passed 513 tests. Six-model capability qualification and fresh installed security end-to-end checks remain pending. Dated reports retain their recorded build identity.
+Alpha 7 adds the native Cyber toolkit: findings and identity metadata, planning, eight specialist roles, 18 procedures, local file monitoring, offline Ghidra decompilation, and Markdown/PDF/Word/SARIF report packages with verified ZIP import. See the [release notes](../docs/release-0.7.10-alpha.7.md) and [implementation limits](../docs/decepticon-cyber-completion-2026-10-13.md). The implementation engine suite passed 562 tests; seven guided installed-model workflows passed, while the separate two-model matrix passed 6/8. Broad model and AD/cloud qualification remain pending. Historical reports retain their original build identities.
 
 ## Build and run
 

@@ -2,9 +2,16 @@ name: Native alpha checks
 on:
   push:
     branches: [main]
+    paths: ['native/**', 'runtime/**', 'package.json', 'package-lock.json', '.github/workflows/check.yml']
   pull_request:
+    paths: ['native/**', 'runtime/**', 'package.json', 'package-lock.json', '.github/workflows/check.yml']
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: wixal-native-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   native:
     # Match the Swift 6.4 toolchain used for the published native alpha.

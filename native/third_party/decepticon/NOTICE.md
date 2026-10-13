@@ -16,3 +16,24 @@ Full licence: `LICENSE` in this directory and packaged
 CVSS is owned by FIRST.Org, Inc. and used by permission.
 Specification: https://www.first.org/cvss/v3.1/specification-document
 Scores are retained with their vector and version; scoring is separate from verification.
+
+## Native cyber adaptation, 13 October 2026
+
+Reference revision: `00fc3b594c40f6e48e22341669cf7048c117781f`.
+Reviewed reporting/finding_quality.py, finding_epistemics.py, finding_dedupe.py,
+SARIF/report/export/timeline utilities, research/chain.py, engagement planning,
+selected assessment and methodology skills, the bash session wrapper,
+Blue Cell collection/coverage documentation and REA/Ghidra evidence contracts.
+
+The cyber.py, cyber_findings.py, cyber_reports.py, cyber_planning.py,
+cyber_sensors.py and cyber_tools.py modules, native Cyber toolkit view and
+thirteen additional cyber procedures are original Wixal implementations
+informed by this review. They use Wixal storage, controller, approvals,
+model-tool discovery and evidence identities. No additional Decepticon
+runtime modules, LangGraph, Neo4j, payload corpus or specialist container
+images are bundled. Static triage never executes the binary; imported
+analysis remains an external assertion bound to selected source bytes.
+
+The original CVSS adaptation and its source revision above are unchanged.
+Decepticon's own Apache-2.0 licence is retained. External corpora and analysis
+engines retain their separate licences and are not redistributed here.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.10 Alpha 7 — 2026-10-13
+
+- Add the native Cyber toolkit: revisioned evidence-bound findings, identity/CVE metadata, planning checks, eight specialist roles and 18 procedures.
+- Add technical/executive PDF and Word reports, SARIF, timeline and manifest-backed ZIP export/import.
+- Add reviewed local log monitoring, rule configuration, grouped leads, source archiving and automatic deadlines.
+- Add bounded offline Ghidra static decompilation and an RDP assessment profile that preserves script observations.
+- Retain raw evidence separately from normalized model-facing derivatives; improve parameter guidance and reasoning-only analysis completion handling.
+- Separate website publication from native version changes and website-only work from full native CI.
+- Implementation evidence: 562 engine tests, 7 guided installed-model workflows and a 6/8 two-model semantic matrix. See [release notes](docs/release-0.7.10-alpha.7.md). Ad-hoc signed, not notarised; no trained cyber weights or broad AD/cloud/C2 qualification.
+
 ## 0.7.10 Alpha 6 — 2026-10-12
 
 - Add a compact Hugging Face model browser with searchable Hub provider/type filters, size and memory guidance, inline downloads, deletion and dedicated engine settings.

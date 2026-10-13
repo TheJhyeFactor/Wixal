@@ -94,7 +94,7 @@
     "type": "function",
     "function": {
       "name": "network_scan",
-      "description": "Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence. Optional source_run_id (investigation) or source_session_id (this chat) derives exact ports from completed discovery. Omit ports for source-bound inspection.",
+      "description": "Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, rdp, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence. Optional source_run_id (investigation) or source_session_id (this chat) derives exact ports from completed discovery. Omit ports for source-bound inspection.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -112,7 +112,8 @@
               "tls",
               "ssh",
               "enumeration",
-              "checks"
+              "checks",
+              "rdp"
             ]
           },
           "ports": {

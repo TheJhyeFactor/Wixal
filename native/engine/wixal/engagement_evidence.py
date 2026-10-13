@@ -6,12 +6,15 @@ from collections import deque
 from .storage import identity, now
 from .tools import safe_path
 
-COLLECTIONS=('securityEngagements','securityObjectives','securityRelations','securityVerifications','securityCleanup','securityAssignments','securityEvidence','securityEngagementEvents','securityCredentials','securityValidationContracts','securityTelemetry')
+COLLECTIONS=('securityEngagements','securityObjectives','securityRelations','securityVerifications','securityCleanup','securityAssignments','securityEvidence','securityEngagementEvents','securityCredentials','securityValidationContracts','securityTelemetry','securityRetests','securitySensors','securityIncidents')
 ROLES={'planner':'Develop prerequisite-based hypotheses and candidate checks from retained evidence.',
        'recon_analyst':'Interpret observed assets and services; distinguish historical identities and incomplete coverage.',
        'researcher':'Evaluate the supplied advisory evidence and its applicability. Do not invent sources or retrieve external data.',
        'verifier':'Challenge the claim, identify contradictory evidence and propose discriminating positive/baseline observations. Your prose is not independent verification.',
-       'reporter':'Draft a report from retained evidence. Separate observations, hypotheses, human review and independently evaluated outcomes.'}
+       'reporter':'Draft a report from retained evidence. Separate observations, hypotheses, human review and independently evaluated outcomes.',
+       'defensive_analyst':'Review supplied sensor evidence, collection health and incident leads. Missing events do not establish safety; state source coverage and attribution limits. No blocking or remediation.',
+       'binary_analyst':'Review supplied static binary observations and source-bound external analysis. Cite exact binary and provider identities. Static analysis does not establish executed behavior; never execute a sample.',
+       'remediation_reviewer':'Review a finding, its counterevidence and declared validation-contract results. Separate passing checks from broader remediation claims and describe untested behavior.'}
 
 
 def canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
@@ -43,6 +46,25 @@ def read(manager, engagement, evidence_id):
     data=path.read_bytes()
     if hashlib.sha256(data).hexdigest()!=row['sha256']:raise ValueError('Retained evidence changed; verification is invalid')
     return row,json.loads(data)
+
+
+def specialist_source(manager,engagement,reference,role,target_id):
+    record,value=read(manager,engagement,reference)
+    if record['kind']=='run':
+        source=manager.record('securityRuns',record['source'],engagement)
+        if source['targetId']!=target_id or source.get('scopeRevision')!=engagement['scopeRevision']:raise ValueError('Specialist evidence needs current-scope target runs')
+        return dict(source,result=value['result'],sourceEvidenceId=reference,evidenceSha256=record['sha256'])
+    if role=='defensive_analyst' and record['kind']=='sensor-batch':
+        sensor=manager.record('securitySensors',value.get('sensorId'),engagement)
+        if sensor['targetId']!=target_id or sensor['scopeRevision']!=engagement['scopeRevision']:raise ValueError('Sensor evidence belongs to another target or scope')
+        result={k:v for k,v in value.items() if k!='rawText'}
+    elif role=='binary_analyst' and record['kind'] in ('binary-analysis','external-binary-analysis','ghidra-analysis'):
+        if value.get('targetId')!=target_id or value.get('scopeRevision')!=engagement['scopeRevision']:raise ValueError('Binary evidence belongs to another target or scope')
+        result=value
+    else:raise ValueError('Specialists require retained Wixal run evidence or role-specific source-bound analysis')
+    from .cyber_reports import clean
+    return dict(id=reference,name=record['kind'],capability='retained_analysis',result=clean(result),
+                sourceEvidenceId=reference,evidenceSha256=record['sha256'],externalAssertions=True)
 
 
 def value_at(value,pointer):

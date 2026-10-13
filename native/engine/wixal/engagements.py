@@ -18,6 +18,8 @@ class Engagements:
         from .security_assurance import Assurance
         self.assurance=Assurance(self)
         for key in evidence.COLLECTIONS:self.store.data.setdefault(key,[])
+        from .cyber import Cyber
+        self.cyber=Cyber(self)
         # Historical targets remain unapproved. No fabricated engagement migration.
         for item in self.store.data['securityAssignments']:
             if item['status'] in ACTIVE_RUNS:item.update(status='interrupted',error='Engine restarted; inspect retained evidence before explicit reassignment')
@@ -125,6 +127,8 @@ class Engagements:
         self.event(engagement,'engagement_'+status,dict(scopeRevision=engagement['scopeRevision']))
 
     async def dispatch(self,method,params):
+        adapted=await self.cyber.dispatch(method,params)
+        if adapted is not NotImplemented:return adapted
         assured=await self.assurance.dispatch(method,params)
         if assured is not NotImplemented:return assured
         if method=='security-engagement-worker-configure':return await self.worker.configure(params.get('socket'))
@@ -138,7 +142,8 @@ class Engagements:
             for skill in package['skills']:
                 old=next((s for s in self.store.data['skills'] if s.get('owner','guest')==owner(self.store) and s.get('name')==skill['name']),None)
                 if old:added.append(old['id']);continue
-                row=dict(copy.deepcopy(skill),id=identity(),owner=owner(self.store),created=now(),source='wixal:redteam-skills:v1',packageSha256=evidence.digest(package))
+                row=dict(copy.deepcopy(skill),id=identity(),owner=owner(self.store),created=now(),packageSha256=evidence.digest(package))
+                row.setdefault('source','wixal:redteam-skills:v1')
                 self.store.data['skills'].append(row);added.append(row['id'])
             self.workspace.publish();return dict(skillIds=added)
         if method=='security-engagement-create':
@@ -228,7 +233,9 @@ class Engagements:
             for ref in refs:evidence.read(self,engagement,ref)
             if state!='inferred' and not refs:raise ValueError('Observed/disproved relationships need retained evidence')
             result=self.add('securityRelations',engagement,fromId=source,toId=destination,kind=kind,state=state,evidenceIds=refs,rationale=policy.text(params.get('rationale'),'Relationship rationale'),scopeRevision=engagement['scopeRevision'])
-        elif method=='security-relation-paths':return evidence.paths(self,engagement,params.get('fromId'),params.get('toId'))
+        elif method=='security-relation-paths':
+            from .cyber_planning import ranked_paths
+            return ranked_paths(self,engagement,params)
         elif method=='security-specialist-assign':
             if self.workspace.service.active and not self.workspace.service.active.done():raise ValueError('Finish current chat or agent work before assigning a specialist')
             role=params.get('role')
@@ -238,11 +245,8 @@ class Engagements:
             if not refs:raise ValueError('Select retained evidence for the specialist')
             run_ids=[]
             for ref in refs:
-                record,_=evidence.read(self,engagement,ref)
-                if record['kind']!='run':raise ValueError('Specialists require retained Wixal run evidence')
-                source=self.record('securityRuns',record['source'],engagement)
-                if source['targetId']!=target['id']:raise ValueError('Specialist evidence belongs to another target')
-                run_ids.append(source['id'])
+                source=evidence.specialist_source(self,engagement,ref,role,target['id'])
+                if source['capability']!='retained_analysis':run_ids.append(source['id'])
             question=policy.text(params.get('question'),'Specialist question')
             run=await self.workspace.prepare_run(dict(targetId=target['id'],capability='analysis',stage='Research',name=role.replace('_',' ').title(),model=params.get('model',''),prompt=evidence.ROLES[role]+'\nQuestion: '+question,evidenceIds=run_ids))
             self.workspace.commit_run(run)

@@ -4,7 +4,7 @@ from contextvars import ContextVar
 profile = ContextVar('wixal_agent_profile', default=None)
 automatic = ContextVar('wixal_automatic_tools', default=False)
 READ_TOOLS = {'workspace_info','list_files','read_file','verify_json','search_files','search_history',
-              'recall_memory','todo_list','tool_result_read','load_skill','web_search','http_request','addon_catalog','addon_job','addon_discover'}
+              'recall_memory','todo_list','tool_result_read','load_skill','web_search','http_request','addon_catalog','addon_job','addon_discover','cyber_read'}
 
 def available_names(tools, store):
     active = profile.get()

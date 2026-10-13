@@ -31,6 +31,12 @@ Passed:
 - Development package creation and `codesign --verify --deep --strict`.
 - Packaged native UI: all four selector destinations, retained project/session and exact unsent draft, project expansion versus opening, cross-project Recents, pinning, search result activation, accessible width change from 248 to 264 points, and Settings retained through collapse and expansion.
 
+- Native minimum window (920 × 640): automatic compaction, selector availability and temporary sidebar expansion.
+- App relaunch: exact draft, pinned shortcut, expanded project and 264-point sidebar width retained.
+- Live agent conversation entry points use engine session resolution rather than merely switching the composer presentation.
+
 The engine regression adds failure-before-navigation, legacy same-project selection, cross-project selection and personal-workspace selection coverage. Draft text and session count remain unchanged during valid cross-project selection.
 
-The canonical installed app and real workspace are not replaced. Screenshots contain a disposable fixture project. Broader VoiceOver, all-theme contrast, very large history performance and real-model qualification remain separate acceptance work.
+The canonical installed app and real workspace are not replaced. Temporary validation app/process cleanup is recorded after final verification. Screenshots contain a disposable fixture project. Broader VoiceOver, all-theme contrast, very large history performance and real-model qualification remain separate acceptance work.
+
+![Native compact layout at the minimum window size](../screenshots/sidebar-compact.png)

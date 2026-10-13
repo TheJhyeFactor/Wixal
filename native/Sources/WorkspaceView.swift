@@ -314,7 +314,7 @@ struct WorkspaceView: View {
         if let session=records(engine.state["sessions"]).reversed().first(where:{textValue($0["projectId"])==textValue(engine.state["activeProject"]) && textValue($0["mode"])==mode && ($0["archivedAt"] == nil || $0["archivedAt"] is NSNull)}){openConversation(session,page:page)}else{newConversation(mode,page:page)}
     }
     private var agentsPage:some View{
-        AgentsHubView(engine:engine,design:agentDesign,page:$agentPage,openModels:{modelPicker=true},openFiles:{tab="Files"},newLiveTask:{newConversation("agent")})
+        AgentsHubView(engine:engine,design:agentDesign,page:$agentPage,openModels:{modelPicker=true},openFiles:{tab="Files"},newLiveTask:{newConversation("agent")},openLiveConversation:{openMode("agent")})
     }
     private var projectsPage:some View{
         WixalPage(eyebrow:"PROJECTS",title:engine.project.map{textValue($0["name"])} ?? "Your projects",subtitle:engine.project == nil ? "Add a folder to keep related work together." : engine.root){

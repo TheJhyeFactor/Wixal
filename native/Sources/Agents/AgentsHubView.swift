@@ -8,6 +8,7 @@ struct AgentsHubView:View {
     let openModels:()->Void
     let openFiles:()->Void
     let newLiveTask:()->Void
+    let openLiveConversation:()->Void
     @Environment(\.wixalTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @ViewState private var selectedAgent:String?
@@ -29,7 +30,7 @@ struct AgentsHubView:View {
                 switch page {
                 case "Conversation":ChatView(engine:engine,openModels:openModels,openFiles:openFiles,openTools:{page="Tools"},agentMode:true)
                 case "Live tools":capabilities
-                case "Task inbox":TasksView(engine:engine,openConversation:{page="Conversation"})
+                case "Task inbox":TasksView(engine:engine,openConversation:openLiveConversation)
                 case "Tools":capabilities
                 case "Workflows":workflows
                 case "Runs":runs
@@ -62,7 +63,7 @@ struct AgentsHubView:View {
     }
     private func pageButton(_ item:String)->some View{Button{navigate(item)}label:{Text(item=="Home" ? "Agents" : item).padding(.horizontal,4)}.buttonStyle(WixalButtonStyle()).background(page==item ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:7)).foregroundStyle(page==item ? theme.accent : theme.muted).accessibilityAddTraits(page==item ? [.isSelected] : [])}
     private var liveMenu:some View{Menu{Button("Open live conversation"){navigate("Conversation")};Button("New live task",action:newLiveTask).disabled(engine.busy);Button("Existing tasks & schedules"){navigate("Task inbox")};Button("Inspect discovered tools"){navigate("Tools")}}label:{Label("Live workspace",systemImage:"arrow.up.right.square")}.menuStyle(.borderlessButton).fixedSize().help("Open a conversation, inspect tools or view the task inbox")}
-    private func navigate(_ value:String){withAnimation(motion){page=value};design.notice=""}
+    private func navigate(_ value:String){if value=="Conversation"{openLiveConversation();return};withAnimation(motion){page=value};design.notice=""}
     private var home:some View{
         AgentDesignPage(title:selectedAgent == nil ? "Your agents" : "Agent workspace",subtitle:"Save a way of working, give it a task, and inspect its progress."){
             AgentRuntimeBanner()
@@ -75,7 +76,7 @@ struct AgentsHubView:View {
                     WixalSection(title:"Start with a template",detail:"Templates provide editable instructions and task boundaries. The model chooses its tools."){
                         LazyVGrid(columns:[GridItem(.adaptive(minimum:190),spacing:14)],spacing:14){ForEach(["Project reviewer","Code assistant","Researcher","Security analyst"],id:\.self){name in templateCard(name)}}
                     }
-                    Button("Prefer a one-off task? Open the live conversation"){page="Conversation"}.buttonStyle(WixalButtonStyle())
+                    Button("Prefer a one-off task? Open the live conversation",action:openLiveConversation).buttonStyle(WixalButtonStyle())
                 }else{
                     HStack{TextField("Find an agent",text:$query).wixalField().frame(maxWidth:260);Toggle("Archived",isOn:$showArchived).toggleStyle(.checkbox).wixalFont(size:11);Spacer();Button("Create agent"){editor=AgentProfileDraft(model:textValue(engine.state["model"]))}.buttonStyle(WixalButtonStyle(outlined:true))}
                     let filtered=design.agents.filter{($0.archived == true)==showArchived && (query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.purpose.localizedCaseInsensitiveContains(query))}

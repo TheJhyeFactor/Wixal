@@ -20,6 +20,9 @@ struct SettingsCategory: Identifiable {
 @MainActor final class SettingsState: ObservableObject {
     struct Draft { var text: String; var baseline: String }
     @Published var category = "Appearance"
+    @Published var contextTab = "Context"
+    @Published var memoryDrafts: [String: MemoryNoteDraft] = [:]
+    struct MemoryNoteDraft { var text=""; var editing:String? }
     @Published var search = ""
     @Published var detail: String?
     @Published var saving = false

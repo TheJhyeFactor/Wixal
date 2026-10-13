@@ -34,6 +34,7 @@ struct SettingsView: View {
                 VStack(spacing:0) {
                     if !settings.search.isEmpty { searchResults }
                     else if let detail = settings.detail { detailView(detail) }
+                    else if settings.category == "Models & performance" { ModelsView(engine:engine) }
                     else if settings.category == "Account" { AccountView(engine:engine,navigate:navigate).disabled(settings.saving || engine.busy) }
                     else { ScrollView { VStack(alignment:.leading,spacing:24) { heading; categoryContent }.padding(geometry.size.width < 720 ? 20 : 28).frame(maxWidth:820,alignment:.leading).frame(maxWidth:.infinity) }.id(settings.category) }
                     feedback
@@ -100,7 +101,7 @@ struct SettingsView: View {
     }
     @ViewBuilder private var categoryContent: some View {
         switch settings.category {
-        case "Models & performance": modelSummary
+        case "Models & performance": EmptyView()
         case "Context & memory": context
         case "Tools & permissions": permissions
         case "Connections & sharing": SettingsConnectionsView(engine:engine,settings:settings)
@@ -125,78 +126,7 @@ struct SettingsView: View {
         QuietAppearanceSettings(ui:ui,locked:appearanceLocked,systemReduceMotion:systemReduceMotion,
             save:saveUI,previewLaunch:previewLaunch,reset:{resetAppearance=true})
     }
-    private var context: some View {
-        Group {
-            WixalSection(title:"Conversation") {
-                SettingsCard {
-                    SettingsRow(title:"Context window",detail:contextHint,scope:"All workspaces") {
-                        Picker("Context window",selection:Binding(get:{engine.state["contextSize"] as? Int ?? 8192},set:{save("model-context",["contextSize":$0])})) {
-                            let value = engine.state["contextSize"] as? Int ?? 8192
-                            if ![4096,8192,16384,32768].contains(value) { Text("\(value) tokens · model limit").tag(value) }
-                            ForEach([4096,8192,16384,32768],id:\.self) { Text("\($0/1024)k tokens").tag($0) }
-                        }.labelsHidden()
-                    }
-                    Divider()
-                    SettingsRow(title:"Summarise older messages",detail:"Full conversation history remains saved on this Mac.",scope:"All workspaces") { Toggle("Summarise older messages",isOn:Binding(get:{engine.state["autoSummary"] as? Bool ?? true},set:{save("settings",["autoSummary":$0])})).labelsHidden().toggleStyle(.switch).controlSize(.small) }
-                }.disabled(locked)
-            }
-            WixalSection(title:"Memory sources") {
-                SettingsCard {
-                    SettingsRow(title:"Recall scope",detail:engine.project == nil ? "Personal chats use global recall. Open a project to select project recall." : "Choose which saved memory sources this project can use.",scope:projectScope) {
-                        Picker("Recall scope",selection:Binding(get:{mode},set:{save("memory-settings",["mode":$0])})) { Text("Project only").tag("project"); Text("Global only").tag("global"); Text("Project + global").tag("both"); Text("Off").tag("off") }.labelsHidden().disabled(engine.project == nil)
-                    }
-                    Divider()
-                    SettingsRow(title:"Use global instructions",detail:"Included only when the recall scope allows global memory.",scope:"All workspaces") { Toggle("Use global instructions",isOn:Binding(get:{globalOn},set:{save("settings",["globalMemoryEnabled":$0])})).labelsHidden().toggleStyle(.switch).controlSize(.small) }
-                }.disabled(locked)
-                VStack(alignment:.leading,spacing:6) { Text(effectiveMemory).wixalFont(size:12,weight:.medium); Text("Current conversation context remains available. Manage saved memory to inspect earlier-chat recall and indexing.").wixalFont(size:11).foregroundStyle(colours.muted) }.frame(maxWidth:.infinity,alignment:.leading).padding(14).background(colours.panel).overlay(alignment:.leading){Rectangle().fill(colours.accent).frame(width:2)}
-            }
-            WixalSection(title:"Global instructions",detail:identityLabel + ". Saved explicitly; drafts are retained when you navigate away.") {
-                VStack(alignment:.leading,spacing:10) {
-                    TextEditor(text:Binding(get:{draft},set:{settings.updateDraft(owner,text:$0,saved:engine.activeMemory)})).accessibilityLabel("Global instructions").wixalFont(size:12).scrollContentBackground(.hidden).frame(height:110).wixalField().disabled(!memoryWritable || settings.saving)
-                    ViewThatFits(in:.horizontal) { HStack { instructionFooter }; VStack(alignment:.leading,spacing:10) { instructionFooter } }
-                    if !memoryWritable { Text("Verify your email in Account to save account instructions.").wixalFont(size:11).foregroundStyle(colours.muted); Button("Open Account") { settings.open("Account") }.buttonStyle(.plain) }
-                }.wixalCard()
-                Button("Manage saved memory & recall →") { settings.detail="Memory" }.buttonStyle(WixalButtonStyle(outlined:true))
-            }
-        }
-    }
-    @ViewBuilder private var instructionFooter: some View {
-        Text("\(draft.count) / 1,200").wixalFont(size:10).foregroundStyle(draft.count > 1200 ? .red : colours.muted)
-        Text(settings.dirty(owner) ? "Unsaved changes" : "No unsaved changes").wixalFont(size:10).foregroundStyle(settings.dirty(owner) ? colours.accent : colours.muted)
-        Button("Save instructions") {
-            let key=owner, value=draft
-            settings.perform(engine,"global-memory-save",["content":value],success:"Global instructions saved") { _ in settings.drafts[key] = .init(text:value,baseline:value) }
-        }.buttonStyle(WixalButtonStyle(outlined:true)).disabled(locked || !memoryWritable || draft.count > 1200 || !settings.dirty(owner))
-    }
-    private var effectiveMemory: String {
-        var sources:[String]=[]
-        if engine.project != nil && ["project","both"].contains(mode) { sources.append("project notes") }
-        if ["global","both"].contains(mode) && globalOn { sources.append("global instructions and notes") }
-        return "Active for \(engine.project == nil ? "Personal" : textValue(engine.project?["name"])): " + (sources.isEmpty ? "saved memory excluded" : sources.joined(separator:" + "))
-    }
-    private var contextHint: String {
-        let model=records(engine.modelStatus["installed"]).first { textValue($0["name"]) == textValue(engine.state["model"]) }
-        if let suggested=model?["suggestedContext"] as? Int { return "Suggested: \(suggested/1024)k for \(textValue(model?["name"])). Larger windows use more memory." }
-        return "Larger windows use more memory. Models shows the selected model’s limits and fit estimates."
-    }
-    private var modelSummary: some View {
-        Group {
-            WixalSection(title:"Current model") {
-                SettingsCard {
-                    SettingsRow(title:textValue(engine.state["model"]).isEmpty ? "No model selected" : textValue(engine.state["model"]),detail:engine.modelConnectionLabel,scope:"All workspaces") { Button("Model library →") { settings.detail="Models" }.buttonStyle(WixalButtonStyle(outlined:true)) }
-                    Divider()
-                    SettingsRow(title:"Context window",detail:"\((engine.state["contextSize"] as? Int ?? 8192)/1024)k tokens. Context and summary controls are kept together.",scope:"All workspaces") { Button("Adjust context →") { settings.open("Context & memory") }.buttonStyle(.plain) }
-                }
-            }
-            WixalSection(title:"Measurements & engine") {
-                SettingsCard {
-                    SettingsRow(title:"Model benchmarks",detail:"Generation speed on this Mac; benchmarks do not measure answer quality.") { Button("Models & engine →") { settings.detail="Models" }.buttonStyle(.plain) }
-                    Divider()
-                    SettingsRow(title:"Conversation usage",detail:"Tokens, first output and measured generation counters.") { Button("View usage →") { settings.detail="Performance" }.buttonStyle(.plain) }
-                }
-            }
-        }
-    }
+    private var context: some View { QuietContextSettings(engine:engine,settings:settings) }
     private var permissions: some View {
         Group {
             WixalSection(title:"Tool installation") {

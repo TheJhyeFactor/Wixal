@@ -18,7 +18,7 @@ for (const [file,html] of documents) {
   assert.equal((html.match(/<h1[ >]/g)||[]).length,1,`${file}: expected one h1`);
   assert.match(html, /name="viewport"/);
   for (const match of html.matchAll(/href="(https:\/\/github\.com\/TheJhyeFactor\/Wixal\/releases\/download\/[^"]+)"/g)) {
-    assert.equal(match[1], `https://github.com/TheJhyeFactor/Wixal/releases/download/v${version}/Wixal-${version}-macOS-arm64.zip`, 'Download link does not match the release version');
+    assert.equal(match[1], `https://github.com/TheJhyeFactor/Wixal/releases/download/v${version}-ui.1/Wixal-${version}-macOS-arm64.zip`, 'Download link does not match the release version');
   }
   if (file.endsWith('/download/index.html')) assert.ok(html.includes(version.replace('-alpha.', ' Alpha ')), 'Download badge is stale');
   if (file.endsWith('/stats/index.html')) assert.ok(html.includes(`data-release-tag="v${version}"`), 'Stats release is stale');

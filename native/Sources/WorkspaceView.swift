@@ -50,7 +50,7 @@ struct WorkspaceView: View {
         VStack(spacing:0) {
             titlebar
             HStack(spacing:0) {
-                navigationRail.frame(width:48).background(theme.sidebar)
+                navigationRail.frame(width:48).background(theme.sidebar).zIndex(20)
                 Rectangle().fill(theme.line).frame(width:1)
                 if !sidebarIsCompact {
                     sidebar.frame(width:CGFloat(SidebarPreferences.width(sidebarWidth))).background(theme.sidebar)
@@ -191,16 +191,7 @@ struct WorkspaceView: View {
             NavigationRailButton(title:"Recents",symbol:"clock",selected:tab=="Recents"){tab="Recents";drawer=nil}
             NavigationRailButton(title:sidebarIsCompact ? "Expand sidebar" : "Collapse sidebar",symbol:"sidebar.left"){toggleSidebar()}.help("Toggle sidebar · ⌘ B")
             Spacer(minLength:0)
-            Menu {
-                Button("Task inbox"){select("Tasks")}
-                Button("Archived chats"){archives=true}
-                Button("Models"){select("Models")}
-                Button("Usage & performance"){select("Performance")}
-                Button("Connections"){select("Connections")}
-                Button("Setup"){select("Setup")}
-                Button("Terms"){select("Terms")}
-                Button("Privacy"){select("Privacy")}
-            } label:{Image(systemName:"ellipsis").frame(width:36,height:36)}.menuStyle(.borderlessButton).menuIndicator(.hidden).help("Utilities").accessibilityLabel("Utilities")
+            NavigationUtilities { route in select(route) }
             NavigationRailButton(title:"Settings",symbol:"gearshape",selected:tab=="Settings"){openSettings()}
             NavigationRailButton(title:accountName,symbol:"person.crop.circle"){select("Account")}
         }.padding(.vertical,6)

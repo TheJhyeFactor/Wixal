@@ -8,6 +8,7 @@ struct NavigationRailButton: View {
     let action: () -> Void
     @Environment(\.wixalTheme) private var theme
     @ViewState private var hovered = false
+    @FocusState private var focused:Bool
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol).wixalFont(size: 16)
@@ -15,7 +16,16 @@ struct NavigationRailButton: View {
                 .background(selected ? theme.selected : hovered ? theme.raised : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .overlay(alignment: .leading) { if selected { Rectangle().fill(theme.accent).frame(width: 2, height: 18) } }
         }.buttonStyle(.plain).foregroundStyle(selected ? theme.text : theme.muted)
-            .onHover { hovered = $0 }.help(title).accessibilityLabel(title)
+            .onHover { hovered = $0 }.focused($focused)
+            .overlay(alignment:.leading) {
+                if hovered || focused {
+                    Text(title).wixalFont(size:11,weight:.medium).fixedSize()
+                        .padding(.horizontal,9).padding(.vertical,6)
+                        .background(theme.raised,in:RoundedRectangle(cornerRadius:4))
+                        .overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1))
+                        .offset(x:44).allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }.zIndex(hovered || focused ? 10 : 0).accessibilityLabel(title)
             .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
@@ -89,5 +99,42 @@ struct SidebarResizeHandle: View {
                 width = SidebarPreferences.width(width + (direction == .increment ? 16 : -16))
             }
             .help("Drag to resize sidebar; adjust width in the sidebar menu")
+    }
+}
+
+
+struct NavigationUtilities:View {
+    let navigate:(String)->Void
+    @Environment(\.wixalTheme) private var theme
+    @ViewState private var presented=false
+    @ViewState private var hovered=false
+    @FocusState private var focused:Bool
+    private let groups:[(String,[(String,String,String)])]=[
+        ("Activity",[("Task inbox","tray","Tasks"),("Archived chats","archivebox","Archived chats")]),
+        ("Workspace",[("Models","cpu","Models"),("Usage & performance","chart.bar","Performance"),("Connections","point.3.connected.trianglepath.dotted","Connections")]),
+        ("Help",[("Setup guide","questionmark.circle","Setup"),("Terms","doc.text","Terms"),("Privacy","hand.raised","Privacy")])
+    ]
+    var body:some View {
+        Button{presented.toggle()}label:{Image(systemName:"ellipsis").wixalFont(size:16).frame(width:36,height:36).contentShape(Rectangle())
+            .background(hovered || presented ? theme.raised : .clear,in:RoundedRectangle(cornerRadius:5))}
+            .buttonStyle(.plain).foregroundStyle(theme.muted).onHover{hovered=$0}.focused($focused)
+            .accessibilityLabel("Utilities").accessibilityValue(presented ? "Expanded" : "Collapsed")
+            .overlay(alignment:.leading){if (hovered || focused) && !presented {Text("Utilities").wixalFont(size:11,weight:.medium).fixedSize().padding(.horizontal,9).padding(.vertical,6).background(theme.raised,in:RoundedRectangle(cornerRadius:4)).overlay(RoundedRectangle(cornerRadius:4).stroke(theme.line,lineWidth:1)).offset(x:44).allowsHitTesting(false).accessibilityHidden(true)}}
+            .zIndex(hovered || focused ? 10 : 0)
+            .popover(isPresented:$presented,arrowEdge:.trailing) {
+                VStack(alignment:.leading,spacing:8) {
+                    Text("Utilities").wixalFont(size:14,weight:.semibold).padding(.horizontal,10).padding(.top,5)
+                    ForEach(groups.indices,id:\.self){index in
+                        VStack(alignment:.leading,spacing:1) {
+                            Text(groups[index].0).wixalFont(size:11,weight:.medium).foregroundStyle(theme.muted).padding(.horizontal,10).padding(.top,4)
+                            ForEach(groups[index].1.indices,id:\.self){row in
+                                let item=groups[index].1[row]
+                                Button{presented=false;navigate(item.2)}label:{Label(item.0,systemImage:item.1).wixalFont(size:12).frame(maxWidth:.infinity,alignment:.leading).frame(height:22)}.buttonStyle(WixalButtonStyle())
+                            }
+                        }
+                        if index < groups.count-1 {Rectangle().fill(theme.line).frame(height:1).padding(.horizontal,8)}
+                    }
+                }.padding(8).frame(width:260).background(theme.panel).foregroundStyle(theme.text).onExitCommand{presented=false}
+            }
     }
 }

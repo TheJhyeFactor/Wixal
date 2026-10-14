@@ -39,7 +39,7 @@ def requested_category(prompt):
         ('security', r'\b(nmap|rustscan|discover(?:y)?|scan|ports?|tls|assessment|security|vulnerab\w*)\b'),
         ('commands', r'\b(run|build|test|command|shell|terminal|execute)\b'),
         ('web', r'https?://|\b(browse|fetch|visit|website|web|online|internet|url|links?)\b|\b(?:read|inspect|open)\s+(?:the\s+)?(?:https?://|website|web\s?page|url)\b'),
-        ('files', r'\b(file|files|folder|source|code|read|write|edit)\b'),
+        ('files', r'\b(file|files|folder|source|code|read(?:ing)?|write|edit)\b|[\w-]+\.(?:txt|md|py|json|csv)\b'),
         ('memory', r'\b(remember|memory|recall|previous|earlier|prefer)\b'))):
         for match in re.finditer(pattern,routing_prompt,re.I):
             # Route the requested work, not a later prohibition. Tool
@@ -67,6 +67,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
     if re.search(r'\b(cyber|engagement|counterevidence|retest|sarif|defensive|incident)\b',prompt,re.I):chosen.update(('cyber_read','cyber_manage'))
     if re.search(r'\b(plan|steps|implement|build|fix|refactor|workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('todo_list')
     if re.search(r'\b(checkpoint|retained|evidence)\b',prompt,re.I):chosen.add('tool_result_read')
+    if re.search(r'\b(delegate|delegation|specialist|specialists)\b',prompt,re.I):chosen.add('delegate_task')
     if re.search(r'\b(workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('workflow_manage')
     if re.search(r'\b(schedule|scheduled|recurring|routine|routines|calendar)\b',prompt,re.I):chosen.add('schedule_manage')
     if re.search(r'\b(skill|skills|procedure|procedures)\b',prompt,re.I):

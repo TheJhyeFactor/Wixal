@@ -9,6 +9,7 @@ struct AgentsHubView:View {
     let openFiles:()->Void
     let newLiveTask:()->Void
     let openLiveConversation:()->Void
+    var showNavigation=true
     @Environment(\.wixalTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @ViewState private var selectedAgent:String?
@@ -19,11 +20,13 @@ struct AgentsHubView:View {
     @ViewState private var taskAgent:AgentProfileDraft?
     @ViewState private var query=""
     @ViewState private var showArchived=false
-    private let pages=["Home","Workflows","Runs","Schedules","Tools"]
+    private let pages=["Home","Skills","Nodes","Schedules","Runs","Workflows","Tools"]
     private var motion:Animation?{systemReduceMotion || (engine.state["ui"] as? [String:Any])?["reduceMotion"] as? Bool == true ? nil : .easeInOut(duration:0.2)}
     var body:some View{
-        VStack(spacing:0){
-            toolbar
+        GeometryReader{geometry in HStack(spacing:0){
+            if showNavigation && geometry.size.width>=720{workspaceNavigation;Rectangle().fill(theme.line).frame(width:1)}
+            VStack(spacing:0){
+            if showNavigation && geometry.size.width<720{toolbar}
             if !design.error.isEmpty { Text(design.error).wixalFont(size:11).foregroundStyle(.orange).padding(12).frame(maxWidth:.infinity,alignment:.leading) }
             Rectangle().fill(theme.line).frame(height:1)
             Group{
@@ -32,13 +35,15 @@ struct AgentsHubView:View {
                 case "Live tools":capabilities
                 case "Task inbox":TasksView(engine:engine,openConversation:openLiveConversation)
                 case "Tools":capabilities
+                case "Skills":AgentSkillsWorkspace(engine:engine,design:design)
+                case "Nodes":AgentNodesWorkspace(engine:engine)
                 case "Workflows":workflows
                 case "Runs":runs
                 case "Schedules":schedules
                 default:home
                 }
             }.id(page).transition(motion == nil ? .identity : .opacity).frame(maxWidth:.infinity,maxHeight:.infinity).animation(motion,value:page)
-        }
+        }}}
         .foregroundStyle(theme.text)
         .task{design.bind(engine)}
         .onChange(of:engine.connected){_,connected in if connected{design.bind(engine)}}
@@ -61,6 +66,19 @@ struct AgentsHubView:View {
             HStack{Menu{ForEach(pages,id:\.self){item in Button(item=="Home" ? "Agents" : item){navigate(item)}}}label:{Label(page=="Home" ? "Agents" : page,systemImage:"diamond")};Spacer();liveMenu}
         }.wixalFont(size:11).padding(.horizontal,18).padding(.vertical,12)
     }
+    private var workspaceNavigation:some View{
+        VStack(alignment:.leading,spacing:5){
+            Text("AGENTS").wixalFont(size:10,design:.monospaced).foregroundStyle(theme.muted).padding(.horizontal,12).padding(.vertical,12)
+            ForEach(pages,id:\.self){item in
+                Button{navigate(item)}label:{HStack(spacing:9){Image(systemName:pageSymbol(item)).frame(width:16);Text(item=="Home" ? "Agents" : item);Spacer(minLength:0)}.padding(.horizontal,10).padding(.vertical,8).frame(maxWidth:.infinity,alignment:.leading).background(page==item ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:6))}
+                    .buttonStyle(.plain).wixalFont(size:12).foregroundStyle(page==item ? theme.accent : theme.text).accessibilityLabel(item=="Home" ? "Agents workspace" : item+" workspace").accessibilityAddTraits(page==item ? [.isSelected] : [])
+            }
+            Spacer()
+            Button("Live conversation"){navigate("Conversation")}.buttonStyle(WixalButtonStyle()).wixalFont(size:11)
+            Text(engine.connected ? "Local engine connected" : "Connecting to engine…").wixalFont(size:10).foregroundStyle(theme.muted).padding(.horizontal,8)
+        }.padding(10).frame(width:154).background(theme.sidebar)
+    }
+    private func pageSymbol(_ page:String)->String{switch page{case "Skills":return "text.book.closed";case "Nodes":return "desktopcomputer";case "Schedules":return "calendar.badge.clock";case "Runs":return "list.bullet.rectangle";case "Workflows":return "point.3.connected.trianglepath.dotted";case "Tools":return "wrench.and.screwdriver";default:return "person.crop.rectangle.stack"}}
     private func pageButton(_ item:String)->some View{Button{navigate(item)}label:{Text(item=="Home" ? "Agents" : item).padding(.horizontal,4)}.buttonStyle(WixalButtonStyle()).background(page==item ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:7)).foregroundStyle(page==item ? theme.accent : theme.muted).accessibilityAddTraits(page==item ? [.isSelected] : [])}
     private var liveMenu:some View{Menu{Button("Open live conversation"){navigate("Conversation")};Button("New live task",action:newLiveTask).disabled(engine.busy);Button("Existing tasks & schedules"){navigate("Task inbox")};Button("Inspect discovered tools"){navigate("Tools")}}label:{Label("Live workspace",systemImage:"arrow.up.right.square")}.menuStyle(.borderlessButton).fixedSize().help("Open a conversation, inspect tools or view the task inbox")}
     private func navigate(_ value:String){if value=="Conversation"{openLiveConversation();return};withAnimation(motion){page=value};design.notice=""}
@@ -74,19 +92,23 @@ struct AgentsHubView:View {
                 if design.agents.isEmpty {
                     AgentEmptyState(icon:"diamond",title:"Give an agent a way to work.",detail:"Start with a template or build your own. Choose its instructions, model and memory before saving a reusable agent.",action:"Create an agent"){editor=AgentProfileDraft(model:textValue(engine.state["model"]))}
                     WixalSection(title:"Start with a template",detail:"Templates provide editable instructions and task boundaries. The model chooses its tools."){
-                        LazyVGrid(columns:[GridItem(.adaptive(minimum:190),spacing:14)],spacing:14){ForEach(["Project reviewer","Code assistant","Researcher","Security analyst"],id:\.self){name in templateCard(name)}}
+                        ForEach(["Project reviewer","Code assistant","Researcher","Security analyst"],id:\.self){name in templateCard(name)}
                     }
                     Button("Prefer a one-off task? Open the live conversation",action:openLiveConversation).buttonStyle(WixalButtonStyle())
                 }else{
                     HStack{TextField("Find an agent",text:$query).wixalField().frame(maxWidth:260);Toggle("Archived",isOn:$showArchived).toggleStyle(.checkbox).wixalFont(size:11);Spacer();Button("Create agent"){editor=AgentProfileDraft(model:textValue(engine.state["model"]))}.buttonStyle(WixalButtonStyle(outlined:true))}
                     let filtered=design.agents.filter{($0.archived == true)==showArchived && (query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.purpose.localizedCaseInsensitiveContains(query))}
                     if filtered.isEmpty{Text("No agents match this search.").foregroundStyle(theme.muted)}
-                    LazyVGrid(columns:[GridItem(.adaptive(minimum:215),spacing:14)],spacing:14){ForEach(filtered){agent in agentCard(agent)}}
+                    VStack(spacing:0){ForEach(filtered){agent in agentRow(agent);Divider().overlay(theme.line)}}
 
                 }
             }
             if !design.notice.isEmpty{Text(design.notice).wixalFont(size:11).foregroundStyle(theme.muted).accessibilityLabel(design.notice)}
         }
+    }
+    private func agentRow(_ agent:AgentProfileDraft)->some View{
+        Button{selectedAgent=agent.id}label:{HStack(spacing:12){AgentAvatar(icon:agent.icon,size:32);VStack(alignment:.leading,spacing:4){Text(agent.name).wixalFont(size:14,weight:.medium);Text(agent.purpose).wixalFont(size:11).foregroundStyle(theme.muted).lineLimit(2)};Spacer();VStack(alignment:.trailing,spacing:4){Text(agent.reviewPolicy).wixalFont(size:11);Text(agent.model).wixalFont(size:10,design:.monospaced).foregroundStyle(theme.muted).lineLimit(1)};Image(systemName:"chevron.right").wixalFont(size:10).foregroundStyle(theme.muted)}.padding(.vertical,14).contentShape(Rectangle())}.buttonStyle(.plain)
+        .contextMenu{Button("Edit"){editor=agent};Button("Duplicate agent"){design.duplicate(agent)};Button("Give task"){taskAgent=agent};Button(agent.archived == true ? "Restore agent" : "Archive agent"){design.archive(agent.id,agent.archived != true)}}
     }
     private func templateCard(_ name:String)->some View{let draft=AgentProfileDraft.template(name,model:textValue(engine.state["model"]));return Button{editor=draft}label:{VStack(alignment:.leading,spacing:13){AgentAvatar(icon:draft.icon);Text(name).wixalFont(size:14,weight:.medium);Text(draft.purpose).wixalFont(size:11).foregroundStyle(theme.muted).fixedSize(horizontal:false,vertical:true);Label("Use template",systemImage:"arrow.up.right").wixalFont(size:11).foregroundStyle(theme.accent)}.wixalCard()}.buttonStyle(AgentTileButtonStyle(reducedMotion:motion == nil))}
     private func agentCard(_ agent:AgentProfileDraft)->some View{Button{withAnimation(motion){selectedAgent=agent.id}}label:{VStack(alignment:.leading,spacing:12){HStack{AgentAvatar(icon:agent.icon);Spacer();Text("Agent").wixalFont(size:10).foregroundStyle(theme.muted)};Text(agent.name).wixalFont(size:16,weight:.medium);Text(agent.purpose).wixalFont(size:11).foregroundStyle(theme.muted).lineLimit(3);Divider();Text(agent.model.isEmpty ? "Model not selected" : agent.model).wixalFont(size:11,design:.monospaced);Text(agent.reviewPolicy).wixalFont(size:11).foregroundStyle(theme.muted)}.wixalCard()}.buttonStyle(AgentTileButtonStyle(reducedMotion:motion == nil)).contextMenu{Button("Edit"){editor=agent};Button("Duplicate agent"){design.duplicate(agent)};Button("Give task"){taskAgent=agent};Button(agent.archived == true ? "Restore agent" : "Archive agent"){design.archive(agent.id,agent.archived != true)}}}
@@ -143,13 +165,8 @@ struct AgentsHubView:View {
         guard let stamp=value as? NSNumber else{return "Not scheduled"}
         return Date(timeIntervalSince1970:stamp.doubleValue/1000).formatted(date:.abbreviated,time:.shortened)
     }
-    private var capabilities:some View{AgentDesignPage(title:"Tools & skills",subtitle:"The model discovers available tools and chooses how to use them. Inspect capabilities and usage here."){
+    private var capabilities:some View{AgentDesignPage(title:"Tools",subtitle:"Discoverable capabilities and retained usage. Assign procedures in Skills."){
         AgentRuntimeBanner()
         AgentToolCatalog(engine:engine)
-        AgentSkillLearningView(engine:engine,design:design)
-        WixalSection(title:"Imported skills"){
-            if records(engine.state["skills"]).isEmpty{Text("No skills imported. Agent drafts can be created without a skill.").wixalFont(size:12).foregroundStyle(theme.muted)}
-            ForEach(Array(records(engine.state["skills"]).enumerated()),id:\.offset){_,skill in VStack(alignment:.leading,spacing:5){Text(textValue(skill["name"]));Text(textValue(skill["description"])).wixalFont(size:11).foregroundStyle(theme.muted);if !records(skill["versions"]).isEmpty{Button("Restore previous version"){engine.action("skill-rollback",["id":textValue(skill["id"])])}.buttonStyle(WixalButtonStyle(outlined:true)).disabled(engine.busy);DisclosureGroup("Version history"){Text(pretty(skill["versions"] ?? [])).wixalFont(size:11,design:.monospaced).textSelection(.enabled)}}}.wixalCard()}
-        }
     }}
 }

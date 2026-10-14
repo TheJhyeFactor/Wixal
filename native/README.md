@@ -12,6 +12,8 @@ Alpha 7 adds the native Cyber toolkit: findings and identity metadata, planning,
 
 ## Build and run
 
+The [14 October Agents workspace update](../docs/design/2026-10-14-agents-hermes-review/IMPLEMENTATION.md) organises Agents, Skills, Nodes, Schedules, Runs, Workflows and Tools in the existing Wixal sidebar. Agent setup supports enforced tool groups and configuration inspection. Delegation can select a saved specialist for bounded read-only work, with retained parent/child evidence. The implementation report distinguishes its repeated real-model checks from broader model and background qualification.
+
 Requires Apple Silicon macOS 14+, Swift 6.4 command-line tools, a build-time Python and the staged runtime payload. The public alpha and native CI use the Xcode 27 toolchain. Older Swift compilers can time out while checking the current SwiftUI views; this build-time requirement does not change the app's macOS 14 deployment target.
 
 ```sh

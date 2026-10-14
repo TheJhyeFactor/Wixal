@@ -45,6 +45,8 @@ class Agents:
     def __init__(self,service):
         self.service=service;self.store=service.store
         self.active_workflow_id=None
+        for assignment in self.store.data.get('agentDelegations',[]):
+            if assignment['status']=='running':assignment.update(status='interrupted',error='Engine restarted; inspect child evidence before another assignment')
         for key in ('agentProfiles','agentWorkflows','workflowRuns','notifications','agentJobs','skillCandidates'):
             self.store.data.setdefault(key,[])
         for run in self.store.data['workflowRuns']:
@@ -59,7 +61,7 @@ class Agents:
         if row is None:raise ValueError('The requested agent, workflow or schedule is unavailable for this workspace owner')
         return row
     def save_profile(self,source):
-        value={k:copy.deepcopy(source[k]) for k in ('id','name','purpose','instructions','icon','model','projectScope','reviewPolicy','memoryScope','recallHistory','suggestMemory','skills','archived','successCriteria','authority','restrictTargets','maxTurns','timeoutSeconds','privateNotes','maxCalls') if k in source}
+        value={k:copy.deepcopy(source[k]) for k in ('id','name','purpose','instructions','icon','model','projectScope','reviewPolicy','memoryScope','recallHistory','suggestMemory','skills','archived','successCriteria','authority','restrictTargets','maxTurns','timeoutSeconds','privateNotes','maxCalls','toolGroups') if k in source}
         for key,limit in [('name',100),('purpose',2000),('instructions',24000),('model',200)]:value[key]=text(value.get(key),key,limit)
         value['id']=text(value.get('id') or identity(),'id',100)
         value.setdefault('reviewPolicy','Review actions');value.setdefault('memoryScope','Project only')
@@ -70,6 +72,11 @@ class Agents:
             value['projectId']=existing['projectId'] if existing and existing.get('projectScope')=='Current project only' and existing.get('projectId') else self.store.data['activeProject']
         if value['reviewPolicy'] not in POLICIES or value['memoryScope'] not in MEMORY:raise ValueError('Invalid agent action or memory policy')
         if not isinstance(value.get('skills',[]),list) or any(not isinstance(v,str) or len(v)>200 for v in value.get('skills',[])):raise ValueError('Invalid skills')
+        from .context_policy import CATEGORIES
+        groups=value.get('toolGroups')
+        if groups is not None:
+            if not isinstance(groups,list) or any(not isinstance(g,str) or g not in CATEGORIES for g in groups):raise ValueError('Choose supported tool groups')
+            value['toolGroups']=sorted(set(groups))
         for key in ('recallHistory','suggestMemory','archived'):
             if value.get(key) is not None and not isinstance(value[key],bool):raise ValueError('Invalid '+key)
         from .outcomes import criteria
@@ -152,7 +159,8 @@ class Agents:
             if not project or project.get('syncRootRequired') or not Path(project['root']).is_dir():raise ValueError('Choose an available local project before running or resuming this agent')
         catalog=await self.service.runtime.catalog()
         if not any(m['name']==agent['model'] and 'tools' in m.get('capabilities',[]) for m in catalog):raise ValueError('Choose an installed model marked Tools for this agent')
-        missing=[s for s in agent.get('skills',[]) if not any(v['name']==s for v in self.store.data['skills'])]
+        from .skill_resources import visible
+        missing=[s for s in agent.get('skills',[]) if not any(v['name']==s for v in visible(self.store))]
         if missing:raise ValueError('Missing agent skills: '+', '.join(missing))
         previous={key:self.store.data[key] for key in ('activeProject','activeSession','model','mode')}
         original=self.service.tools.approve

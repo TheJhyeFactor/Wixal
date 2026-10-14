@@ -246,6 +246,90 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(validate_report(report,{'case':['L','M']},report['identity'],self.root)['status'],'passed')
         self.assertEqual(validate_report(report,{'case':['L','M']},report['identity'],self.root,5)['status'],'failed')
         evidence.write_text('altered');self.assertEqual(validate_report(report,{'case':['L','M']},report['identity'],self.root)['status'],'failed')
+    async def test_controller_owned_discovery_inspection_and_decline(self):
+        """Real RustScan/Nmap, listener oracle, durable receipts and review refusal."""
+        await self.install()
+        store=Store(self.root/'chain-workspace')
+        store.data['projects']=[dict(id='chain',name='Chain',root=str(self.root),approvalMode='review')]
+        store.data['activeProject']='chain';store.data['enabledTools']=[r['function']['name'] for r in DEFINITIONS]
+        manager=Addons(SimpleNamespace(store=store,emit=lambda *_:None));manager.managed=self.registry;store.addons=manager
+        reviews=[];decline=False
+        async def approve(details):
+            reviews.append(details)
+            return not (decline and details.get('assessment',{}).get('capability')=='network_scan')
+        tools=Tools(store,approve,lambda *_:None,SimpleNamespace(definitions=lambda:[]))
+        server=await asyncio.start_server(lambda r,w:w.close(),'127.0.0.1',0)
+        port=server.sockets[0].getsockname()[1]
+        args=dict(target='127.0.0.1',ports=str(port),profile='ports',discover_first=True,timeout_seconds=30)
+        checkpoint=dict(id='chain-checkpoint',name='network_scan',arguments=args,status='started')
+        task=dict(id='chain-task',sessionId='chat',prompt='Discover and inspect the requested ports',checkpoints=[checkpoint])
+        store.data['tasks'].append(task)
+        try:
+            result=await tools.execute('network_scan',args,'chat',stage_checkpoint=checkpoint)
+            self.assertEqual(result['state'],'completed')
+            self.assertEqual([(s['host'],int(s['port']),s['state']) for s in result['services']],[('127.0.0.1',port,'open')])
+            self.assertEqual(result['sourceSessionId'],result['discovery']['session_id'])
+            self.assertIsNone(result['evidenceReport'][0]['examinedPortCount'])
+            self.assertEqual([r['name'] for r in checkpoint['controllerStages']],['network_discover','network_read','network_scan'])
+            self.assertTrue(all(r['origin']=='controller_stage' and r['status']=='finished' for r in checkpoint['controllerStages']))
+            saved=next(t for t in json.loads(store.db.execute('SELECT value FROM state').fetchone()[0])['tasks'] if t['id']=='chain-task')
+            self.assertEqual(saved['checkpoints'][0]['controllerStages'],checkpoint['controllerStages'])
+            raw=Path(result['evidence'][0]['stdoutPath']).read_bytes()
+            import xml.etree.ElementTree as ET
+            xml=ET.fromstring(raw)
+            self.assertEqual([int(p.attrib['portid']) for p in xml.findall('.//port')],[port])
+            self.assertEqual(digest(result['evidence'][0]['stdoutPath']),result['evidence'][0]['stdoutSha256'])
+            self.assertEqual([r['assessment']['capability'] for r in reviews],['network_discover','network_scan'])
+            from wixal.outcomes import discovery_follow_up
+            checkpoint.update(status='finished',result=json.dumps(result))
+            self.assertEqual(discovery_follow_up(task)['status'],'passed')
+            count=len(tools.jobs)
+            retry=dict(checkpoint,id='retry',status='started');retry.pop('controllerStages');task['checkpoints'].append(retry)
+            with self.assertRaisesRegex(ValueError,'already started'):
+                await tools.execute('network_scan',args,'chat',stage_checkpoint=retry)
+            self.assertEqual(len(tools.jobs),count)
+            decline=True
+            refused=dict(id='refused',name='network_scan',arguments=args,status='started')
+            store.data['tasks'].append(dict(id='refused-task',checkpoints=[refused]))
+            result=await tools.execute('network_scan',args,'chat',stage_checkpoint=refused)
+            self.assertTrue(result.startswith('User declined'))
+            self.assertEqual(len(tools.jobs),count+1,'Declined inspection must not spawn Nmap')
+            store.data['enabledTools'].remove('network_discover')
+            with self.assertRaisesRegex(ValueError,'switched off'):
+                await tools.execute('network_scan',args,'chat')
+            self.assertEqual(len(tools.jobs),count+1,'Disabled discovery must not spawn either scanner')
+            store.data['enabledTools'].append('network_discover')
+            server.close();await server.wait_closed()
+            empty=await tools.execute('network_scan',args,'chat')
+            self.assertTrue(empty['skipped'])
+            self.assertEqual(empty['services'],[])
+            self.assertEqual(len(tools.jobs),count+2,'Empty discovery must skip Nmap')
+        finally:
+            server.close();await server.wait_closed()
+            await tools.close();await manager.close();store.close()
+
+    async def test_stopped_controller_discovery_never_hands_off(self):
+        await self.install();store=Store(self.root/'stopped-chain')
+        store.data['projects']=[dict(id='stopped',root=str(self.root),approvalMode='review')]
+        store.data['activeProject']='stopped';store.data['enabledTools']=[r['function']['name'] for r in DEFINITIONS]
+        manager=Addons(SimpleNamespace(store=store,emit=lambda *_:None));manager.managed=self.registry;store.addons=manager
+        reviews=[]
+        async def approve(details):reviews.append(details);return True
+        tools=Tools(store,approve,lambda *_:None,SimpleNamespace(definitions=lambda:[]))
+        try:
+            operation=asyncio.create_task(tools.execute('network_scan',dict(target='127.0.0.1',ports='1-1024',discover_first=True,profile='ports',timeout_seconds=20),'chat'))
+            async with asyncio.timeout(10):
+                while not tools.jobs:await asyncio.sleep(0)
+            job=next(iter(tools.jobs.values()));tools.stop_job(job)
+            result=await operation
+            self.assertEqual(result['state'],'failed')
+            self.assertEqual(result['discovery']['state'],'stopped')
+            self.assertEqual(len(tools.jobs),1)
+            self.assertEqual([r['assessment']['capability'] for r in reviews],['network_discover'])
+            self.assertIsNone(result['evidenceReport'][0]['examinedPortCount'])
+        finally:
+            await tools.close();await manager.close();store.close()
+
     async def test_real_managed_discovery_and_source_bound_nmap(self):
         await self.install();store=Store(self.root/'workspace');store.data['projects']=[dict(id='test',name='Test',root=str(self.root),approvalMode='bypass')];store.data['activeProject']='test';store.data['enabledTools']=[r['function']['name'] for r in DEFINITIONS]
         manager=Addons(SimpleNamespace(store=store,emit=lambda *_:None));manager.managed=self.registry;store.addons=manager
@@ -255,6 +339,9 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
             for _ in range(3):servers.append(await asyncio.start_server(lambda r,w:w.close(),'127.0.0.1',0))
             expected=sorted(server.sockets[0].getsockname()[1] for server in servers)
             started=await tools.execute('network_discover',dict(target='127.0.0.1',ports=','.join(map(str,expected)),timeout_seconds=20),'chat');job=tools.jobs[started['session_id']];await job['collector']
+            self.assertEqual(started['state'],'completed','Default foreground call must deliver terminal evidence')
+            self.assertEqual(started['structuredResult']['hosts'][0]['ports'],expected)
+            self.assertEqual(started['evidenceReport']['state'],'completed')
             result=job['structuredResult'];self.assertEqual(result['hosts'][0]['ports'],expected,result);self.assertTrue(result['handoffEligible'],result)
             inspected=await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],profile='ports',timeout_seconds=20),'chat')
             self.assertEqual(sorted(int(r['port']) for r in inspected['services']),expected)
@@ -274,4 +361,30 @@ class ManagedToolsTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ValueError,'manual ports'):await tools.execute('network_scan',dict(target='127.0.0.1',source_session_id=started['session_id'],ports='22'),'chat')
         finally:
             for server in servers:server.close();await server.wait_closed()
+            await tools.close();await manager.close();store.close()
+
+    async def test_discovery_background_and_owned_foreground_cancellation(self):
+        await self.install();store=Store(self.root/'foreground-cancellation')
+        store.data['projects']=[dict(id='foreground',root=str(self.root),approvalMode='review')]
+        store.data['activeProject']='foreground';store.data['enabledTools']=[r['function']['name'] for r in DEFINITIONS]
+        manager=Addons(SimpleNamespace(store=store,emit=lambda *_:None));manager.managed=self.registry;store.addons=manager
+        tools=Tools(store,AsyncMock(return_value=True),lambda *_:None,SimpleNamespace(definitions=lambda:[]))
+        try:
+            started=await tools.execute('network_discover',dict(target='127.0.0.1',coverage='all_tcp',timeout_seconds=20,await_results=False),'chat')
+            self.assertEqual(started['state'],'running')
+            job=tools.jobs[started['session_id']];tools.stop_job(job);await job['collector']
+            self.assertEqual(job['state'],'stopped')
+            self.assertFalse(job['structuredResult']['handoffEligible'])
+            previous=set(tools.jobs)
+            operation=asyncio.create_task(tools.execute('network_discover',dict(target='127.0.0.1',coverage='all_tcp',timeout_seconds=20),'chat'))
+            async with asyncio.timeout(10):
+                while set(tools.jobs)==previous:await asyncio.sleep(0)
+            job=tools.jobs[next(iter(set(tools.jobs)-previous))]
+            operation.cancel()
+            with self.assertRaises(asyncio.CancelledError):await operation
+            self.assertTrue(job['collector'].done())
+            self.assertEqual(job['state'],'stopped')
+            self.assertIsNotNone(job['child'].returncode)
+            self.assertFalse(job['structuredResult']['handoffEligible'])
+        finally:
             await tools.close();await manager.close();store.close()

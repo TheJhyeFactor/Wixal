@@ -1,6 +1,7 @@
 """Independent qualification review preserves failures and missing evidence."""
 import importlib.util
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,10 +10,15 @@ spec=importlib.util.spec_from_file_location('review',Path(__file__).parents[1]/'
 review=importlib.util.module_from_spec(spec);spec.loader.exec_module(review)
 
 class ModelOutcomeReviewTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.xml=Path(self.temp.name)/'inspection.xml'
+        self.xml.write_text('<nmaprun><host><address addr="127.0.0.1"/><ports><port portid="8123"><state state="open"/></port><port portid="8124"><state state="open"/></port></ports></host></nmaprun>')
+
     def report(self):
         def evidence(scenario):
-            return [] if scenario=='naturalDiscovery' else [dict(tool_name='network_scan',content=json.dumps(dict(state='completed',sourceSessionId='fixture-source',services=[dict(port=8123),dict(port=8124)])))]
-        return dict(status='passed',finished=1,modelAttempts=[dict(scenario=scenario,attempt=i,status='passed',oracle=dict(ports=[8123,8124]),output=dict(answer='Observed 8123 and 8124 open.',toolResults=evidence(scenario))) for scenario in ('naturalDiscovery','sourceInspection') for i in range(1,31)])
+            return [] if scenario=='naturalDiscovery' else [dict(tool_name='network_scan',content=json.dumps(dict(state='completed',sourceSessionId='fixture-source',services=[dict(host='127.0.0.1',port=8123,state='open'),dict(host='127.0.0.1',port=8124,state='open')],evidence=[dict(stdoutPath=str(self.xml),stdoutSha256=hashlib.sha256(self.xml.read_bytes()).hexdigest(),incomplete=False)],inspectionSessions=[dict(session_id='fixture-inspection',state='completed',exitCode=0)])))]
+        return dict(status='passed',finished=1,modelAttempts=[dict(scenario=scenario,attempt=i,status='passed',connectionLedger=[dict(port=8123),dict(port=8124)],oracle=dict(ports=[8123,8124]),output=dict(answer='Observed 8123 and 8124 open.',toolResults=evidence(scenario))) for scenario in ('naturalDiscovery','sourceInspection') for i in range(1,31)])
 
     def check(self,report):
         with tempfile.TemporaryDirectory() as directory:
@@ -53,3 +59,21 @@ class ModelOutcomeReviewTests(unittest.TestCase):
         result=self.check(report)
         self.assertEqual(result['status'],'qualification_blocked')
         self.assertEqual(result['cores']['sourceInspection']['passed'],0)
+
+    def test_structured_pass_cannot_hide_changed_saved_xml(self):
+        report=self.report()
+        self.xml.write_text(self.xml.read_text().replace('state="open"','state="closed"'))
+        result=self.check(report)
+        self.assertEqual(result['status'],'qualification_blocked')
+        self.assertEqual(result['cores']['sourceInspection']['passed'],0)
+
+    def test_missing_per_attempt_listener_receipt_blocks_qualification(self):
+        report=self.report();report['modelAttempts'][0].pop('connectionLedger')
+        result=self.check(report)
+        self.assertTrue(result['attempts'][0]['missingListenerOracle'])
+        self.assertEqual(result['status'],'qualification_blocked')
+
+    def test_controller_correction_cannot_erase_rejected_model_claim(self):
+        report=self.report()
+        report['modelAttempts'][0]['session']=dict(messages=[dict(role='assistant',content='Observed 8123 and 8124 open.',unverifiedModelContent='All selected ports were closed.')])
+        self.assertTrue(self.check(report)['attempts'][0]['criticalFailure'])

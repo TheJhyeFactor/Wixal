@@ -4,6 +4,56 @@ This is a conservative contradiction detector, not a claim of complete natural
 language understanding. Mandatory raw/structured evidence checks are separate.
 """
 import re
+import json
+import hashlib
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+
+def tool_results(messages):
+    """Decode real IPC returns, preserving controller execution provenance."""
+    values=[]
+    for message in messages:
+        try:value=json.loads(message.get('content',''))
+        except (ValueError,TypeError):continue
+        if not isinstance(value,dict):continue
+        name=message.get('tool_name');values.append((name,value))
+        discovery=value.get('discovery')
+        if name=='network_scan' and isinstance(discovery,dict):
+            # This is a controller stage, not an extra model tool call.
+            if discovery.get('session_id')!=value.get('sourceSessionId'):
+                continue
+            values.append(('controller_discovery',discovery))
+    return values
+
+
+def inspection_errors(value, expected):
+    """Independent saved-byte/XML oracle; never trusts the model or renderer."""
+    errors=[]
+    if value.get('state')!='completed' or value.get('error') or not value.get('sourceSessionId'):
+        return ['No completed source-bound inspection']
+    try:
+        observed=[]
+        evidence=value['evidence'];handles=value['inspectionSessions']
+        if not evidence or len(handles)!=len(evidence):raise ValueError('Missing inspection receipts')
+        for receipt,handle in zip(evidence,handles):
+            raw=Path(receipt['stdoutPath']).read_bytes()
+            if hashlib.sha256(raw).hexdigest()!=receipt['stdoutSha256'] or receipt.get('incomplete'):
+                raise ValueError('Inspection bytes or completeness differ')
+            if handle['state']!='completed' or handle['exitCode']!=0 or handle['session_id']==value['sourceSessionId']:
+                raise ValueError('Inspection handle did not complete independently')
+            xml=ET.fromstring(raw)
+            for host in xml.findall('host'):
+                address=host.find('address').attrib['addr']
+                for port in host.findall('ports/port'):
+                    observed.append((address,int(port.attrib['portid']),port.find('state').attrib['state']))
+        if sorted(observed)!=[('127.0.0.1',p,'open') for p in sorted(expected)]:
+            raise ValueError('Saved Nmap XML differs from owned listener oracle')
+        services=sorted((s['host'],int(s['port']),s['state']) for s in value['services'])
+        if services!=sorted(observed):raise ValueError('Structured services differ from saved XML')
+    except (OSError,KeyError,ValueError,TypeError,ET.ParseError) as error:
+        errors.append(str(error))
+    return errors
 
 def contradictions(answer,open_ports):
     answer=re.sub(r'\bno\s+open\s+ports(?:\s+detected)?\s+does\s+not\s+establish[^.!?\n]*','',answer,flags=re.I)

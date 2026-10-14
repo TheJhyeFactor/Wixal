@@ -15,6 +15,10 @@ def available_names(tools, store):
     if active is None:
         return scanner_scope([t['function']['name'] for t in tools.catalog()]) if automatic.get() or store.data.get('mode') == 'chat' else store.data['enabledTools']
     names = scanner_scope([t['function']['name'] for t in tools.catalog()])
+    if active.get('toolGroups') is not None:
+        from .context_policy import category
+        foundation={'workspace_info','todo_list','tool_result_read','load_skill'}
+        names=[n for n in names if n in foundation or category(n) in active['toolGroups']]
     if active.get('_delegateTools') is not None:
         names = [n for n in names if n in active['_delegateTools']]
     if active.get('reviewPolicy') == 'Read only':

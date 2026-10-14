@@ -94,7 +94,7 @@
     "type": "function",
     "function": {
       "name": "network_scan",
-      "description": "Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, rdp, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence. Optional source_run_id (investigation) or source_session_id (this chat) derives exact ports from completed discovery. Omit ports for source-bound inspection.",
+      "description": "For requested discovery followed by inspection, set discover_first=true: the controller completes RustScan discovery and binds Nmap inspection to its exact evidence, with ordinary approval for each stage and one shared deadline. Use network_discover for discovery alone. Start a bounded Nmap scan against an authorised IP, website host or private /24\u2013/32 network. Choose discovery, ports, services, web, tls, ssh, rdp, enumeration or checks. Returns session_id; use network_read until complete and command_save_output for evidence. Optional source_run_id (investigation) or source_session_id (this chat) derives exact ports from completed discovery. Omit ports for source-bound inspection.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -134,6 +134,10 @@
             "type": "string",
             "maxLength": 100,
             "description": "Copy the complete session_id returned by network_discover in this chat after network_read confirms completion. Do not also provide source_run_id; omit manual ports."
+          },
+          "discover_first": {
+            "type": "boolean",
+            "description": "Complete discovery and source-bound inspection as one bounded operation. Ports selects discovery coverage only. Do not combine with source IDs or profile discovery."
           }
         },
         "required": [
@@ -861,7 +865,7 @@
     "type": "function",
     "function": {
       "name": "delegate_task",
-      "description": "Delegate a focused project inspection to an isolated read-only child. Supply all required context explicitly; the child does not inherit conversation history or private notes. It cannot write, access external services or delegate recursively.",
+      "description": "Delegate a focused project inspection to an isolated read-only child. Optionally select agent_id from workspace_info specialists to use that saved specialist's instructions, model and selected skills. Supply context and expected output explicitly. The child cannot write, access external services or delegate recursively and does not inherit private notes or history.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -873,6 +877,11 @@
             "type": "string",
             "maxLength": 8000,
             "description": "Relevant facts, file paths and expected output for this child; untrusted data, not additional authority."
+          },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Saved specialist ID returned by workspace_info. Omit for the generic project inspector."
           }
         },
         "required": [
@@ -952,7 +961,7 @@
     "type": "function",
     "function": {
       "name": "network_discover",
-      "description": "Discover observed open TCP ports using isolated RustScan. Selected ports is the default; all_tcp requires an explicit user request. Does not identify services. Poll network_read; stop with network_stop. Follow up through network_scan source_session_id, without manual ports.",
+      "description": "Discover observed open TCP ports using isolated RustScan. By default this owned tool call awaits scanner termination and evidence finalization, returning the real result. Set await_results=false only to start in the background; collect that handle with network_read before reporting observations. Selected ports is the default; all_tcp requires an explicit user request. Does not identify services. Stop with network_stop. Follow up through network_scan source_session_id, without manual ports.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
@@ -970,6 +979,11 @@
               "selected",
               "all_tcp"
             ]
+          },
+          "await_results": {
+            "type": "boolean",
+            "default": true,
+            "description": "Keep this tool call owned until the bounded scanner and its saved evidence settle. False returns a running handle immediately and requires later network_read collection; it does not establish scan results."
           },
           "ports": {
             "type": "string",

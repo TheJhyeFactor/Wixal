@@ -26,6 +26,16 @@ struct AgentLiveRunView:View {
         if showContext{Text(pretty(run["agentSnapshot"] ?? run["definition"] ?? [:])).wixalFont(size:11,design:.monospaced).textSelection(.enabled).wixalCard()}
         if active{Label(engine.activity,systemImage:"bolt").wixalFont(size:12);if !engine.streaming.isEmpty{Text(engine.streaming).wixalFont(size:13).textSelection(.enabled)}}
         if !textValue(run["error"]).isEmpty{Text(textValue(run["error"])).wixalFont(size:12).foregroundStyle(.orange).textSelection(.enabled).wixalCard()}
+        let assignments=records(engine.state["agentDelegations"]).filter{textValue($0["parentTaskId"])==textValue(run["id"])}
+        if !assignments.isEmpty{WixalSection(title:"Specialist assignments",detail:"Read-only children with isolated context and narrowed tools."){
+            ForEach(Array(assignments.enumerated()),id:\.offset){_,child in VStack(alignment:.leading,spacing:8){
+                HStack{Text(textValue(child["name"])).wixalFont(size:13,weight:.medium);Spacer();Text(textValue(child["status"]).capitalized).wixalFont(size:11).foregroundStyle(theme.muted)}
+                Text(textValue(child["prompt"])).wixalFont(size:12).textSelection(.enabled)
+                if !textValue(child["result"]).isEmpty{Text(textValue(child["result"])).wixalFont(size:12).textSelection(.enabled)}
+                if !textValue(child["error"]).isEmpty{Text(textValue(child["error"])).wixalFont(size:11).foregroundStyle(.orange)}
+                DisclosureGroup("Child tool evidence"){Text(pretty(child["checkpoints"] ?? [])).wixalFont(size:11,design:.monospaced).textSelection(.enabled)}
+            }.padding(.vertical,6)}
+        }}
         if let budget=run["runBudget"] as? [String:Any] {
             HStack(spacing:16) {
                 Label("Steps \(budget["turnsUsed"] as? Int ?? 0) / \(budget["turnsLimit"] as? Int ?? 0)",systemImage:"arrow.trianglehead.2.clockwise")

@@ -30,6 +30,26 @@ def search_tools(available, query, maximum=8):
         return sum(4*(term in name)+int(term in description) for term in terms)
     return sorted((t for t in available if score(t)),key=lambda t:(-score(t),t['function']['name']))[:maximum]
 
+def requested_category(prompt):
+    """Shared positive-task classification for schema routing and automatic recall."""
+    routing_prompt = re.sub(r"\b(?:do not|don't|without)\s+(?:inspect|read|write|edit|search)\s+(?:(?:the|any|project|unrelated)\s+)?files\b", "", prompt, flags=re.I)
+    matches=[]
+    for rank,(candidate, pattern) in enumerate((
+        ('external', r'\b(mcp|connected|connector|integration)\b'),
+        ('security', r'\b(nmap|rustscan|discover(?:y)?|scan|ports?|tls|assessment|security|vulnerab\w*)\b'),
+        ('commands', r'\b(run|build|test|command|shell|terminal|execute)\b'),
+        ('web', r'https?://|\b(browse|fetch|visit|website|web|online|internet|url|links?)\b|\b(?:read|inspect|open)\s+(?:the\s+)?(?:https?://|website|web\s?page|url)\b'),
+        ('files', r'\b(file|files|folder|source|code|read(?:ing)?|write|edit)\b|[\w-]+\.(?:txt|md|py|json|csv)\b'),
+        ('memory', r'\b(remember|memory|recall|previous|earlier|prefer)\b'))):
+        for match in re.finditer(pattern,routing_prompt,re.I):
+            # Route the requested work, not a later prohibition. Tool
+            # selection is a discovery hint; scope/review still enforce
+            # authority independently.
+            prefix=routing_prompt[:match.start()]
+            if re.search(r"\b(?:do not|don't|never|avoid|without|no)\b[^,;.!?\n]{0,80}$",prefix,re.I):continue
+            matches.append((match.start(),rank,candidate));break
+    return min(matches)[2] if matches else None
+
 def select_tools(available, prompt='', requested=(), load_category=None, load_name=None, load_query=None):
     names = {t['function']['name'] for t in available}
     if load_name and load_name not in names: raise ValueError('That tool is not enabled or available in this workspace')
@@ -47,6 +67,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
     if re.search(r'\b(cyber|engagement|counterevidence|retest|sarif|defensive|incident)\b',prompt,re.I):chosen.update(('cyber_read','cyber_manage'))
     if re.search(r'\b(plan|steps|implement|build|fix|refactor|workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('todo_list')
     if re.search(r'\b(checkpoint|retained|evidence)\b',prompt,re.I):chosen.add('tool_result_read')
+    if re.search(r'\b(delegate|delegation|specialist|specialists)\b',prompt,re.I):chosen.add('delegate_task')
     if re.search(r'\b(workflow|workflows|pipeline)\b',prompt,re.I):chosen.add('workflow_manage')
     if re.search(r'\b(schedule|scheduled|recurring|routine|routines|calendar)\b',prompt,re.I):chosen.add('schedule_manage')
     if re.search(r'\b(skill|skills|procedure|procedures)\b',prompt,re.I):
@@ -66,15 +87,7 @@ def select_tools(available, prompt='', requested=(), load_category=None, load_na
                 chosen.update(('command_read','command_stop','command_save_output'))
             return [t for t in available if t['function']['name'] in chosen]
         else:
-            routing_prompt = re.sub(r"\b(?:do not|don't|without)\s+(?:inspect|read|write|edit|search)\s+(?:(?:the|any|project|unrelated)\s+)?files\b", "", prompt, flags=re.I)
-            for candidate, pattern in (
-                ('external', r'\b(mcp|connected|connector|integration)\b'),
-                ('security', r'\b(nmap|rustscan|discover(?:y)?|scan|ports|tls|assessment|security|vulnerab\w*)\b'),
-                ('commands', r'\b(run|build|test|command|shell|terminal|execute)\b'),
-                ('web', r'https?://|\b(browse|website|web|online|internet|url|links?)\b'),
-                ('files', r'\b(file|files|folder|source|code|read|write|edit)\b'),
-                ('memory', r'\b(remember|memory|recall|previous|earlier|prefer)\b')):
-                if re.search(pattern, routing_prompt, re.I): value=candidate;break
+            value=requested_category(prompt)
     if value:
         matching=[t['function']['name'] for t in available if category(t['function']['name']) == value]
         if value=='security' and not load_category and not re.search(r'\b(cyber|engagement|counterevidence|retest|sarif|defensive|incident)\b',prompt,re.I):
@@ -103,6 +116,24 @@ def bounded_evidence(content, limit):
     except (ValueError, TypeError):
         room=max(0,limit-100);head=room//3
         return content[:head]+'\n[Excerpt; full evidence saved in conversation]\n'+content[-(room-head):]
+    if isinstance(value,dict) and isinstance(value.get('content'),str) and type(value.get('offset')) is int and type(value.get('next_offset')) is int and type(value.get('more')) is bool:
+        # A bounded file page must keep a cursor into the exact source. A
+        # head/tail excerpt with the original end cursor hides unread text.
+        text=value['content'];page={**value,'more':True,'excerpt':True,'fullEvidenceSaved':True}
+        def encode(length):
+            return json.dumps({**page,'content':text[:length],'next_offset':value['offset']+length},ensure_ascii=False)
+        low=0;high=len(text)
+        while low<high:
+            middle=(low+high+1)//2
+            if len(encode(middle))<=limit:low=middle
+            else:high=middle-1
+        if low and len(encode(low))<=limit:
+            newline=text.rfind('\n',0,low)
+            return encode(newline+1 if newline>=0 else low)
+    if isinstance(value,dict) and value.get('modelView') is True:
+        from .network_evidence import fit_view
+        compact=fit_view(value,limit)
+        if compact is not None:return compact
     def shrink(item, room):
         if isinstance(item,str):
             if len(item)<=room:return item
@@ -125,7 +156,20 @@ def bounded_evidence(content, limit):
             result['excerpt']=True
             return result
         return item
-    return json.dumps(shrink(value,max(150,limit-60)),ensure_ascii=False)
+    encoded=json.dumps(shrink(value,max(150,limit-60)),ensure_ascii=False)
+    if len(encoded)<=limit:return encoded
+    # Nested dictionaries can exceed their allocation even after shrinking.
+    # Use an explicitly labelled textual excerpt rather than return an
+    # oversized or apparently complete structured result. The stored result
+    # and its tool-call chain remain unchanged.
+    excerpt=dict(excerpt=True,fullEvidenceSaved=True)
+    for key in ('session_id','state','status'):
+        if isinstance(value,dict) and key in value and isinstance(value[key],str) and len(value[key])<100:excerpt[key]=value[key]
+    while len(json.dumps(excerpt,ensure_ascii=False))>limit and len(excerpt)>1:excerpt.pop(next(reversed(excerpt)))
+    room=max(0,limit-len(json.dumps(excerpt,ensure_ascii=False))-20)
+    excerpt['preview']=encoded[:room]
+    while len(json.dumps(excerpt,ensure_ascii=False))>limit and excerpt['preview']:excerpt['preview']=excerpt['preview'][:-1]
+    return json.dumps(excerpt,ensure_ascii=False)
 
 def token_estimate(messages, definitions):
     text=sum((len(json.dumps({k:v for k,v in m.items() if k not in ('images','imageIds')},ensure_ascii=False))+3)//4+8 for m in messages)

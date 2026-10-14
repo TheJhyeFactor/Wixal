@@ -45,21 +45,21 @@
     "package:electron": "node scripts/runtime-stage.cjs && electron-packager . Wixal --platform=darwin --arch=arm64 --asar.unpackDir='{app,node_modules}' --asar.unpack=package.json --extra-resource=runtime/ollama --extend-info=resources/Info.plist --out=release --overwrite --icon=assets/Wixal.icns --app-bundle-id=app.wixal.desktop --app-category-type=public.app-category.developer-tools --ignore='^/(native|runtime|release|test|scripts|artifacts|docs|assets/social|\\.git)($|/)' && node scripts/runtime-package.cjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "dompurify": "^3.2.7",
     "jose": "^6.2.12",
-    "marked": "^17.0.0",
+    "marked": "^18.1.0",
     "node-pty": "1.1.0",
     "sharp": "^0.35.5",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
-    "@electron/rebuild": "4.2.0",
-    "electron": "44.5.1",
-    "playwright": "^1.56.0"
+    "@electron/rebuild": "4.2.1",
+    "electron": "44.7.0",
+    "playwright": "^1.64.0"
   },
   "allowScripts": {
     "electron@44.5.1": true,

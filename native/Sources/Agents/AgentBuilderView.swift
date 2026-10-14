@@ -44,6 +44,10 @@ struct AgentBuilderView:View {
             Text("You describe the job and its boundaries. Available project, command, web, memory and connected tools are discovered from the workspace.").wixalFont(size:12).foregroundStyle(theme.muted)
             Text("Tool calls and their results appear in the run activity so you can inspect what happened.").wixalFont(size:11).foregroundStyle(theme.muted)
         }
+        Toggle("Use all available tool groups",isOn:Binding(get:{draft.toolGroups==nil},set:{draft.toolGroups=$0 ? nil : ["files","memory"]})).wixalFont(size:12)
+        if draft.toolGroups != nil{WixalSection(title:"Allowed tool groups",detail:"Enforced during discovery and execution. Planning, skill reading and saved-result retrieval remain available."){
+            ForEach(["files","commands","web","memory","security","external"],id:\.self){group in Toggle(group=="external" ? "Connected MCP tools" : group.capitalized,isOn:Binding(get:{draft.toolGroups?.contains(group)==true},set:{enabled in var groups=draft.toolGroups ?? [];groups.removeAll{$0==group};if enabled{groups.append(group)};draft.toolGroups=groups})).wixalFont(size:12)}
+        }}
         AgentChecksEditor(checks:Binding(get:{draft.successCriteria ?? []},set:{draft.successCriteria=$0}))
         AgentAuthorityEditor(authority:Binding(get:{draft.authority ?? AgentAuthorityDraft()},set:{draft.authority=$0}))
         Toggle("Restrict network actions to authorised targets",isOn:Binding(get:{draft.restrictTargets ?? false},set:{draft.restrictTargets=$0})).wixalFont(size:12)
@@ -81,13 +85,13 @@ struct AgentProfileDetail:View{
     let schedule:()->Void
     let openRun:(String)->Void
     @Environment(\.wixalTheme) private var theme
-    @ViewState private var tab="Work"
+    @ViewState private var tab="Overview"
     @Environment(\.agentDesignReduceMotion) private var reduceMotion
     var body:some View{VStack(alignment:.leading,spacing:22){
         ViewThatFits(in:.horizontal){HStack{identity;Spacer();actions};VStack(alignment:.leading,spacing:16){identity;actions}}
         ViewThatFits(in:.horizontal){HStack(spacing:4){tabs};VStack(alignment:.leading,spacing:4){tabs}}
         Group{switch tab{
-        case "Configuration":configuration
+        case "Overview":configuration
         case "Skills & tools":VStack(alignment:.leading,spacing:16){AgentToolCatalog(engine:engine);WixalSection(title:"Selected skills"){Text(agent.skills.isEmpty ? "No skills selected." : agent.skills.joined(separator:", ")).wixalFont(size:12)}}
         case "Memory":VStack(alignment:.leading,spacing:16){AgentMetadata(title:"Scope",value:agent.memoryScope);AgentMetadata(title:"History recall",value:agent.recallHistory ? "Relevant conversations" : "Off");AgentMetadata(title:"Suggestions",value:agent.suggestMemory ? "Review before saving" : "Off");Text("The engine applies this agent's scope during each run. Project notes are shared within their project.").wixalFont(size:12).foregroundStyle(theme.muted)}
         case "Schedules":VStack(alignment:.leading,spacing:16){let schedules=design.schedules.filter{$0.agentID==agent.id};if schedules.isEmpty{Text("No schedule drafts for this agent.").foregroundStyle(theme.muted)};ForEach(schedules){item in HStack{Text(item.name);Spacer();Text(item.timing+" · "+item.time).foregroundStyle(theme.muted)}.wixalCard()};Button("Create schedule",action:schedule).buttonStyle(WixalButtonStyle(outlined:true))}
@@ -96,8 +100,8 @@ struct AgentProfileDetail:View{
     }}
     private var identity:some View{HStack(spacing:14){AgentAvatar(icon:agent.icon,size:48);VStack(alignment:.leading,spacing:6){Text(agent.name).wixalFont(size:23,weight:.medium);Text(agent.purpose).wixalFont(size:12).foregroundStyle(theme.muted)}}}
     private var actions:some View{HStack{Button("Edit agent",action:edit);Button("Give task",action:giveTask)}.buttonStyle(WixalButtonStyle(outlined:true))}
-    private var tabs:some View{ForEach(["Work","Configuration","Skills & tools","Memory","Schedules"],id:\.self){item in Button(item){tab=item}.buttonStyle(WixalButtonStyle()).background(tab==item ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:7)).accessibilityAddTraits(tab==item ? [.isSelected] : [])}}
-    private var configuration:some View{VStack(alignment:.leading,spacing:14){AgentMetadata(title:"Model",value:agent.model);AgentMetadata(title:"Project",value:agent.projectScope);AgentMetadata(title:"Actions",value:agent.reviewPolicy);WixalSection(title:"Instructions"){Text(agent.instructions).wixalFont(size:12).textSelection(.enabled).lineSpacing(4)}}.wixalCard()}
+    private var tabs:some View{ForEach(["Overview","Skills & tools","Memory","Schedules","Runs"],id:\.self){item in Button(item){tab=item}.buttonStyle(WixalButtonStyle()).background(tab==item ? theme.selected : .clear,in:RoundedRectangle(cornerRadius:7)).accessibilityAddTraits(tab==item ? [.isSelected] : [])}}
+    private var configuration:some View{VStack(alignment:.leading,spacing:14){AgentMetadata(title:"Model",value:agent.model);AgentMetadata(title:"Project",value:agent.projectScope);AgentMetadata(title:"Actions",value:agent.reviewPolicy);AgentMetadata(title:"Tool groups",value:agent.toolGroups.map{$0.isEmpty ? "Planning and skill reading only" : $0.joined(separator:", ")} ?? "All available groups");AgentReadinessView(engine:engine,agent:agent);WixalSection(title:"Instructions"){Text(agent.instructions).wixalFont(size:12).textSelection(.enabled).lineSpacing(4)}}.wixalCard()}
     private var work:some View{VStack(alignment:.leading,spacing:18){
         let tasks=records(engine.state["tasks"]).filter{textValue($0["agentId"])==agent.id}
         if tasks.isEmpty{AgentEmptyState(icon:"play.rectangle",title:"Ready for its first task.",detail:"Give this agent a task. It will choose tools and retain results and evidence.",action:"Give a task",perform:giveTask)}

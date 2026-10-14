@@ -25,6 +25,7 @@ struct AgentProfileDraft: Identifiable, Codable, Equatable {
     var maxCalls:Int?=nil
     var maxTurns:Int?=nil
     var timeoutSeconds:Int?=nil
+    var toolGroups:[String]?=nil
     static func template(_ name: String, model: String = "") -> Self {
         switch name {
         case "Code assistant": return Self(name:name,purpose:"Inspect, change and verify project code.",instructions:"Inspect the issue first. Propose focused changes, review edits and commands, verify the result, and report remaining work.",icon:"chevron.left.forwardslash.chevron.right",model:model,tools:["Project files","Commands"])

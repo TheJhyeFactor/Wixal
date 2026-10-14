@@ -12,8 +12,7 @@ import SwiftTerm
     override func accessibilityLabel()->String? { "Terminal · "+projectDirectory }
     override func accessibilityHelp()->String? { "Host shell. Interact to type commands. Visible output follows terminal scrolling." }
     override func accessibilityValue()->Any? {
-        guard let terminal else{return ""}
-        return (0..<min(terminal.rows,80)).compactMap{terminal.getLine(row:$0)?.translateToString(trimRight:true)}.joined(separator:"\n").trimmingCharacters(in:.whitespacesAndNewlines)
+        return visibleRowsText(0..<80).joined(separator:"\n").trimmingCharacters(in:.whitespacesAndNewlines)
     }
     override func accessibilityPerformPress()->Bool { window?.makeFirstResponder(self) ?? false }
     override func dataReceived(slice:ArraySlice<UInt8>) {

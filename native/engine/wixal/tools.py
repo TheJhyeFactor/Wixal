@@ -351,7 +351,10 @@ class Tools:
         if not job or job["owner"] != session_id or job["projectId"] != (self.store.project() or {}).get("id"):
             raise ValueError("Command belongs to another conversation or project")
         if job["state"] == "running" or not job.get('settled',False):
-            await asyncio.sleep(args.get("wait_ms", 1000)/1000)
+            wait=args.get("wait_ms",1000)
+            if wait>0:
+                try:await asyncio.wait_for(asyncio.shield(job['collector']),wait/1000)
+                except TimeoutError:pass
         offset = args.get("offset", job["base"])
         encoded=job['output'].encode('utf-16-le');units=len(encoded)//2
         if offset<0 or offset>job["base"]+units:
@@ -384,7 +387,7 @@ class Tools:
                     progressState=progress,unchangedReads=job['unchangedReads'],progressNote='Repeated reads returned no new output; the process may be waiting or quiet. Inspect before sending reviewed input or stopping.' if progress=='no_new_output' else '',
                     more=start+len(output.encode('utf-16-le'))//2<job["base"]+units, earliest_offset=job["base"], started=job["started"], finished=job.get("finished"))
 
-    async def execute(self, name, args, session_id):
+    async def execute(self, name, args, session_id, stage_checkpoint=None):
         from .agent_context import available_names
         definition = next((t for t in self.catalog() if t["function"]["name"]==name), None)
         if not definition:raise ValueError("Unknown tool name. Inspect workspace_info for the exact available tool names.")
@@ -429,12 +432,15 @@ class Tools:
             return load(self.store, args)
         if name == "delegate_task":
             if not self.delegate: raise ValueError("Delegation is unavailable in a child agent")
-            return await self.delegate(args["prompt"], args.get("context", ""))
+            return await self.delegate(args["prompt"], args.get("context", ""), args.get("agent_id"))
         if name == "workspace_info":
             from .context_policy import eligible,category,search_tools
             available=eligible(self.catalog(),available_names(self,self.store),self.store.project())
             if args.get('query'):available=search_tools(available,args['query'])
-            return dict(app="Wixal Native",environment=self.environment(), project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name']),description=t['function']['description']) for t in available],memory=self.store.memory.snapshot()['policy'])
+            from .memory import owner
+            project_id=(self.store.project() or {}).get('id')
+            specialists=[dict(id=a['id'],name=a['name'],purpose=a['purpose'],model=a['model'],delegation='Read-only project inspection') for a in self.store.data.get('agentProfiles',[]) if a.get('owner','guest')==owner(self.store) and not a.get('archived') and (a.get('projectScope')!='Current project only' or a.get('projectId')==project_id)] if any(t['function']['name']=='delegate_task' for t in available) else []
+            return dict(app="Wixal Native",environment=self.environment(), project=self.store.project(), model=self.store.data["model"], approvalMode=self.store.approval_mode(), tools=[dict(name=t['function']['name'],category=category(t['function']['name']),description=t['function']['description']) for t in available],specialists=specialists,memory=self.store.memory.snapshot()['policy'])
         if name == "verify_json":
             from .outcomes import criteria,verify,source_value
             check=criteria([dict(kind='json_matches_source',**args)])[0]
@@ -528,7 +534,11 @@ class Tools:
                 return await self.read_job(dict(session_id=result["session_id"], wait_ms=0), session_id)
             return result
         if name in ("command_read", "network_read"):
-            return await self.read_job(args, session_id)
+            result=await self.read_job(args, session_id)
+            if name=='network_read' and result.get('structuredResult'):
+                from .network_investigation import report
+                result['evidenceReport']=report(result)
+            return result
         if name in ("command_stop", "network_stop", "command_write", "command_save_output"):
             result = await self.read_job(dict(session_id=args["session_id"], wait_ms=0), session_id)
             job = self.jobs[args["session_id"]]
@@ -562,11 +572,28 @@ class Tools:
             return dict(installed=bool(shutil.which('nmap') or Path('/opt/homebrew/bin/nmap').is_file()),profiles=list(PROFILES),rustscan=rustscan,nativeAdapters=adapters,interpretation='Installation, capability readiness, current adapter availability and model evaluation are separate states. Installed binaries and ready packages do not grant task permission. Respect disabled adapters and user restrictions; do not use commands or installation as a workaround when the user forbids it.')
         if name == 'network_discover':
             from .network_discovery import start
-            return await start(self,args,session_id)
+            started=await start(self,args,session_id)
+            if not args.get('await_results',True):return started
+            job=self.jobs[started['session_id']]
+            try:await asyncio.shield(job['collector'])
+            except asyncio.CancelledError:
+                self.stop_job(job)
+                await asyncio.shield(job['collector'])
+                raise
+            result=await self.read_job(dict(session_id=job['id'],wait_ms=0,max_chars=100000),session_id)
+            from .network_investigation import report
+            result.update(evidenceReport=report(result),read='network_read',stop='network_stop')
+            return result
         if name == 'network_scan':
+            if args.get('discover_first'):
+                from .network_investigation import run
+                return await run(self,args,session_id,stage_checkpoint)
             if args.get('source_run_id') or args.get('source_session_id'):
                 from .network_discovery import inspect
-                return await inspect(self,args,session_id)
+                from .network_investigation import report
+                result=await inspect(self,args,session_id)
+                result['evidenceReport']=report(result)
+                return result
             executable=shutil.which('nmap') or ('/opt/homebrew/bin/nmap' if Path('/opt/homebrew/bin/nmap').exists() else None)
             if not executable:raise ValueError('Install Nmap to use network assessment')
             from .agent_context import profile

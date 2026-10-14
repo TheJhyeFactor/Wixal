@@ -29,7 +29,7 @@ async def main(options):
     helper = options.helper.resolve()
     app = helper.parents[3]
     client = real.Client(False, helper=helper, payload=app/'Contents/Resources/ollama', endpoint=options.endpoint)
-    report = dict(status='running', started=time.time(), cases=[],
+    report = dict(requestedContext=options.context, status='running', started=time.time(), cases=[],
                   helperSha256=hashlib.sha256(helper.read_bytes()).hexdigest(),
                   sourceManifestSha256=hashlib.sha256((app/'Contents/Resources/SOURCE_MANIFEST.json').read_bytes()).hexdigest(),
                   acceptanceScriptSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -53,17 +53,15 @@ async def main(options):
         project = base/'project'
         project.mkdir()
         await client.call('project-add', dict(root=str(project)))
-        models = await client.call('models')
-        assert any(m['name'] == options.model for m in models), 'Model must already be installed'
         report['model'] = await client.model(options.model)
-        await client.call('settings', dict(contextSize=8192))
+        await client.call('settings', dict(contextSize=options.context))
         installed = await client.call('addon-install', dict(id='rustscan', provider='managed', reason='Explicit owned-loopback partial-evidence acceptance'))
         async with asyncio.timeout(90):
             while installed['status'] not in ('ready', 'failed', 'cancelled'):
                 await asyncio.sleep(.1)
                 installed = await client.call('addon-job', dict(id=installed['id']))
         assert installed['status'] == 'ready', installed
-        started = await client.call('tool', dict(name='network_discover', arguments=dict(target='127.0.0.1', coverage='all_tcp', timeout_seconds=30)))
+        started = await client.call('tool', dict(name='network_discover', arguments=dict(target='127.0.0.1', coverage='all_tcp', timeout_seconds=30, await_results=False)))
         await client.call('tool', dict(name='network_stop', arguments=dict(session_id=started['session_id'])))
         async with asyncio.timeout(45):
             while True:
@@ -122,5 +120,6 @@ if __name__ == '__main__':
     parser.add_argument('--helper', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--model', default='gpt-oss:20b')
-    parser.add_argument('--endpoint', default='http://127.0.0.1:11434')
+    parser.add_argument('--context', type=int, choices=[4096,8192,16384,32768], default=8192, help='Requested application context; safe_context remains enforced')
+    parser.add_argument('--endpoint', help='Explicit external loopback service; omit to qualify the bundled supervised runtime')
     asyncio.run(main(parser.parse_args()))

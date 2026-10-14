@@ -36,7 +36,7 @@ async def main():
   for server in servers:server.close();await server.wait_closed()
   started=await c.call('tool',dict(name='network_discover',arguments=dict(target='127.0.0.1',ports=str(ports[0]),timeout_seconds=20)));result=(await finished(started))['structuredResult'];assert result['hosts'][0]['ports']==[] and result['handoffEligible'],result
   skipped=await c.call('tool',dict(name='network_scan',arguments=dict(target='127.0.0.1',source_session_id=started['session_id'])));assert skipped['skipped'] and skipped['sourceSessionId']==started['session_id'];report['cases']['actualEmptyCoverage']=dict(discovery=result,inspection=skipped);save()
-  started=await c.call('tool',dict(name='network_discover',arguments=dict(target='127.0.0.1',coverage='all_tcp',timeout_seconds=30)));stopped=await c.call('tool',dict(name='network_stop',arguments=dict(session_id=started['session_id'])));result=await finished(started);assert result['state']=='stopped' and not result['structuredResult']['handoffEligible'],result
+  started=await c.call('tool',dict(name='network_discover',arguments=dict(target='127.0.0.1',coverage='all_tcp',timeout_seconds=30,await_results=False)));stopped=await c.call('tool',dict(name='network_stop',arguments=dict(session_id=started['session_id'])));result=await finished(started);assert result['state']=='stopped' and not result['structuredResult']['handoffEligible'],result
   report['cases']['actualCancellation']=dict(stop=stopped,result=result);report.update(status='passed',finished=time.time());save();print(json.dumps(dict(status='passed',cases=list(report['cases']))))
  except BaseException as error:report.update(status='failed',error=str(error));save();raise
  finally:

@@ -4,7 +4,7 @@ let package = Package(
     name: "WixalNative", platforms: [.macOS(.v14)],
     products: [.executable(name: "WixalNative", targets: ["WixalNative"])],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.20.0"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.99.0"),
         .package(url: "https://github.com/swiftlang/swift-markdown.git", exact: "0.9.0")
     ],
     targets: [

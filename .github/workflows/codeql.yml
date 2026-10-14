@@ -34,12 +34,20 @@ jobs:
             runner: ubuntu-latest
             build-mode: none
           - language: swift
-            runner: xcode-27
+            # CodeQL tracing currently requires macOS/Xcode < 27.
+            # https://github.com/github/codeql-action/pull/4221
+            runner: macos-26
             build-mode: manual
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Select supported Xcode for Swift analysis
+        if: matrix.language == 'swift'
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          xcodebuild -version
+          swift --version
       - name: Initialize CodeQL
         uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:

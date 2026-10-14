@@ -380,6 +380,10 @@ class Agent:
                         if task.get('checkpoints'):required.add('tool_result_read')
                         last_calls=next((m.get('tool_calls',[]) for m in reversed(session['messages']) if m.get('tool_calls')),[])
                         required.update(c['function']['name'] for c in last_calls)
+                        # Keep the most recent explicit schema load when the
+                        # larger catalogue no longer fits a small context.
+                        latest_load=next((c.get('arguments',{}) for c in reversed(task.get('checkpoints',[])) if c.get('name')=='workspace_info' and c.get('status')=='finished'),{})
+                        if latest_load.get('tool'):required.add(latest_load['tool'])
                         # Context fitting must retain schemas needed to finish
                         # the current workflow, including after a final-answer
                         # verification retry. Discovering them again is not a

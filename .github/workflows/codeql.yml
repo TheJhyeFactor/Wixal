@@ -48,6 +48,9 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
           xcodebuild -version
           swift --version
+      - name: Resolve pinned Swift dependencies before tracing
+        if: matrix.language == 'swift'
+        run: swift package --package-path native resolve
       - name: Initialize CodeQL
         uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
@@ -58,7 +61,7 @@ jobs:
         if: matrix.language == 'swift'
         # Debug compilation provides full source extraction without release optimisation.
         # The separate native job verifies the production release build on Xcode 27.
-        run: swift build --package-path native --build-system native -c debug
+        run: swift build --package-path native --build-system native --disable-sandbox -c debug
       - name: Analyze
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:

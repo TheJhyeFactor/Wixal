@@ -16,7 +16,8 @@ jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    # A full cold Swift extraction and analysis took nearly 35 minutes.
+    timeout-minutes: 60
     permissions:
       contents: read
       security-events: write

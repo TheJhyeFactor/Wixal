@@ -95,7 +95,7 @@ def parse(stdout,invocation,complete=True):
             observations.setdefault(address,set()).update(values)
         except ValueError as error:warnings.append(str(error));valid=False
     hosts=[dict(host=host,ports=sorted(observations.get(host,set()))) for host in invocation['addresses']]
-    result=dict(schemaVersion=1,scanner='RustScan',parserRevision=1,invocation=invocation,hosts=hosts,services=[dict(host=h['host'],port=str(p),protocol='tcp',state='open',service={}) for h in hosts for p in h['ports']],warnings=warnings[:100],coverage='completed_attempts' if complete and valid else 'partial' if not complete else 'indeterminate',handoffEligible=bool(complete and valid),interpretation='Observed open TCP ports only. No open ports detected does not establish host absence, closed ports or service safety.')
+    result=dict(schemaVersion=2,scanner='RustScan',parserRevision=2,invocation=invocation,hosts=hosts,services=[dict(host=h['host'],port=str(p),protocol='tcp',state='open',service={}) for h in hosts for p in h['ports']],warnings=warnings[:100],coverage='unknown',evidenceStatus='complete' if complete and valid else 'interrupted' if not complete else 'invalid',coverageMeaning='Actual per-port probe completion is unknown. evidenceStatus describes the saved scanner artifact, not how many ports were probed.',handoffEligible=bool(complete and valid),interpretation='Observed open TCP ports only. No open ports detected does not establish host absence, closed ports or service safety.')
     result['coverageDetail']=dict(requestedPortCount=len(requested),requestedConnectionPairs=len(requested)*len(hosts),observedOpenEndpointCount=sum(len(h['ports']) for h in hosts),examinedPortCount=None,
         limitation='Invocation ports describe requested coverage. No per-port probe-completion ledger is retained. Elapsed time and timeout settings cannot establish which probes completed.')
     result['resultSha256']=canonical(result);return result
@@ -130,7 +130,7 @@ async def start(tools,args,session):
     if budget is None:
         budget=getattr(tools,'socket_budget',None) or SocketBudget();tools.socket_budget=budget
     reservation=await budget.acquire(invocation['batchSize'])
-    handle=None;home=None
+    handle=None;home=None;job=None
     try:
         acquisition=asyncio.create_task(asyncio.to_thread(executable,tools))
         try:handle=await asyncio.shield(acquisition)
@@ -159,6 +159,12 @@ async def start(tools,args,session):
             return result
         raise ValueError(result)
     except BaseException:
+        if job is not None:
+            # Cancellation can arrive while binding the launched process to
+            # its reservation. Its collector owns evidence and lease cleanup.
+            tools.stop_job(job)
+            await asyncio.shield(job['collector'])
+            raise
         if handle and handle.get('lease'):manager.managed.release(handle['lease'])
         await budget.release(invocation['batchSize'],reservation)
         if home:shutil.rmtree(home,ignore_errors=True)

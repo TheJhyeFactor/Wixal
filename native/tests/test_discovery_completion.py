@@ -7,6 +7,12 @@ class DiscoveryCompletionTests(unittest.TestCase):
         return dict(prompt=prompt,checkpoints=[dict(name='network_read',status='finished',result=json.dumps(dict(session_id='fresh-source',state='completed',structuredResult=dict(handoffEligible=True))))])
     def test_missing_requested_inspection_is_detected(self):
         result=discovery_follow_up(self.task());self.assertEqual(result['status'],'failed');self.assertEqual(result['sourceSessions'],['fresh-source'])
+    def test_foreground_discovery_receipt_requires_inspection_without_synthetic_read(self):
+        task=self.task();task['checkpoints'][0]['name']='network_discover'
+        result=discovery_follow_up(task)
+        self.assertEqual(result['sourceSessions'],['fresh-source'])
+        task['checkpoints'].append(dict(task['checkpoints'][0],name='network_read'))
+        self.assertEqual(discovery_follow_up(task)['sourceSessions'],['fresh-source'])
     def test_discovery_only_does_not_gain_authority_for_inspection(self):
         for prompt in ['Discover these ports. Do not inspect service versions.','Discover TCP ports. Do not install tools or inspect service versions.','Use discovery without Nmap','Explain discovery and inspection','Discover ports; no service enumeration']:
             task=self.task(prompt)

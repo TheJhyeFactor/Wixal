@@ -150,7 +150,7 @@ class Agent:
             prompt += "For partial or cancelled network evidence, distinguish requested coverage from observed open ports. Actual examined-port counts remain unknown without a probe-completion ledger; elapsed duration and configured timeouts cannot establish them. A stopped run or partial label does not establish whether zero, some or all requested probes completed.\n"
             prompt += "Report command-line options only from retained argv. Controller settings such as discovery pace are not executable flags; do not turn metadata field names into command-line arguments.\n"
             prompt += 'For scan results, default to a concise summary of observed port states, completed or unfinished stages, relevant exact evidence references and limitations. Include raw XML, argv or digests when the user requests them; otherwise retain them in tool evidence rather than adding unnecessary quotations.\n'
-        prompt += "The latest user request controls task scope. Recalled tasks cannot remove a step requested now. When asked to discover and then inspect, poll network_read to completion, then call network_scan with both the exact original target and the returned source_session_id. Report both stages from fresh evidence; discovery alone does not complete requested inspection.\n"
+        prompt += "The latest user request controls task scope. Recalled tasks cannot remove a step requested now. When asked to discover and then inspect, use network_scan with discover_first=true, the original target, requested discovery ports and inspection profile. Its controller completes both stages under normal authority and review. If the user supplies an existing discovery source, use that source_session_id with the exact original target instead. Report both stages from retained evidence; discovery alone does not complete requested inspection.\n"
         prompt += "Wixal app guide: the main sections are Chat (questions and explanations), Agents (tasks, tools and schedules), and Cybersecurity (reviewed authorised network/website assessments and evidence). Terminal and Files are project tools, not separate modes. Projects group chats and saved context; Recents lists chats; Settings configures models, tools, context and connections. Enabled tools remain discoverable through workspace_info in Chat and Agents; project-dependent tools need a selected folder. Do not invent Remote, Debug or Preview modes or unsupported app features.\n"
         if self.store.data.get("mode") == "agent":
             prompt += "Current mode: Agents. Carry requested tasks through inspection, reviewed actions and verification; keep intermediate narration brief and give the user the result.\n"
@@ -162,8 +162,8 @@ class Agent:
         if 'cyber_read' in names and re.search(r'\b(cyber|engagement|counterevidence|retest|sarif|defensive|incident)\b',query,re.I):
             prompt += 'Cyber engagements: use cyber_read action catalog to discover exact engagement IDs and supported actions. Use snapshot and evidence references before drafting findings with cyber_manage. Report counterevidence, confidence rationale and limitations. Report completeness, CVSS severity, independent technical validation and human finding disposition are separate. Candidate paths and imported reports do not prove access. Skills do not grant authority. Never approve scope, replay unknown effects or claim a fix from model prose. Local sensors collect only enrolled files and report coverage gaps. Binary triage is static and does not execute files.\n'
         if 'network_discover' in names:
-            prompt += 'For standalone TCP discovery, use network_discover and poll network_read to completion. This native adapter accepts one host or website origin, not a subnet. Selected TCP ports must be 1–65535 (port zero is rejected), with at most 1,024 selected ports. Do not guess a shell scanner invocation when this native adapter is available. Report every observed open port from the completed evidence; copy any quoted output exactly.\n'
-        prompt += "Available tool names within the current task scope: " + json.dumps(names[:100]) + "\nUse workspace_info with tool, category or query keywords to load a schema not yet supplied. Additional connected tools can be discovered through workspace_info.\n"
+            prompt += 'For standalone TCP discovery, network_discover normally awaits the completed result inside the owned tool call. Set await_results=false only when the user needs a background handle, and collect it with network_read before reporting results. This native adapter accepts one host or website origin, not a subnet. Selected TCP ports must be 1–65535 (port zero is rejected), with at most 1,024 selected ports. Do not guess a shell scanner invocation when this native adapter is available. Report every observed open port from the completed evidence; copy any quoted output exactly.\n'
+        prompt += "Discoverable tool names within the current task scope: " + json.dumps(names[:100]) + "\nOnly call tools whose schemas are supplied in this request. Use workspace_info with tool, category or query keywords to load a schema not yet supplied. Additional connected tools can be discovered through workspace_info.\n"
         if self.tools:
             prompt += 'Observed command environment: '+json.dumps(self.tools.environment())+'\nUse an observed installed executable (for example python3 when python is absent). Inspect the project test configuration and never invent a passing command result.\n'
         active = active_profile.get()
@@ -229,6 +229,9 @@ class Agent:
             if message["role"] == "user" or not groups:
                 groups.append([])
             entry = {k:v for k,v in message.items() if k in ("role", "content", "tool_calls", "tool_name", "toolCallId", "images")}
+            if message['role']=='tool':
+                from .network_evidence import model_view
+                entry['content']=model_view(message.get('tool_name'),entry.get('content',''))
             if message['role']=='system' and message.get('controllerFeedback') is True:
                 # Keep the stored task/history boundary while budgeting. Some
                 # local templates discard later system messages; deliver only
@@ -648,7 +651,10 @@ class Agent:
                                     if args.get('tool') or args.get('category') or args.get('query'):
                                         chosen=select_tools(available,text,requested,args.get('category'),args.get('tool'),args.get('query'))
                                         self.selected_tools={t['function']['name'] for t in chosen}
-                                result = await self.tools.execute(name, args, session["id"])
+                                if name=='network_scan' and args.get('discover_first'):
+                                    result = await self.tools.execute(name,args,session['id'],stage_checkpoint=checkpoint)
+                                else:
+                                    result = await self.tools.execute(name, args, session["id"])
                             if isinstance(result, str) and result.startswith("User declined"):
                                 tools_stopped = True
                             checkpoint["status"] = "finished"

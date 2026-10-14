@@ -6,13 +6,14 @@ language claim or vulnerability inference. It never starts or repeats a tool.
 import hashlib
 import json
 import re
+from .network_investigation import evidence_views
 
 
 def reference_claim(task):
     """A reported handle must remain copyable; never repair a tool argument."""
     known=set()
     canonical=r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
@@ -48,15 +49,15 @@ def facts(task):
         if isinstance(timestamp,(int,float)):return timestamp
         fallback=checkpoint.get('finished',checkpoint.get('created',0))
         return fallback if isinstance(fallback,(int,float)) else 0
-    candidates=[c for c in task.get('checkpoints',[]) if c.get('status')=='finished' and c.get('name') in ('network_read','network_scan')]
+    candidates=[c for c in evidence_views(task) if c.get('status')=='finished' and c.get('name') in ('network_discover','network_read','network_scan')]
     for checkpoint in sorted(candidates,key=observed_time):
-        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
         try:result=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(result,dict) or result.get('error') or result.get('state')!='completed' or result.get('exitCode') not in (None,0):continue
         structured=result.get('structuredResult',result)
         if not isinstance(structured,dict) or structured.get('error'):continue
-        if checkpoint['name']=='network_read' and not (structured.get('handoffEligible') or structured.get('coverage')=='complete'):continue
+        if checkpoint['name'] in ('network_discover','network_read') and not (structured.get('handoffEligible') or structured.get('coverage')=='complete'):continue
         services=structured.get('services',[])
         if not isinstance(services,list):continue
         observed=False
@@ -105,7 +106,7 @@ def execution_claim(task):
     Restricted to current-task native scanner checkpoints. A completed empty
     scan is still completion; this check does not reinterpret its port states.
     """
-    attempts=[c for c in task.get('checkpoints',[]) if c.get('name') in ('network_discover','network_scan','network_read')]
+    attempts=[c for c in evidence_views(task) if c.get('name') in ('network_discover','network_scan','network_read')]
     if not attempts:return None
     for checkpoint in attempts:
         try:value=json.loads(checkpoint.get('result',''))
@@ -130,8 +131,8 @@ def execution_claim(task):
 def coverage_claim(task):
     """A completed discovery is not a per-port probe-completion ledger."""
     sources=[]
-    for checkpoint in task.get('checkpoints',[]):
-        if checkpoint.get('name')!='network_read' or checkpoint.get('status')!='finished':continue
+    for checkpoint in evidence_views(task):
+        if checkpoint.get('name') not in ('network_discover','network_read') or checkpoint.get('status')!='finished':continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(value,dict):continue
@@ -140,7 +141,7 @@ def coverage_claim(task):
         if isinstance(structured,dict) and structured.get('scanner')=='RustScan' and isinstance(detail,dict) and detail.get('examinedPortCount','absent') is None:sources.append(value.get('session_id'))
     if not sources:return None
     for sentence in re.split(r'[.!?\n]',task.get('result','')):
-        if re.search(r'\b(?:did|does)\s+not\s+(?:finish|complete)\s+(?:probing|testing|examining)\s+(?:all|every)\b',sentence,re.I) and not re.search(r'\b(?:whether|unknown|cannot|example|historical)\b',sentence,re.I):
+        if re.search(r'\b(?:did|does)\s+not\s+(?:finish|complete)\s+(?:(?:probing|testing|examining)\s+(?:all|every)\b|(?:all|every|(?:the\s+)?\d+)\s+(?:(?:requested|selected|TCP)\s+)?ports?\b)',sentence,re.I) and not re.search(r'\b(?:whether|unknown|cannot|example|historical)\b',sentence,re.I):
             return dict(check=dict(kind='network_coverage_claim'),status='failed',sourceSessions=sources,error='A stopped run or partial coverage label does not establish whether zero, some or all requested probes completed. The actual examined count is unknown without a probe-completion ledger; report termination without inferring probe completion.')
         if re.search(r"\b(?:unknown|which|whether|not|cannot|can't|never|example|historical|inspection|nmap)\b",sentence,re.I):continue
         if re.search(r'\b(?:single|all|every|\d+)\s+(?:(?:requested|selected|TCP)\s+)?ports?\s+(?:was|were|have been|has been)\s+(?:examined|tested|probed)\b',sentence,re.I):
@@ -155,8 +156,8 @@ def evidence_invocation_claim(task):
     in invocation prose, not arbitrary examples or all command semantics.
     """
     options=set()
-    for checkpoint in task.get('checkpoints',[]):
-        if checkpoint.get('status')!='finished' or checkpoint.get('name')!='network_read':continue
+    for checkpoint in evidence_views(task):
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(value,dict) or value.get('error'):continue
@@ -183,8 +184,8 @@ def evidence_hash_claim(task):
     explicit stdout/stderr hash claims, not arbitrary factual model prose.
     """
     hashes={};inspection_hashes=set();source_hashes=set()
-    for checkpoint in task.get('checkpoints',[]):
-        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_read','network_scan'):continue
+    for checkpoint in evidence_views(task):
+        if checkpoint.get('status')!='finished' or checkpoint.get('name') not in ('network_discover','network_read','network_scan'):continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue
         if not isinstance(value,dict) or value.get('error'):continue
@@ -254,7 +255,7 @@ def evidence_quote(task):
     to certify arbitrary rewritten summaries or all model prose.
     """
     outputs=[];sources=[]
-    for checkpoint in task.get('checkpoints',[]):
+    for checkpoint in evidence_views(task):
         if checkpoint.get('name')!='network_scan' or checkpoint.get('status')!='finished':continue
         try:value=json.loads(checkpoint.get('result',''))
         except (ValueError,TypeError):continue

@@ -97,3 +97,9 @@ native/.venv/bin/python native/scripts/install.py --alpha
 The build is `release/native/Wixal.app`. See the [native guide](native/README.md) for runtime staging, tests and signing options. Earlier Electron source and releases remain available for history and migration; they are not the current download.
 
 [Report an issue](https://github.com/TheJhyeFactor/Wixal/issues) · [Contribute](CONTRIBUTING.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## Licence and security
+
+Wixal's original code is licensed under [Apache 2.0](LICENSE). See [NOTICE](NOTICE) and [third-party notices](THIRD_PARTY_NOTICES.md) for attribution and component licences. Model weights retain their publishers' terms.
+
+Report vulnerabilities through [private security reporting](SECURITY.md). For questions use [Discussions](https://github.com/TheJhyeFactor/Wixal/discussions); for reproducible bugs use the issue forms. Contributors follow the [contribution guide](CONTRIBUTING.md) and [community conduct](CODE_OF_CONDUCT.md).

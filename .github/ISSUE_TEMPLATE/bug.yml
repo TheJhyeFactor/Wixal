@@ -1,5 +1,6 @@
 name: Bug report
-description: Something isn't working as expected.
+description: Something isn't working as expected. Report vulnerabilities privately.
+labels: [bug]
 body:
   - type: textarea
     id: problem
@@ -18,8 +19,8 @@ body:
   - type: input
     id: model
     attributes:
-      label: Ollama and model
-      placeholder: Ollama version and exact model name
+      label: Provider and model
+      placeholder: Wixal Local, Ollama, or remote provider; exact model name
   - type: textarea
     id: evidence
     attributes:

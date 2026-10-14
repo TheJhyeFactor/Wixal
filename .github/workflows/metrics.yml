@@ -13,9 +13,10 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
       - name: Collect release counts and available repository traffic
@@ -47,7 +48,7 @@ jobs:
           git add README.md latest.json snapshots
           git commit -m "Record Wixal download metrics $(date -u +%F)"
           git push origin HEAD:refs/heads/wixal-metrics
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wixal-github-metrics
           path: ${{ runner.temp }}/wixal-metrics

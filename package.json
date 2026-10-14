@@ -76,5 +76,6 @@
   "homepage": "https://thejhyefactor.github.io/Wixal/",
   "engines": {
     "node": ">=22"
-  }
+  },
+  "license": "Apache-2.0"
 }

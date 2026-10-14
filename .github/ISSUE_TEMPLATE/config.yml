@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/TheJhyeFactor/Wixal/security/advisories/new
+    about: Use a private report for vulnerabilities; do not disclose them in public issues.
+  - name: Questions and usage help
+    url: https://github.com/TheJhyeFactor/Wixal/discussions
+    about: Ask questions and discuss workflows with the community.

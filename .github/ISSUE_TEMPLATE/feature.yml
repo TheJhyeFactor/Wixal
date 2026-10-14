@@ -1,5 +1,6 @@
 name: Feature idea
 description: A change that would make Wixal more useful.
+labels: [enhancement]
 body:
   - type: textarea
     id: job

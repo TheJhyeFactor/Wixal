@@ -21,3 +21,13 @@ Validate IPC and scope in the controller. File tools retain selected-project, cr
 ## Reports
 
 Include macOS, machine architecture, alpha version, model name, expected behaviour and a small reproduction. Remove private content and credentials from logs.
+
+## Pull requests and repository controls
+
+Use a focused branch and pull request against `main`. Squash merges keep the history linear. Main requires passing native and website checks, CodeQL analysis for Actions, JavaScript, Python and Swift, dependency review, an up-to-date branch, and resolved review conversations. Direct pushes, force pushes, and deletion are blocked, including for administrators.
+
+CODEOWNERS routes reviews to @TheJhyeFactor. Mandatory human approval is currently zero because the repository has one owner, who cannot approve their own pull request. Add required independent approval when a second maintainer can review; do not weaken the automated checks to merge failures.
+
+Dependabot proposes weekly updates to Actions, Python, Swift and npm dependencies. Review compatibility and security alerts before merging. Workflow actions use full commit hashes and minimal token permissions. Security reports follow [SECURITY.md](SECURITY.md); participation follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+By submitting a contribution, you agree to license your original contribution under [Apache 2.0](LICENSE). Preserve third-party licences and provenance.
